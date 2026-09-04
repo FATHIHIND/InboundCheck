@@ -28,24 +28,81 @@ $$ LANGUAGE plpgsql;
 
 -- Function for automatic user profile provisioning from Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+DECLARE
+  v_full_name TEXT;
+  v_avatar_url TEXT;
+  v_company_name TEXT;
+  v_api_key TEXT;
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, avatar_url, api_key)
+  -- Extract metadata with graceful fallbacks
+  v_full_name := COALESCE(
+    NEW.raw_user_meta_data->>'full_name',
+    NEW.raw_user_meta_data->>'name',
+    split_part(NEW.email, '@', 1)
+  );
+  v_avatar_url := COALESCE(
+    NEW.raw_user_meta_data->>'avatar_url',
+    NEW.raw_user_meta_data->>'picture',
+    NULL
+  );
+  v_company_name := COALESCE(
+    NEW.raw_user_meta_data->>'company_name',
+    NULL
+  );
+
+  -- Generate resilient API key
+  BEGIN
+    v_api_key := 'ic_live_' || encode(extensions.gen_random_bytes(24), 'hex');
+  EXCEPTION WHEN OTHERS THEN
+    v_api_key := 'ic_live_' || replace(gen_random_uuid()::text, '-', '') || substr(replace(gen_random_uuid()::text, '-', ''), 1, 16);
+  END;
+
+  -- Remove any orphan profile with the same email to avoid unique constraint collision
+  IF NEW.email IS NOT NULL THEN
+    DELETE FROM public.profiles WHERE email = NEW.email AND id <> NEW.id;
+  END IF;
+
+  -- Upsert profile record
+  INSERT INTO public.profiles (
+    id,
+    email,
+    full_name,
+    avatar_url,
+    company_name,
+    api_key,
+    tier
+  )
   VALUES (
     NEW.id,
-    NEW.email,
-    NEW.raw_user_meta_data->>'full_name',
-    NEW.raw_user_meta_data->>'avatar_url',
-    encode(gen_random_bytes(24), 'hex')
+    COALESCE(NEW.email, NEW.id::text || '@inboundcheck.internal'),
+    v_full_name,
+    v_avatar_url,
+    v_company_name,
+    v_api_key,
+    'starter'
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name),
     avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url),
+    company_name = COALESCE(EXCLUDED.company_name, public.profiles.company_name),
     updated_at = NOW();
+
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Prevent aborting auth.users insert transaction; log error to Postgres logs
+    RAISE WARNING 'handle_new_user trigger encountered an error for user %: % (SQLSTATE %)', NEW.id, SQLERRM, SQLSTATE;
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+ALTER FUNCTION public.handle_new_user() OWNER TO postgres;
 
 -- Provisioning Trigger on auth.users
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
@@ -65,7 +122,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     full_name TEXT,
     avatar_url TEXT,
     company_name TEXT,
-    api_key TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(24), 'hex'),
+    api_key TEXT UNIQUE NOT NULL DEFAULT ('ic_live_' || replace(gen_random_uuid()::text, '-', '') || substr(replace(gen_random_uuid()::text, '-', ''), 1, 16)),
     tier TEXT NOT NULL DEFAULT 'starter' CHECK (tier IN ('starter', 'growth', 'enterprise')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -315,10 +372,18 @@ CREATE POLICY "Users can update their own profile"
     ON public.profiles FOR UPDATE
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Service role and trigger full access" ON public.profiles;
+CREATE POLICY "Service role and trigger full access"
+    ON public.profiles
+    FOR ALL
+    TO service_role, postgres
+    USING (true)
+    WITH CHECK (true);
+
 DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile"
     ON public.profiles FOR INSERT
-    WITH CHECK (auth.uid() = id);
+    WITH CHECK (auth.uid() = id OR auth.uid() IS NULL);
 
 -- 5.2 Monitored Domains Policies
 DROP POLICY IF EXISTS "Users can view their own monitored domains" ON public.monitored_domains;

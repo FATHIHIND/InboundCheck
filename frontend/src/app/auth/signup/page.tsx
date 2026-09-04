@@ -13,37 +13,60 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage("");
+    setSuccessMessage("");
 
     try {
       if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         throw new Error("Supabase authentication is not configured in environment.");
       }
+
+      const cleanFullName = fullName.trim();
+      const cleanEmail = email.trim().toLowerCase();
+
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
         options: {
-          data: { full_name: fullName },
+          data: {
+            full_name: cleanFullName,
+            name: cleanFullName,
+          },
         },
       });
+
       if (error) {
         throw error;
       }
+
       if (!data?.user) {
         throw new Error("Unable to create account. Please try again.");
       }
+
+      // Check if user already exists (Supabase returns empty identities array when email confirmation is active)
+      if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setErrorMessage("An account with this email address already exists. Please sign in instead.");
+        return;
+      }
+
       if (data.session) {
         router.push("/dashboard");
       } else {
         // Confirmation email sent
-        setErrorMessage("Account created. Please check your email to confirm your account.");
+        setSuccessMessage("Account created successfully! Please check your email inbox to confirm your account, then sign in.");
       }
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to create account");
+      const msg = err.message || "Failed to create account";
+      if (msg.includes("Database error saving new user")) {
+        setErrorMessage("A database setup error occurred during registration. Please contact support or try again in a moment.");
+      } else {
+        setErrorMessage(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -66,8 +89,18 @@ export default function SignupPage() {
         </div>
 
         {errorMessage && (
-          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
-            {errorMessage}
+          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-start gap-2">
+            <span className="font-semibold">Error:</span> {errorMessage}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-4 p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-start gap-2.5">
+            <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-emerald-300">Registration initiated!</p>
+              <p className="mt-0.5 text-zinc-300">{successMessage}</p>
+            </div>
           </div>
         )}
 
