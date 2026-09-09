@@ -12,20 +12,39 @@ from collections import defaultdict
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from contextlib import asynccontextmanager
 from starlette.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 from app.api.v1 import api_v1_router
+from app.services.scheduler.background_auditor import background_auditor
+from app.core.env_guard import validate_runtime_environment
 
 logger = logging.getLogger("AppServer")
 
 is_production = settings.ENVIRONMENT.lower() in ["production", "prod"]
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup 1: Perform Fail-Fast Runtime Environment Integrity Validation
+    validate_runtime_environment()
+
+    # Startup 2: Launch autonomous background DNS & RBL audit scheduler
+    logger.info("Starting InboundCheck background auditor daemon...")
+    background_auditor.start()
+    yield
+    # Shutdown: Terminate background daemon cleanly
+    logger.info("Stopping InboundCheck background auditor daemon...")
+    await background_auditor.stop()
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="High-precision email deliverability diagnostic platform designed for eCommerce brands and Shopify merchants.",
     version="1.0.0",
+    lifespan=lifespan,
     openapi_url=None if is_production else f"{settings.API_V1_STR}/openapi.json",
     docs_url=None if is_production else "/docs",
     redoc_url=None if is_production else "/redoc",

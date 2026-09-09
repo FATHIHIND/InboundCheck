@@ -73,18 +73,86 @@ async def test_billing_endpoints():
         assert portal_res.status_code == 200
         assert "portal_url" in portal_res.json()
 
-        # 4. Webhook processing (unauthenticated via user JWT, verified via Stripe signature)
+        # 4. Get active user subscription & quota
+        sub_res = await ac.get("/api/v1/billing/subscription")
+        assert sub_res.status_code == 200
+        assert "tier" in sub_res.json()
+        assert "domain_limit" in sub_res.json()
+
+        # 5. Webhook processing: checkout.session.completed with customer & subscription IDs
         webhook_res = await ac.post("/api/v1/billing/webhook", json={
+            "id": "evt_test_checkout_complete_99",
             "type": "checkout.session.completed",
             "data": {
                 "object": {
                     "client_reference_id": "test-user-1",
+                    "customer": "cus_test_abc123",
+                    "subscription": "sub_test_xyz789",
                     "metadata": {"plan_tier": "growth", "user_id": "test-user-1"}
                 }
             }
         })
         assert webhook_res.status_code == 200
         assert webhook_res.json()["action"] == "subscription_activated"
+        assert webhook_res.json()["tier"] == "growth"
+        assert webhook_res.json()["customer_id"] == "cus_test_abc123"
+
+        # 6. Webhook processing: customer.subscription.deleted downgrades to starter
+        cancel_res = await ac.post("/api/v1/billing/webhook", json={
+            "id": "evt_test_cancel_100",
+            "type": "customer.subscription.deleted",
+            "data": {
+                "object": {
+                    "customer": "cus_test_abc123",
+                    "status": "canceled",
+                    "metadata": {"user_id": "test-user-1"}
+                }
+            }
+        })
+        assert cancel_res.status_code == 200
+        assert cancel_res.json()["action"] == "subscription_downgraded"
+
+        # 7. Get user invoices (authenticated)
+        inv_res = await ac.get("/api/v1/billing/invoices")
+        assert inv_res.status_code == 200
+        assert inv_res.json()["success"] is True
+        assert isinstance(inv_res.json()["invoices"], list)
+
+
+def test_env_guard_validation():
+    """Verify runtime environment validator detects placeholder and missing variables."""
+    from app.core.env_guard import check_is_placeholder, validate_runtime_environment
+
+    # Verify placeholder detector
+    assert check_is_placeholder("your_stripe_secret_key") is True
+    assert check_is_placeholder("https://your-project-ref.supabase.co") is True
+    assert check_is_placeholder("dummy_token") is True
+    assert check_is_placeholder("") is True
+    assert check_is_placeholder("sk_live_51P9x824901823901") is False
+
+    # In test/dev environment, validate_runtime_environment returns (is_valid, issues) without crashing
+    is_valid, issues = validate_runtime_environment()
+    assert isinstance(is_valid, bool)
+    assert isinstance(issues, list)
+
+
+@pytest.mark.asyncio
+async def test_tier_domain_quota_enforcement():
+    """Verify Starter tier quota blocks adding more than 1 domain."""
+    from app.services.supabase_client import supabase_service
+    transport = ASGITransport(app=app)
+    # Use isolated test user with valid UUID format
+    test_user = "11111111-1111-1111-1111-111111111111"
+    supabase_service._in_memory_domains[test_user] = [
+        {"id": "dom_existing", "domain_name": "starter-domain-1.com", "user_id": test_user}
+    ]
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(test_user)) as ac:
+        # Trying to add second domain on starter plan (default quota = 1) must return 402
+        res = await ac.post("/api/v1/domains", json={"domain": "starter-domain-2.com"})
+        assert res.status_code == 402
+        assert "quota" in res.json()["detail"].lower()
+
 
 
 @pytest.mark.asyncio

@@ -13,10 +13,17 @@ import logging
 
 from app.core.security import get_current_user_id
 from app.services.billing_service import billing_service, PLAN_PRICING
+from app.services.supabase_client import supabase_service
 
 logger = logging.getLogger("BillingRoutes")
 
 router = APIRouter(prefix="/billing", tags=["Stripe Billing & Subscriptions"])
+
+TIER_LIMITS = {
+    "starter": 1,
+    "growth": 5,
+    "enterprise": 999
+}
 
 
 class CreateCheckoutRequest(BaseModel):
@@ -29,6 +36,28 @@ class CreateCheckoutRequest(BaseModel):
 class CustomerPortalRequest(BaseModel):
     customer_id: Optional[str] = None
     return_url: Optional[str] = None
+
+
+@router.get("/subscription")
+async def get_user_subscription(user_id: str = Depends(get_current_user_id)):
+    """
+    Get authenticated user's active subscription tier, status, and domain quota usage.
+    """
+    profile = supabase_service.get_user_profile(user_id) if supabase_service.is_connected else None
+    tier = profile.get("tier", "starter") if profile else "starter"
+    status = profile.get("subscription_status", "active") if profile else "active"
+    stripe_customer_id = profile.get("stripe_customer_id") if profile else None
+    domain_count = supabase_service.get_user_domain_count(user_id)
+
+    return {
+        "success": True,
+        "tier": tier,
+        "subscription_status": status,
+        "has_stripe_customer": bool(stripe_customer_id),
+        "domain_count": domain_count,
+        "domain_limit": TIER_LIMITS.get(tier, 1),
+        "current_period_end": profile.get("current_period_end") if profile else None
+    }
 
 
 @router.get("/plans")
@@ -123,6 +152,22 @@ async def create_customer_portal(
     except Exception as e:
         logger.error(f"Error creating customer portal session: {e}")
         raise HTTPException(status_code=500, detail="Failed to create customer portal session")
+
+
+@router.get("/invoices")
+async def get_billing_invoices(
+    limit: int = Query(10, ge=1, le=50),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Retrieve paid and processing Stripe invoice receipts for the authenticated user.
+    """
+    try:
+        invoices = await billing_service.get_customer_invoices(user_id=user_id, limit=limit)
+        return {"success": True, "invoices": invoices, "total": len(invoices)}
+    except Exception as e:
+        logger.error(f"Error fetching invoices for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve billing invoices")
 
 
 @router.post("/webhook")

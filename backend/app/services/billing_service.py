@@ -4,7 +4,8 @@ InboundCheck - Stripe Billing & Subscription Service
 Handles Stripe Checkout Sessions, Customer Billing Portal, and webhook event processing.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+from datetime import datetime
 import hmac
 import hashlib
 import time
@@ -124,23 +125,93 @@ class BillingService:
     ) -> Dict[str, Any]:
         """
         Create a Stripe Customer Portal Session for billing and invoice management.
+        Automatically resolves stripe_customer_id from user's profile if not supplied.
         """
-        r_url = return_url or f"{settings.FRONTEND_URL}/dashboard/settings"
+        r_url = return_url or f"{settings.FRONTEND_URL}/dashboard/billing"
+        resolved_customer_id = customer_id
 
-        if self.secret_key and customer_id:
+        # Lookup stripe_customer_id from Supabase profile if omitted
+        if not resolved_customer_id and supabase_service.is_connected:
+            try:
+                profile = supabase_service.get_user_profile(user_id)
+                if profile:
+                    resolved_customer_id = profile.get("stripe_customer_id")
+            except Exception as e:
+                logger.warning(f"Could not resolve stripe_customer_id for user {user_id}: {e}")
+
+        if self.secret_key and resolved_customer_id:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     res = await client.post(
                         "https://api.stripe.com/v1/billing_portal/sessions",
                         headers={"Authorization": f"Bearer {self.secret_key}"},
-                        data={"customer": customer_id, "return_url": r_url}
+                        data={"customer": resolved_customer_id, "return_url": r_url}
                     )
                     if res.status_code == 200:
-                        return {"portal_url": res.json().get("url")}
+                        return {"portal_url": res.json().get("url"), "has_customer": True}
+                    else:
+                        logger.error(f"Stripe Portal API returned {res.status_code}: {res.text}")
             except Exception as e:
                 logger.error(f"Stripe Portal error: {e}")
 
-        return {"portal_url": r_url}
+        return {
+            "portal_url": r_url,
+            "has_customer": bool(resolved_customer_id),
+            "message": "No active Stripe customer account found." if not resolved_customer_id else "Portal session ready"
+        }
+
+    async def get_customer_invoices(
+        self,
+        user_id: str,
+        customer_id: Optional[str] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch paid and processing invoices from Stripe Invoices API for customer.
+        """
+        resolved_customer_id = customer_id
+        if not resolved_customer_id and supabase_service.is_connected:
+            try:
+                profile = supabase_service.get_user_profile(user_id)
+                if profile:
+                    resolved_customer_id = profile.get("stripe_customer_id")
+            except Exception as e:
+                logger.warning(f"Could not resolve stripe_customer_id for user {user_id}: {e}")
+
+        if self.secret_key and resolved_customer_id:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    res = await client.get(
+                        f"https://api.stripe.com/v1/invoices?customer={resolved_customer_id}&limit={limit}",
+                        headers={"Authorization": f"Bearer {self.secret_key}"}
+                    )
+                    if res.status_code == 200:
+                        stripe_data = res.json()
+                        invoices = []
+                        for inv in stripe_data.get("data", []):
+                            amount_paid = inv.get("amount_paid", 0) / 100
+                            currency = (inv.get("currency") or "usd").upper()
+                            p_start_ts = inv.get("period_start") or inv.get("created") or time.time()
+                            p_end_ts = inv.get("period_end") or inv.get("created") or time.time()
+                            period_start = datetime.fromtimestamp(p_start_ts).strftime("%b %d, %Y")
+                            period_end = datetime.fromtimestamp(p_end_ts).strftime("%b %d, %Y")
+                            invoices.append({
+                                "id": inv.get("id"),
+                                "invoice_number": inv.get("number") or f"INV-{inv.get('id', '')[-6:].upper()}",
+                                "billing_period": f"{period_start} – {period_end}",
+                                "amount": f"${amount_paid:.2f} {currency}",
+                                "status": "paid" if inv.get("status") == "paid" else (inv.get("status") or "processing"),
+                                "pdf_url": inv.get("invoice_pdf") or inv.get("hosted_invoice_url") or "#",
+                                "created_at": inv.get("created")
+                            })
+                        return invoices
+                    else:
+                        logger.warning(f"Stripe invoices API responded with {res.status_code}: {res.text}")
+            except Exception as e:
+                logger.error(f"Error fetching Stripe invoices: {e}")
+
+        # Return empty list if no customer ID or local simulation
+        return []
 
     def verify_webhook_signature(self, payload: bytes, sig_header: str, tolerance_seconds: int = 300) -> bool:
         """
@@ -191,6 +262,7 @@ class BillingService:
     def process_webhook_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """
         Reconcile Stripe event and update user subscription tier in database with idempotency protection.
+        Persists stripe_customer_id, stripe_subscription_id, and subscription_status.
         """
         event_id = event.get("id")
         if event_id and self.is_event_processed(event_id):
@@ -202,32 +274,60 @@ class BillingService:
 
         if event_type == "checkout.session.completed":
             user_id = data_object.get("client_reference_id") or data_object.get("metadata", {}).get("user_id")
-            plan_tier = data_object.get("metadata", {}).get("plan_tier", "growth")
+            raw_tier = data_object.get("metadata", {}).get("plan_tier", "growth").lower()
+            plan_tier = raw_tier if raw_tier in ["starter", "growth", "enterprise"] else "growth"
+            customer_id = data_object.get("customer")
+            subscription_id = data_object.get("subscription")
 
             if user_id:
                 if supabase_service.is_connected:
                     try:
-                        supabase_service._client.table("profiles").update({
-                            "plan_tier": plan_tier,
+                        update_payload: Dict[str, Any] = {
+                            "tier": plan_tier,
+                            "subscription_status": "active",
                             "updated_at": "now()"
-                        }).eq("id", user_id).execute()
+                        }
+                        if customer_id:
+                            update_payload["stripe_customer_id"] = customer_id
+                        if subscription_id:
+                            update_payload["stripe_subscription_id"] = subscription_id
+
+                        supabase_service._client.table("profiles").update(update_payload).eq("id", user_id).execute()
                     except Exception as e:
                         logger.error(f"Failed to update profile subscription in Supabase: {e}")
 
                 if event_id:
                     self.mark_event_processed(event_id)
 
-                return {"status": "success", "action": "subscription_activated", "user_id": user_id, "tier": plan_tier}
+                return {
+                    "status": "success",
+                    "action": "subscription_activated",
+                    "user_id": user_id,
+                    "tier": plan_tier,
+                    "customer_id": customer_id
+                }
 
         elif event_type in ["customer.subscription.deleted", "customer.subscription.updated"]:
             status = data_object.get("status")
             user_id = data_object.get("metadata", {}).get("user_id")
+            customer_id = data_object.get("customer")
 
-            if user_id and status == "canceled":
+            # If user_id missing in metadata, resolve via stripe_customer_id
+            if not user_id and customer_id and supabase_service.is_connected:
+                try:
+                    res = supabase_service._client.table("profiles").select("id").eq("stripe_customer_id", customer_id).execute()
+                    if res.data and len(res.data) > 0:
+                        user_id = res.data[0]["id"]
+                except Exception as e:
+                    logger.error(f"Failed to resolve user_id for customer {customer_id}: {e}")
+
+            if user_id and (status == "canceled" or event_type == "customer.subscription.deleted"):
                 if supabase_service.is_connected:
                     try:
                         supabase_service._client.table("profiles").update({
-                            "plan_tier": "starter"
+                            "tier": "starter",
+                            "subscription_status": "canceled",
+                            "updated_at": "now()"
                         }).eq("id", user_id).execute()
                     except Exception as e:
                         logger.error(f"Failed to downgrade profile: {e}")
@@ -236,6 +336,21 @@ class BillingService:
                     self.mark_event_processed(event_id)
 
                 return {"status": "success", "action": "subscription_downgraded", "user_id": user_id}
+
+            elif user_id and status == "active":
+                if supabase_service.is_connected:
+                    try:
+                        supabase_service._client.table("profiles").update({
+                            "subscription_status": "active",
+                            "updated_at": "now()"
+                        }).eq("id", user_id).execute()
+                    except Exception as e:
+                        logger.error(f"Failed to update subscription status: {e}")
+
+                if event_id:
+                    self.mark_event_processed(event_id)
+
+                return {"status": "success", "action": "subscription_updated", "user_id": user_id}
 
         if event_id:
             self.mark_event_processed(event_id)

@@ -24,6 +24,7 @@ class SupabaseService:
         self._client: Optional[Client] = None
         self._in_memory_domains: Dict[str, List[Dict[str, Any]]] = {}
         self._in_memory_logs: Dict[str, List[Dict[str, Any]]] = {}
+        self._in_memory_profiles: Dict[str, Dict[str, Any]] = {}
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -39,8 +40,40 @@ class SupabaseService:
     def is_connected(self) -> bool:
         return self._client is not None
 
+    def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch public.profiles record for user."""
+        if user_id in self._in_memory_profiles:
+            return self._in_memory_profiles[user_id]
+
+        if self._client:
+            try:
+                res = self._client.table("profiles").select("*").eq("id", user_id).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+            except Exception as e:
+                logger.error(f"Failed to query user profile {user_id}: {e}")
+        return None
+
+    def get_user_domain_count(self, user_id: str) -> int:
+        """Get count of active monitored domains for user."""
+        if user_id in self._in_memory_domains:
+            return len(self._in_memory_domains[user_id])
+
+        if self._client:
+            try:
+                res = self._client.table("monitored_domains").select("id", count="exact").eq("user_id", user_id).execute()
+                if res.count is not None:
+                    return res.count
+                return len(res.data or [])
+            except Exception as e:
+                logger.error(f"Failed to count domains for {user_id}: {e}")
+        return len(self._in_memory_domains.get(user_id, []))
+
     def get_user_domains(self, user_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
         """Fetch all monitored domains for a user with pagination."""
+        if user_id in self._in_memory_domains and len(self._in_memory_domains[user_id]) > 0:
+            return self._in_memory_domains[user_id][offset:offset + limit]
+
         if self._client:
             try:
                 response = (
@@ -56,36 +89,7 @@ class SupabaseService:
                 logger.error(f"Failed to query user domains from Supabase: {e}")
 
         # Fallback in-memory
-        all_domains = self._in_memory_domains.get(user_id, [
-            {
-                "id": "dom_1",
-                "user_id": user_id,
-                "domain_name": "brandshop.com",
-                "health_score": 92,
-                "spf_status": "optimal",
-                "dkim_status": "optimal",
-                "dmarc_status": "optimal",
-                "mx_status": "optimal",
-                "bimi_status": "optimal",
-                "is_active": True,
-                "last_checked_at": datetime.utcnow().isoformat(),
-                "created_at": datetime.utcnow().isoformat(),
-            },
-            {
-                "id": "dom_2",
-                "user_id": user_id,
-                "domain_name": "checkout-orders.com",
-                "health_score": 68,
-                "spf_status": "warning",
-                "dkim_status": "optimal",
-                "dmarc_status": "warning",
-                "mx_status": "optimal",
-                "bimi_status": "missing",
-                "is_active": True,
-                "last_checked_at": datetime.utcnow().isoformat(),
-                "created_at": datetime.utcnow().isoformat(),
-            }
-        ])
+        all_domains = self._in_memory_domains.get(user_id, [])
         return all_domains[offset:offset + limit]
 
     def create_or_update_domain(

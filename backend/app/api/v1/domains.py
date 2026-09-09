@@ -22,6 +22,13 @@ router = APIRouter(prefix="/domains", tags=["Monitored Domains"])
 diagnostic_engine = DNSDiagnosticEngine()
 
 
+TIER_DOMAIN_LIMITS = {
+    "starter": 1,
+    "growth": 5,
+    "enterprise": 999
+}
+
+
 class CreateDomainRequest(BaseModel):
     domain: str = Field(..., description="Apex or subdomain to monitor, e.g. brandshop.com", min_length=3)
     custom_selectors: Optional[List[str]] = None
@@ -53,11 +60,27 @@ async def add_monitored_domain(
     """
     Add a new sending domain to continuous monitoring.
     Immediately executes initial DNS diagnostic audit and stores record in Supabase.
+    Enforces subscription tier domain quotas (Starter=1, Growth=5, Enterprise=Unlimited).
     """
     try:
         clean_domain = request.domain.strip().lower()
         if not clean_domain or len(clean_domain) < 3:
             raise HTTPException(status_code=400, detail="Valid domain name is required.")
+
+        # Enforce tier-based domain quota limits
+        profile = supabase_service.get_user_profile(user_id) if supabase_service.is_connected else None
+        tier = (profile.get("tier") or "starter").lower() if profile else "starter"
+        quota_limit = TIER_DOMAIN_LIMITS.get(tier, 1)
+
+        # Allow updating existing domain without consuming additional quota
+        existing_domains = supabase_service.get_user_domains(user_id=user_id, limit=100)
+        is_already_monitored = any(d.get("domain_name") == clean_domain for d in existing_domains)
+
+        if not is_already_monitored and len(existing_domains) >= quota_limit:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Domain quota reached ({len(existing_domains)}/{quota_limit}) for '{tier.capitalize()}' plan. Please upgrade your plan in Billing to add more domains."
+            )
 
         # Run live DNS diagnostic
         summary, raw_responses, exec_ms = await diagnostic_engine.audit_domain(
@@ -99,6 +122,8 @@ async def add_monitored_domain(
             "domain": saved_domain,
             "audit": audit_payload
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error adding domain {request.domain}: {e}")
         raise HTTPException(status_code=500, detail="Failed to add monitored domain")

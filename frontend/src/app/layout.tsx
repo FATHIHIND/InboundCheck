@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import EnvConfigAlert from "@/components/ui/EnvConfigAlert";
+
 export const metadata: Metadata = {
   title: "InboundCheck - Email Deliverability & DNS Diagnostic for Shopify",
   description: "High-precision email deliverability diagnostic platform designed for eCommerce brands and Shopify merchants. Instant MX, SPF, DKIM, and DMARC enforcement checks.",
@@ -22,6 +24,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[#09090b] text-zinc-100 antialiased selection:bg-emerald-500/20 selection:text-emerald-300 font-['Plus_Jakarta_Sans',sans-serif]">
+        <EnvConfigAlert />
         {children}
       </body>
     </html>

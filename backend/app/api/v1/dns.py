@@ -20,7 +20,7 @@ from app.schemas.dns import (
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine, DEFAULT_DKIM_SELECTORS
 from app.services.dns.scorer import DeliverabilityScorer
 from app.services.dns.record_generator import DNSRecordGenerator
-from app.services.failover.omnichannel_service import telegram_alert_service
+from app.services.alert_dispatcher import alert_dispatcher
 
 logger = logging.getLogger("DNSRoutes")
 
@@ -29,14 +29,14 @@ diagnostic_engine = DNSDiagnosticEngine()
 
 
 @router.post("/audit", response_model=DNSAuditResponse)
-async def audit_domain(
+async def execute_dns_audit(
     request: DNSAuditRequest,
     user_id: str = Depends(get_current_user_id)
 ):
     """
-    Perform a comprehensive, asynchronous DNS deliverability audit for a domain.
-    Audits MX, SPF (syntax & RFC 7208 lookup limits), DKIM selectors, DMARC policies, and BIMI.
-    Calculates unified Domain Health Score (0-100%) and triggers Telegram alert if verification passes.
+    Execute real-time multi-resolver DNS audit for the specified domain.
+    Enforces SSRF domain sanitization, deliverability health scoring,
+    and automatic degradation alerts on threshold dips.
     """
     try:
         clean_domain = request.domain.strip().lower()
@@ -53,25 +53,18 @@ async def audit_domain(
             summary=summary
         )
 
-        # Closed-loop Telegram Alert: Notify when domain is verified and healthy (Optimal >= 90%)
-        if health_score >= 90:
-            try:
-                alert_text = (
-                    f"🎉 *INBOUNDCHECK DNS VERIFICATION CONFIRMED*\n\n"
-                    f"🏬 *Domain:* `{clean_domain}`\n"
-                    f"🛡️ *Health Score:* `{health_score}%` ({overall_status.upper()})\n"
-                    f"⚡ *SPF:* {summary.spf.status.upper()} ({summary.spf.dns_lookup_count}/10 lookups)\n"
-                    f"🔑 *DKIM:* {summary.dkim.status.upper()} ({len(summary.dkim.found_selectors)} selectors active)\n"
-                    f"📜 *DMARC:* {summary.dmarc.status.upper()} (`p={summary.dmarc.policy or 'none'}`)\n\n"
-                    f"✅ *Status:* Primary inbox delivery active. All transactional receipts protected."
-                )
-                await telegram_alert_service.send_telegram_alert(
-                    bot_token=settings.TELEGRAM_BOT_TOKEN or "7198234891:AAH8Fj90qWz1x9_example",
-                    chat_id=settings.TELEGRAM_CHAT_ID or "@inboundcheck_alerts",
-                    text=alert_text
-                )
-            except Exception as tg_err:
-                logger.warning(f"Telegram notification in DNS audit skipped: {tg_err}")
+        # Real-time Degradation Alert Dispatcher: Alert on score dip below threshold or protocol failure
+        try:
+            await alert_dispatcher.evaluate_and_dispatch(
+                user_id=user_id,
+                domain_name=clean_domain,
+                health_score=health_score,
+                overall_status=overall_status,
+                summary=summary,
+                issues=issues
+            )
+        except Exception as alert_err:
+            logger.warning(f"Degradation alert evaluation skipped for {clean_domain}: {alert_err}")
 
         return DNSAuditResponse(
             domain=clean_domain,
