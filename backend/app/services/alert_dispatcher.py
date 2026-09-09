@@ -7,6 +7,7 @@ against tenant-configured alert thresholds, and dispatches real-time alerts.
 
 from typing import Dict, Any, Optional, List
 import logging
+import time
 from datetime import datetime
 
 from app.core.config import settings
@@ -23,7 +24,33 @@ class AlertDispatcherService:
     """
     Intelligently evaluates domain deliverability posture against tenant preferences
     and dispatches multi-channel alerts (Telegram, Email, Webhook).
+    Suppresses repetitive alerts via a 6-hour cooldown window per tenant-domain.
     """
+
+    def __init__(self, cooldown_seconds: int = 6 * 3600):
+        self.cooldown_seconds = cooldown_seconds  # 21,600s = 6 hours
+        self._alert_cooldown_tracker: Dict[str, float] = {}
+
+    def is_in_cooldown(self, user_id: str, domain_name: str) -> bool:
+        """Check if tenant-domain is currently within active cooldown window."""
+        key = f"{user_id}:{domain_name.strip().lower()}"
+        last_alert = self._alert_cooldown_tracker.get(key)
+        if not last_alert:
+            return False
+        return (time.time() - last_alert) < self.cooldown_seconds
+
+    def mark_alerted(self, user_id: str, domain_name: str):
+        """Record alert dispatch timestamp for cooldown window."""
+        key = f"{user_id}:{domain_name.strip().lower()}"
+        self._alert_cooldown_tracker[key] = time.time()
+
+    def reset_cooldown(self, user_id: Optional[str] = None, domain_name: Optional[str] = None):
+        """Reset cooldown tracker for a specific domain or all domains."""
+        if user_id and domain_name:
+            key = f"{user_id}:{domain_name.strip().lower()}"
+            self._alert_cooldown_tracker.pop(key, None)
+        else:
+            self._alert_cooldown_tracker.clear()
 
     def get_tenant_alert_config(self, user_id: str) -> Dict[str, Any]:
         """Fetch alert configuration for tenant from Supabase with graceful fallback."""
@@ -115,6 +142,20 @@ class AlertDispatcherService:
                 "threshold": threshold
             }
 
+        # 3. Check if alert is suppressed by active 6-hour cooldown window
+        if self.is_in_cooldown(user_id, domain_name):
+            logger.info(
+                f"Suppressed duplicate alert for {domain_name} (tenant {user_id}): active 6-hour cooldown window"
+            )
+            return {
+                "dispatched": False,
+                "cooldown": True,
+                "reasons": reasons,
+                "health_score": health_score,
+                "threshold": threshold,
+                "message": "Alert suppressed: 6-hour debounce cooldown active for domain"
+            }
+
         # Build Rich Actionable Telegram Alert Message
         issues_formatted = ""
         if issues:
@@ -155,6 +196,9 @@ class AlertDispatcherService:
         if config.get("email_notifications", True) and config.get("notification_email"):
             email_dispatched = True
             logger.info(f"Queued email alert for {config['notification_email']}: {domain_name} degraded to {health_score}%")
+
+        # Mark alert timestamp to activate 6-hour debounce cooldown
+        self.mark_alerted(user_id, domain_name)
 
         return {
             "dispatched": True,

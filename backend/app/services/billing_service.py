@@ -35,20 +35,51 @@ class BillingService:
         self._processed_events: Dict[str, float] = {}
 
     def is_event_processed(self, event_id: str) -> bool:
-        """Check if Stripe event has already been processed (24-hour TTL)."""
+        """Check if Stripe event has already been processed (DB table + 24-hour memory cache)."""
         if not event_id:
             return False
+
+        # 1. Query persistent database table if connected
+        if supabase_service.is_connected:
+            try:
+                res = (
+                    supabase_service._client.table("processed_webhook_events")
+                    .select("id")
+                    .eq("id", event_id)
+                    .execute()
+                )
+                if res.data and len(res.data) > 0:
+                    self._processed_events[event_id] = time.time()
+                    return True
+            except Exception as e:
+                logger.warning(f"Error querying processed_webhook_events in DB: {e}")
+
+        # 2. Local memory fallback with 24-hour TTL (86400s)
         now = time.time()
-        # Evict expired events older than 24 hours (86400s)
         self._processed_events = {
             eid: ts for eid, ts in self._processed_events.items() if now - ts < 86400
         }
         return event_id in self._processed_events
 
-    def mark_event_processed(self, event_id: str):
-        """Mark Stripe event as successfully reconciled."""
-        if event_id:
-            self._processed_events[event_id] = time.time()
+    def mark_event_processed(self, event_id: str, event_type: str = "stripe_webhook"):
+        """Mark Stripe event as successfully reconciled in DB and local memory."""
+        if not event_id:
+            return
+
+        # Update local memory cache
+        self._processed_events[event_id] = time.time()
+
+        # Persist to database
+        if supabase_service.is_connected:
+            try:
+                supabase_service._client.table("processed_webhook_events").upsert(
+                    {
+                        "id": event_id,
+                        "event_type": event_type,
+                    }
+                ).execute()
+            except Exception as e:
+                logger.warning(f"Failed to record event {event_id} in processed_webhook_events: {e}")
 
     def get_price_for_tier(self, tier: str) -> Dict[str, Any]:
         """Return plan metadata and price amount in cents."""
@@ -297,7 +328,7 @@ class BillingService:
                         logger.error(f"Failed to update profile subscription in Supabase: {e}")
 
                 if event_id:
-                    self.mark_event_processed(event_id)
+                    self.mark_event_processed(event_id, event_type=event_type or "stripe_webhook")
 
                 return {
                     "status": "success",
@@ -333,7 +364,7 @@ class BillingService:
                         logger.error(f"Failed to downgrade profile: {e}")
 
                 if event_id:
-                    self.mark_event_processed(event_id)
+                    self.mark_event_processed(event_id, event_type=event_type or "stripe_webhook")
 
                 return {"status": "success", "action": "subscription_downgraded", "user_id": user_id}
 
@@ -348,12 +379,12 @@ class BillingService:
                         logger.error(f"Failed to update subscription status: {e}")
 
                 if event_id:
-                    self.mark_event_processed(event_id)
+                    self.mark_event_processed(event_id, event_type=event_type or "stripe_webhook")
 
                 return {"status": "success", "action": "subscription_updated", "user_id": user_id}
 
         if event_id:
-            self.mark_event_processed(event_id)
+            self.mark_event_processed(event_id, event_type=event_type or "stripe_webhook")
 
         return {"status": "ignored", "event_type": event_type}
 

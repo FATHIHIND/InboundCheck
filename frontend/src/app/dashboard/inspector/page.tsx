@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
   Terminal,
@@ -79,8 +80,13 @@ interface GeneratedFix {
   authoritative_target: string;
 }
 
-export default function DNSInspectorPage() {
-  const [domainInput, setDomainInput] = useState("shopify.com");
+function DNSInspectorContent() {
+  const searchParams = useSearchParams();
+  const queryDomain = searchParams.get("domain");
+
+  const [domainInput, setDomainInput] = useState(
+    queryDomain ? queryDomain.trim().toLowerCase() : "shopify.com"
+  );
   const [customSelectors, setCustomSelectors] = useState("shopify, google, k1");
   const [activeTab, setActiveTab] = useState<"generator" | "inspector">("generator");
   const [isLoading, setIsLoading] = useState(false);
@@ -93,7 +99,9 @@ export default function DNSInspectorPage() {
   const [includeKlaviyo, setIncludeKlaviyo] = useState(true);
   const [includeSendgrid, setIncludeSendgrid] = useState(false);
   const [dmarcPolicy, setDmarcPolicy] = useState<"quarantine" | "reject" | "none">("reject");
-  const [dmarcReportEmail, setDmarcReportEmail] = useState("dmarc-aggregate@shopify.com");
+  const [dmarcReportEmail, setDmarcReportEmail] = useState(
+    queryDomain ? `dmarc-aggregate@${queryDomain.trim().toLowerCase()}` : "dmarc-aggregate@shopify.com"
+  );
   const [generatedRecords, setGeneratedRecords] = useState<GeneratedFix[]>([]);
 
   // Accordion open/close state for record cards
@@ -112,11 +120,15 @@ export default function DNSInspectorPage() {
   const [copiedJson, setCopiedJson] = useState(false);
   const [showRawDrawer, setShowRawDrawer] = useState(false);
 
-  // Initial load
+  // Initial load and URL param deep-link reactivity
   useEffect(() => {
-    handleRunAudit("shopify.com");
-    handleGenerateRecords();
-  }, []);
+    const target = (queryDomain || "shopify.com").trim().toLowerCase();
+    setDomainInput(target);
+    const targetEmail = `dmarc-aggregate@${target}`;
+    setDmarcReportEmail(targetEmail);
+    handleRunAudit(target);
+    handleGenerateRecords(target, targetEmail);
+  }, [queryDomain]);
 
   const handleRunAudit = async (targetDomain?: string) => {
     const d = (targetDomain || domainInput).trim().toLowerCase();
@@ -200,8 +212,9 @@ export default function DNSInspectorPage() {
     }
   };
 
-  const handleGenerateRecords = async () => {
-    const d = domainInput.trim().toLowerCase() || "shopify.com";
+  const handleGenerateRecords = async (targetDomain?: string, targetEmail?: string) => {
+    const d = (targetDomain || domainInput).trim().toLowerCase() || "shopify.com";
+    const reportEmail = targetEmail || dmarcReportEmail || `dmarc-aggregate@${d}`;
     try {
       const res = await apiFetch("/api/v1/dns/generate-records", {
         method: "POST",
@@ -214,7 +227,7 @@ export default function DNSInspectorPage() {
           include_klaviyo: includeKlaviyo,
           include_sendgrid: includeSendgrid,
           dmarc_policy: dmarcPolicy,
-          rua_email: dmarcReportEmail,
+          rua_email: reportEmail,
         }),
       });
 
@@ -860,6 +873,23 @@ export default function DNSInspectorPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DNSInspectorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-96 w-full items-center justify-center font-mono text-xs text-zinc-500">
+          <div className="flex items-center space-x-2.5">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <span className="text-zinc-400">Loading DNS Inspector & Diagnostic Engine...</span>
+          </div>
+        </div>
+      }
+    >
+      <DNSInspectorContent />
+    </Suspense>
   );
 }
 

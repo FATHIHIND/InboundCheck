@@ -55,6 +55,30 @@ async def test_alert_dispatcher_degradation_triggers():
     assert res_degraded["dispatched"] is True
     assert any("dipped to 68%" in r for r in res_degraded["reasons"])
 
+    # 2b. Repeated degraded evaluation within 6 hours MUST be suppressed by cooldown
+    res_suppressed = await alert_dispatcher.evaluate_and_dispatch(
+        user_id=test_user,
+        domain_name="degraded-store.com",
+        health_score=68,
+        overall_status="warning",
+        summary=None,
+        issues=[]
+    )
+    assert res_suppressed["dispatched"] is False
+    assert res_suppressed.get("cooldown") is True
+
+    # Reset cooldown allows re-dispatch
+    alert_dispatcher.reset_cooldown(test_user, "degraded-store.com")
+    res_rearmed = await alert_dispatcher.evaluate_and_dispatch(
+        user_id=test_user,
+        domain_name="degraded-store.com",
+        health_score=68,
+        overall_status="warning",
+        summary=None,
+        issues=[]
+    )
+    assert res_rearmed["dispatched"] is True
+
     # 3. Failover alert dispatch
     failover_res = await alert_dispatcher.dispatch_failover_alert(
         user_id=test_user,
