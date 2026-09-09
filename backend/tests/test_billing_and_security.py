@@ -80,8 +80,9 @@ async def test_billing_endpoints():
         assert "domain_limit" in sub_res.json()
 
         # 5. Webhook processing: checkout.session.completed with customer & subscription IDs
+        unique_checkout_evt = f"evt_test_checkout_{int(time.time() * 1000)}"
         webhook_res = await ac.post("/api/v1/billing/webhook", json={
-            "id": "evt_test_checkout_complete_99",
+            "id": unique_checkout_evt,
             "type": "checkout.session.completed",
             "data": {
                 "object": {
@@ -98,8 +99,9 @@ async def test_billing_endpoints():
         assert webhook_res.json()["customer_id"] == "cus_test_abc123"
 
         # 6. Webhook processing: customer.subscription.deleted downgrades to starter
+        unique_cancel_evt = f"evt_test_cancel_{int(time.time() * 1000)}"
         cancel_res = await ac.post("/api/v1/billing/webhook", json={
-            "id": "evt_test_cancel_100",
+            "id": unique_cancel_evt,
             "type": "customer.subscription.deleted",
             "data": {
                 "object": {
@@ -171,8 +173,9 @@ async def test_stripe_webhook_replay_tolerance_and_idempotency():
         assert res_large.status_code == 413
 
         # 2. Valid event processing
+        unique_replay_evt = f"evt_test_replay_{int(time.time() * 1000)}"
         valid_event = {
-            "id": "evt_test_replay_123",
+            "id": unique_replay_evt,
             "type": "checkout.session.completed",
             "data": {
                 "object": {

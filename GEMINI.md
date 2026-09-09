@@ -14,7 +14,7 @@
 ### Core Value Proposition:
 1. **Zero-Friction DNS Governance:** Live multi-resolver DNS audit for SPF, DKIM (CNAME selectors), DMARC policy alignment, BIMI brand indicators, and MX routes.
 2. **1-Click Automated Remediation:** Direct API integrations with Cloudflare and GoDaddy to insert or rollback DNS fixes with zero manual zone editing.
-3. **Blacklist Radar:** Real-time probing across 10 authoritative RBLs (Spamhaus ZEN, Barracuda BRBL, SpamCop, SORBS, etc.) with 48–72h predictive risk forecasting.
+3. **Blacklist Radar:** Real-time probing across 10 authoritative RBLs (Spamhaus ZEN, Barracuda BRBL, SpamCop, Invaluement, etc.) with 48–72h predictive risk forecasting.
 4. **AI Content Intelligence:** Deliverability spam density scoring and polymorphic copy variations preserving Liquid tags without exposing underlying model endpoints.
 5. **Omnichannel Failover Engine:** Automated fallback dispatch of order receipts via WhatsApp Business API or SMS (Twilio/Interakt) when email delivery fails.
 6. **Predictive Dispute Analytics:** Real-time correlation linking deliverability health scores to store GMV, weekly protected revenue, and subscription ROI multipliers.
@@ -87,7 +87,7 @@ graph TD
   3. *Integrations:* `/dashboard/shopify` (Shopify Store Sync & Omnichannel Failover).
   4. *Configuration:* `/dashboard/settings` (Tenant profile, dynamic API keys, alert rules).
 - **Reputation Trend Chart:** Custom interactive SVG component rendering historical trajectory and 48–72h risk forecast from `reputation_checks`.
-- **Blacklist Radar (`/dashboard/radar`):** Probes 10 major RBL lists (Spamhaus ZEN, Barracuda BRBL, SpamCop SCBL, SORBS, UCEPROTECT, Spamhaus DBL, CBL, Abuse.ro, SURBL, Mailspike) with latency tracking and delisting guidance.
+- **Blacklist Radar (`/dashboard/radar`):** Probes 10 major RBL lists (Spamhaus ZEN, Barracuda BRBL, SpamCop SCBL, Invaluement ivmURI, UCEPROTECT, Spamhaus DBL, CBL, Abuse.ro, SURBL, Mailspike) with latency tracking and delisting guidance.
 
 ### Phase 3: Enterprise Automation & Content Lab (V3 Roadmap)
 - **Bloc A — AI Content Intelligence Service:**

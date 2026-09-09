@@ -168,3 +168,54 @@ def test_deliverability_scorer_reweighting_and_remediation():
     )
     assert breakdown_bimi.bimi_score == 5
     assert score_bimi == 100  # min(100, 97 + 5) = 100
+
+
+def test_anti_ssrf_and_cidr_filtering():
+    """
+    Verify strict SSRF defense:
+    Blocks 127.0.0.0/8, 169.254.0.0/16, 10.0.0.0/8, 172.16.0.0/12,
+    192.168.0.0/16, 100.64.0.0/10, ::ffff:0:0/96, and cloud metadata targets.
+    """
+    engine = DNSDiagnosticEngine()
+
+    blocked_targets = [
+        # Loopback (127.0.0.0/8)
+        "127.0.0.1",
+        "127.1.2.3",
+        "localhost",
+        # Cloud Metadata / Link-Local (169.254.0.0/16)
+        "169.254.169.254",
+        "169.254.1.1",
+        "metadata.google.internal",
+        # Private RFC 1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+        "10.0.0.1",
+        "10.255.255.254",
+        "172.16.0.1",
+        "172.31.255.254",
+        "192.168.1.1",
+        "192.168.0.100",
+        # Carrier-Grade NAT RFC 6598 (100.64.0.0/10)
+        "100.64.0.1",
+        "100.127.255.254",
+        # IPv4-mapped IPv6 (::ffff:0:0/96)
+        "::ffff:127.0.0.1",
+        "::ffff:169.254.169.254",
+        "::1",
+        # Internal non-routable TLDs
+        "server.local",
+        "db.internal",
+        "cluster.lan",
+        "admin.corp"
+    ]
+
+    for target in blocked_targets:
+        with pytest.raises(ValueError) as excinfo:
+            engine._clean_domain(target)
+        err_msg = str(excinfo.value).lower()
+        assert "restricted" in err_msg or "not allowed" in err_msg or "invalid" in err_msg
+
+    # Valid apex domains must cleanly pass
+    assert engine._clean_domain("shopify.com") == "shopify.com"
+    assert engine._clean_domain("https://brandshop.com/") == "brandshop.com"
+    assert engine._clean_domain("sub.orders.example.co.uk") == "sub.orders.example.co.uk"
+

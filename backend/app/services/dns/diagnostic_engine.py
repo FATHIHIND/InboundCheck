@@ -10,11 +10,32 @@ import time
 import asyncio
 import base64
 import logging
+import ipaddress
 from typing import List, Dict, Any, Optional, Tuple
 import dns.asyncresolver
 import dns.resolver
 import dns.rdatatype
 import dns.exception
+
+# Restricted CIDR blocks blocked by Anti-SSRF Guard
+RESTRICTED_SSRF_NETWORKS = [
+    ipaddress.ip_network("0.0.0.0/8"),          # Broadcast / Current network
+    ipaddress.ip_network("10.0.0.0/8"),          # Private IPv4 (RFC 1918)
+    ipaddress.ip_network("100.64.0.0/10"),       # Carrier-Grade NAT (RFC 6598)
+    ipaddress.ip_network("127.0.0.0/8"),        # Loopback IPv4
+    ipaddress.ip_network("169.254.0.0/16"),      # Link-Local / Cloud Metadata (169.254.169.254)
+    ipaddress.ip_network("172.16.0.0/12"),       # Private IPv4 (RFC 1918)
+    ipaddress.ip_network("192.168.0.0/16"),      # Private IPv4 (RFC 1918)
+    ipaddress.ip_network("192.0.2.0/24"),        # TEST-NET-1 (RFC 5737)
+    ipaddress.ip_network("198.51.100.0/24"),     # TEST-NET-2
+    ipaddress.ip_network("203.0.113.0/24"),      # TEST-NET-3
+    ipaddress.ip_network("224.0.0.0/4"),         # Multicast
+    ipaddress.ip_network("240.0.0.0/4"),         # Reserved
+    ipaddress.ip_network("::1/128"),             # IPv6 Loopback
+    ipaddress.ip_network("fc00::/7"),            # IPv6 Unique Local Address (ULA)
+    ipaddress.ip_network("fe80::/10"),           # IPv6 Link-Local
+    ipaddress.ip_network("::ffff:0:0/96"),       # IPv4-mapped IPv6
+]
 
 from app.schemas.dns import (
     MXRecordItem,
@@ -80,6 +101,44 @@ class DNSDiagnosticEngine:
     ]
     BLOCKED_SUFFIXES = [".local", ".internal", ".lan", ".home", ".corp", ".onion", ".arpa"]
 
+    @classmethod
+    def is_ssrf_restricted(cls, target: str) -> bool:
+        """
+        Validates whether target hostname or IP falls within restricted SSRF ranges:
+        127.0.0.0/8, 169.254.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
+        100.64.0.0/10, and ::ffff:0:0/96, or cloud metadata endpoints.
+        """
+        raw = target.strip("[]").strip().lower()
+
+        # Check cloud metadata endpoints and internal names
+        if raw in cls.BLOCKED_DOMAINS or any(raw.endswith(suffix) for suffix in cls.BLOCKED_SUFFIXES):
+            return True
+
+        # Check if target parses as a standard IPv4/IPv6 address
+        try:
+            ip_obj = ipaddress.ip_address(raw)
+            for net in RESTRICTED_SSRF_NETWORKS:
+                if ip_obj in net:
+                    return True
+            if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
+                for net in RESTRICTED_SSRF_NETWORKS:
+                    if ip_obj.ipv4_mapped in net:
+                        return True
+            # Any direct IP address is disallowed for domain audits
+            return True
+        except ValueError:
+            pass
+
+        # Regex fallback for dotted-decimal patterns (including carrier-grade NAT 100.64.0.0/10)
+        if re.match(r"^(127\.|169\.254\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.|100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\.|0\.)", raw):
+            return True
+
+        # IPv4-mapped IPv6 text patterns
+        if "::ffff:" in raw or raw.startswith("::"):
+            return True
+
+        return False
+
     def _clean_domain(self, domain: str) -> str:
         """Sanitize domain string and prevent SSRF / injection attacks."""
         d = domain.strip().lower()
@@ -92,12 +151,8 @@ class DNSDiagnosticEngine:
         if not d or len(d) > 253:
             raise ValueError(f"Invalid domain length: '{domain}'")
 
-        if d in self.BLOCKED_DOMAINS or any(d.endswith(suffix) for suffix in self.BLOCKED_SUFFIXES):
-            raise ValueError(f"Domain '{d}' is restricted or points to a private/internal target.")
-
-        # Check for private IP patterns (10.x, 192.168.x, 172.16-31.x)
-        if re.match(r"^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|0\.)", d):
-            raise ValueError(f"Direct IP addresses or private networks are not allowed: '{d}'")
+        if self.is_ssrf_restricted(d):
+            raise ValueError(f"SSRF Protection: Domain or target '{d}' is restricted or points to a private/internal network.")
 
         # RFC 1035 Domain Format Validation
         domain_pattern = r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"

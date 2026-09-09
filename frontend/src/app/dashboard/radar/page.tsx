@@ -72,14 +72,14 @@ export default function BlacklistRadarPage() {
       description: "Determined dynamically from unsolicited email report submissions."
     },
     {
-      id: "sorbs",
-      name: "SORBS Aggregate",
-      host: "dnsbl.sorbs.net",
-      category: "ip",
+      id: "invaluement",
+      name: "Invaluement URI",
+      host: "ival.invaluement.com",
+      category: "domain",
       status: "clean",
-      latency_ms: 61,
-      delisting_url: "http://www.sorbs.net/lookup.shtml",
-      description: "Monitors open relay servers, compromised hosts, and spam originators."
+      latency_ms: 46,
+      delisting_url: "https://www.invaluement.com/lookup/",
+      description: "Leading anti-spam reputation blacklist specialized in evasive spam and phishing domains."
     },
     {
       id: "uceprotect_1",
