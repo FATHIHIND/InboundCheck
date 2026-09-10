@@ -336,3 +336,95 @@ async def test_delivery_failure_generates_telegram_dispatch_log():
     assert logs[0]["provider"] == "telegram"
     assert logs[0]["provider_status"] == "delivered"
     assert logs[0]["delivery_failure_event_id"] == event["id"]
+
+
+@pytest.mark.asyncio
+async def test_valid_signed_esp_creates_received_record_and_replay_is_idempotent():
+    """Valid signed ESP delivery failure creates one record with 'received', replay does not duplicate."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        evt_id = f"evt_{uuid.uuid4()}"
+        msg_id = f"msg_{uuid.uuid4()}"
+        payload = {
+            "RecordType": "Bounce",
+            "ID": evt_id,
+            "Type": "HardBounce",
+            "Details": "smtp; 550 5.1.1 User unknown",
+            "Email": "bounce@brand.com",
+            "MessageID": msg_id,
+        }
+
+        # 1. First signed ingestion -> 200 OK and record created with 'received'
+        res1 = await client.post(
+            "/api/v1/webhook/delivery-failure/postmark",
+            json=payload,
+            headers={"Content-Type": "application/json", "X-Postmark-Server-Token": "test_secret_token"}
+        )
+        assert res1.status_code == 200
+        assert res1.json()["accepted"] is True
+        assert res1.json()["processed_events"] == 1
+
+        rec = next(
+            (e for e in supabase_service._in_memory_delivery_failure_events.values() if e.get("provider_event_id") == str(evt_id)),
+            None
+        )
+        assert rec is not None
+        assert rec["processing_status"] == "received"
+        initial_db_id = rec["id"]
+
+        # 2. Replay of identical event -> Accepted but deduplicated to same record
+        res2 = await client.post(
+            "/api/v1/webhook/delivery-failure/postmark",
+            json=payload,
+            headers={"Content-Type": "application/json", "X-Postmark-Server-Token": "test_secret_token"}
+        )
+        assert res2.status_code == 200
+        assert res2.json()["accepted"] is True
+
+        rec_after = next(
+            (e for e in supabase_service._in_memory_delivery_failure_events.values() if e.get("provider_event_id") == str(evt_id)),
+            None
+        )
+        assert rec_after is not None
+        assert rec_after["id"] == initial_db_id
+
+
+@pytest.mark.asyncio
+async def test_no_carrier_callback_endpoint_exists():
+    """Verify carrier callback endpoints do not exist and return 404."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for route in [
+            "/api/v1/carrier/delivery-status",
+            "/api/v1/carrier/sms",
+            "/api/v1/twilio/status",
+            "/api/v1/whatsapp/status",
+            "/api/v1/meta/status",
+        ]:
+            res = await client.post(route, json={"status": "delivered"})
+            assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_webhook_ingestion_does_not_dispatch_telegram_directly():
+    """Webhook ingestion must only persist/queue the event and never dispatch Telegram directly."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        payload = {
+            "RecordType": "Bounce",
+            "ID": f"evt_async_{uuid.uuid4()}",
+            "Type": "HardBounce",
+            "Details": "smtp; 550 5.1.1 User unknown",
+            "Email": "async@brand.com",
+            "MessageID": f"msg_async_{uuid.uuid4()}",
+        }
+
+        with patch("app.services.failover.omnichannel_service.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_tg:
+            res = await client.post(
+                "/api/v1/webhook/delivery-failure/postmark",
+                json=payload,
+                headers={"Content-Type": "application/json", "X-Postmark-Server-Token": "test_secret_token"}
+            )
+            assert res.status_code == 200
+            # Verification: Telegram was NOT dispatched during webhook HTTP request
+            mock_tg.assert_not_called()

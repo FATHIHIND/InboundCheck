@@ -41,12 +41,12 @@ async def test_claim_received_delivery_failure_events_atomic():
     )
 
     # Worker 1 claims
-    claimed_w1 = repository.claim_received_delivery_failure_events(worker_id=worker_1, limit=10)
+    claimed_w1 = repository.claim_received_delivery_failure_events(worker_id=worker_1, limit=100)
     claimed_ids = [e.get("id") for e in claimed_w1]
     assert evt["id"] in claimed_ids
 
     # Worker 2 attempts to claim simultaneously -> must NOT receive the already queued event
-    claimed_w2 = repository.claim_received_delivery_failure_events(worker_id=worker_2, limit=10)
+    claimed_w2 = repository.claim_received_delivery_failure_events(worker_id=worker_2, limit=100)
     w2_ids = [e.get("id") for e in claimed_w2]
     assert evt["id"] not in w2_ids
 
