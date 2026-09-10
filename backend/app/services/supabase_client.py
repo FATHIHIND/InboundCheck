@@ -661,6 +661,39 @@ class SupabaseService:
                     return False
         return False
 
+    def extend_domain_audit_lease(self, domain_id: str, worker_id: str, extend_seconds: int = 900) -> bool:
+        """
+        Extend an active domain audit lease heartbeat.
+        Requires that the calling worker owns the active lease.
+        """
+        now = datetime.now(timezone.utc)
+        if self._client:
+            try:
+                extend_str = f"{extend_seconds} seconds"
+                res = self._client.rpc(
+                    "extend_domain_audit_lease",
+                    {
+                        "p_domain_id": domain_id,
+                        "p_worker_id": worker_id,
+                        "p_extend_duration": extend_str,
+                    },
+                ).execute()
+                if res.data is True:
+                    return True
+            except Exception as e:
+                logger.warning(f"Could not execute extend_domain_audit_lease RPC: {e}")
+
+        # In-memory fallback
+        for uid, domains in self._in_memory_domains.items():
+            for domain in domains:
+                if domain.get("id") == domain_id:
+                    if domain.get("audit_lease_owner") == worker_id:
+                        lease_expiry = datetime.fromtimestamp(now.timestamp() + extend_seconds, tz=timezone.utc).isoformat()
+                        domain["audit_lease_until"] = lease_expiry
+                        return True
+                    return False
+        return False
+
     # =====================================================================
     # FAILOVER & TELEGRAM INCIDENT LOGS REPOSITORY METHODS (PHASE 4)
     # =====================================================================

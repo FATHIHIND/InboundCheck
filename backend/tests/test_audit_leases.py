@@ -150,6 +150,45 @@ def test_audit_lease_expiration_recovery():
     assert domain.get("audit_lease_owner") == worker_rescuer
 
 
+def test_audit_lease_heartbeat_extension():
+    """Verify that an active worker can extend its lease via heartbeat."""
+    user_id = f"test-user-{uuid.uuid4()}"
+    worker_active = str(uuid.uuid4())
+    worker_intruder = str(uuid.uuid4())
+    dom_id = f"dom_{uuid.uuid4()}"
+
+    initial_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+    domain = {
+        "id": dom_id,
+        "user_id": user_id,
+        "domain_name": "heartbeat-domain.com",
+        "is_active": True,
+        "last_audited_at": None,
+        "audit_lease_owner": worker_active,
+        "audit_lease_until": initial_expiry,
+    }
+    supabase_service._in_memory_domains[user_id] = [domain]
+
+    # Intruder fails to extend
+    res_intruder = supabase_service.extend_domain_audit_lease(
+        domain_id=dom_id,
+        worker_id=worker_intruder,
+        extend_seconds=1800,
+    )
+    assert res_intruder is False
+
+    # Owner successfully extends
+    res_owner = supabase_service.extend_domain_audit_lease(
+        domain_id=dom_id,
+        worker_id=worker_active,
+        extend_seconds=1800,
+    )
+    assert res_owner is True
+    new_expiry_dt = datetime.fromisoformat(domain["audit_lease_until"].replace("Z", "+00:00"))
+    now_dt = datetime.now(timezone.utc)
+    assert (new_expiry_dt - now_dt).total_seconds() > 1000
+
+
 def test_telegram_failover_persistence_and_api(test_client):
     """Verify Telegram failover log persistence and REST endpoint."""
     user_id = "test-failover-user"

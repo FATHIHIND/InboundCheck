@@ -109,6 +109,30 @@ BEGIN
 END;
 $$;
 
+-- 2.4 Heartbeat extension for long-running audit operations (only if lease is still owned by worker)
+CREATE OR REPLACE FUNCTION public.extend_domain_audit_lease(
+  p_domain_id UUID,
+  p_worker_id UUID,
+  p_extend_duration INTERVAL DEFAULT INTERVAL '15 minutes'
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_updated INTEGER;
+BEGIN
+  UPDATE public.monitored_domains
+  SET audit_lease_until = NOW() + p_extend_duration
+  WHERE id = p_domain_id
+    AND audit_lease_owner = p_worker_id;
+
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated > 0;
+END;
+$$;
+
 -- =====================================================================
 -- SECTION 3: ENHANCE FAILOVER_LOGS TABLE WITH TELEGRAM INCIDENT FIELDS
 -- =====================================================================
