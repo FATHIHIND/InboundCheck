@@ -26,6 +26,18 @@ logger = logging.getLogger("FailoverWebhooks")
 router = APIRouter(tags=["Delivery Failure Webhooks"])
 
 
+@router.api_route("/twilio/status", methods=["GET", "POST", "PUT", "DELETE"], include_in_schema=False)
+@router.api_route("/whatsapp/status", methods=["GET", "POST", "PUT", "DELETE"], include_in_schema=False)
+@router.api_route("/meta/status", methods=["GET", "POST", "PUT", "DELETE"], include_in_schema=False)
+@router.api_route("/carrier/{path:path}", methods=["GET", "POST", "PUT", "DELETE"], include_in_schema=False)
+async def reject_deprecated_carrier_routes():
+    """Reject deprecated legacy carrier, SMS, and WhatsApp status webhooks."""
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Carrier, Twilio, WhatsApp, and Meta webhook status endpoints are deprecated and disabled.",
+    )
+
+
 class FailureEventRepository:
     """Repository handling idempotent insertion of normalized delivery failures."""
 

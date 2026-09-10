@@ -28,7 +28,6 @@ async def test_transactional_message_registration_and_hash():
         esp_provider=esp_provider,
         provider_message_id=provider_message_id,
         recipient_email=raw_email,
-        phone_consent_status="consented",
         message_type="order_confirmation"
     )
 
@@ -37,7 +36,6 @@ async def test_transactional_message_registration_and_hash():
     assert record["esp_provider"] == "sendgrid"
     assert record["provider_message_id"] == provider_message_id
     assert record["recipient_email_hash"] == expected_hash
-    assert record["phone_consent_status"] == "consented"
     assert record["message_type"] == "order_confirmation"
 
     # Query back

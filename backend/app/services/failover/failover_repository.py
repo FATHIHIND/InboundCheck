@@ -21,42 +21,41 @@ class FailoverRepository:
     def __init__(self):
         self.supabase = supabase_service
 
-    def claim_received_delivery_failure_events(
+    def claim_pending_delivery_failure_events(
         self,
         worker_id: str,
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """
-        Atomically claim pending delivery failure events (received -> queued) using FOR UPDATE SKIP LOCKED RPC.
-        Guarantees only one worker processes an event.
+        Atomically claim received delivery failure events using claim_pending_delivery_failure_events RPC.
+        Transitions received -> queued using FOR UPDATE SKIP LOCKED.
         """
         now_iso = datetime.now(timezone.utc).isoformat()
-
         if self.supabase._client:
             try:
                 res = self.supabase._client.rpc(
-                    "claim_received_delivery_failure_events",
+                    "claim_pending_delivery_failure_events",
                     {
                         "p_worker_id": worker_id,
                         "p_limit": limit
                     }
                 ).execute()
                 if res.data is not None:
+                    for row in res.data:
+                        evt_id = row.get("id")
+                        for m in self.supabase._in_memory_delivery_failure_events.values():
+                            if m.get("id") == evt_id:
+                                m["processing_status"] = "queued"
+                                m["claimed_by"] = worker_id
+                                m["claimed_at"] = row.get("claimed_at")
                     return res.data
             except Exception as e:
-                logger.warning(f"Could not execute claim_received_delivery_failure_events RPC: {e}")
+                logger.warning(f"Could not execute claim_pending_delivery_failure_events RPC: {e}")
 
         # In-memory fallback for local development and testing
-        claimed: List[Dict[str, Any]] = []
-        for evt in self.supabase._in_memory_delivery_failure_events.values():
-            if evt.get("processing_status") == "received":
-                evt["processing_status"] = "queued"
-                evt["claimed_by"] = worker_id
-                evt["claimed_at"] = now_iso
-                claimed.append(evt)
-                if len(claimed) >= limit:
-                    break
-        return claimed
+        return self.supabase.claim_pending_delivery_failure_events(worker_id=worker_id, limit=limit)
+
+    claim_received_delivery_failure_events = claim_pending_delivery_failure_events
 
     def mark_event_processed(
         self,
@@ -147,21 +146,25 @@ class FailoverRepository:
     ) -> Dict[str, Any]:
         """
         Record a Telegram incident alert in public.failover_logs.
-        Enforces idempotency index idx_failover_logs_one_telegram_per_event.
+        Enforces idempotency index idx_failover_logs_one_telegram_incident_per_event.
         """
+        now_iso = datetime.now(timezone.utc).isoformat()
         return self.supabase.persist_failover_log(
             user_id=user_id,
-            order_id=order_id or "#0000",
+            order_id=order_id or "unknown",
             channel="telegram",
+            fallback_channel="telegram",
             provider="telegram",
             status=provider_status,
-            domain_name=domain_name or "store.com",
-            store_name=store_name or "Shopify Store",
-            triggered_reason=triggered_reason,
+            provider_status=provider_status,
+            domain_name=domain_name or "unknown",
+            store_name=store_name or "unknown",
+            triggered_reason=triggered_reason or "unknown",
             target_chat_id=target_chat_id,
             delivery_failure_event_id=delivery_failure_event_id,
             provider_sid=provider_message_id,
-            provider_status=provider_status,
+            attempted_at=now_iso,
+            delivered_at=now_iso if provider_status == "delivered" else None,
         )
 
     def get_transactional_message(
@@ -190,3 +193,5 @@ class FailoverRepository:
 
 
 failure_event_repository = FailoverRepository()
+failover_repository = failure_event_repository
+repository = failure_event_repository

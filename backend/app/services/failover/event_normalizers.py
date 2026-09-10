@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger("ESPEventNormalizers")
 
 # Critical eligibility filters: only permanent, mission-critical transactional delivery failures
-# are eligible to trigger an omnichannel fallback (SMS/WhatsApp).
+# are eligible to trigger an incident alert (Telegram).
 FAILOVER_ELIGIBLE_EVENTS = {"bounce", "dropped", "rejected"}
 
 FAILOVER_ELIGIBLE_MESSAGE_TYPES = {
