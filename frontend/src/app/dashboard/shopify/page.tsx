@@ -27,17 +27,20 @@ import {
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 
-interface FailoverLog {
+interface TelegramIncidentLog {
   id: string;
   order_id: string | null;
+  domain_name: string | null;
   triggered_reason: string | null;
   channel: "telegram";
+  fallback_channel: "telegram";
   provider: "telegram";
-  provider_status: "delivered" | "failed" | null;
+  provider_status: "delivered" | "failed";
   status: "delivered" | "failed";
-  domain_name: string | null;
   attempted_at: string | null;
-  created_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  provider_sid?: string | null;
 }
 
 interface ShopifyStoreItem {
@@ -91,7 +94,7 @@ export default function ShopifyHubPage() {
     resource: failoverLogsResource,
     retry: retryFailoverLogs,
     reload: reloadFailoverLogs,
-  } = useApiResource<any[]>({
+  } = useApiResource<TelegramIncidentLog[]>({
     endpoint: "/api/v1/failover/logs?limit=50&offset=0",
     parse: async (res) => {
       const json = await res.json();
@@ -450,6 +453,7 @@ export default function ShopifyHubPage() {
       </div>
 
       {/* Webhook & Order Activity Log */}
+      {/* Webhook & Order Activity Log */}
       <GlassEmeraldCard
         title="Real-Time Telegram Incident & Failover Audit"
         subtitle="Live delivery degradation events and Telegram dispatches logged to public.failover_logs"
@@ -461,7 +465,7 @@ export default function ShopifyHubPage() {
           <OperationalLoadingState
             label="Loading Telegram failover & incident logs..."
             subtext="Querying public.failover_logs records"
-            rows={3}
+            rows={4}
           />
         )}
 
@@ -478,12 +482,8 @@ export default function ShopifyHubPage() {
           <OperationalEmptyState
             icon={<Activity className="w-8 h-8 text-emerald-400" />}
             badge="Incident Radar Clear"
-            title="No Transactional Failover Incidents Recorded"
+            title="No Telegram delivery incidents recorded"
             description="No delivery-failure webhook has produced a Telegram incident alert for this store. New verified incidents will appear here."
-            action={{
-              label: "Simulate Order",
-              onClick: handleSimulateOrder,
-            }}
           />
         )}
 
@@ -492,60 +492,67 @@ export default function ShopifyHubPage() {
             <table className="w-full text-left text-xs font-mono">
               <thead className="text-zinc-400 border-b border-zinc-800 text-[10px] uppercase bg-[#0E0E12] sticky top-0 z-10 backdrop-blur-sm">
                 <tr>
-                  <th className="px-5 py-3.5 font-semibold">Channel</th>
                   <th className="px-5 py-3.5 font-semibold">Order ID</th>
-                  <th className="px-5 py-3.5 font-semibold">Triggered Reason / Bounce Code</th>
                   <th className="px-5 py-3.5 font-semibold">Domain</th>
-                  <th className="px-5 py-3.5 font-semibold">Telegram Status</th>
-                  <th className="px-5 py-3.5 font-semibold text-right">Incident Time</th>
+                  <th className="px-5 py-3.5 font-semibold">ESP Failure Reason</th>
+                  <th className="px-5 py-3.5 font-semibold">Channel</th>
+                  <th className="px-5 py-3.5 font-semibold">Status</th>
+                  <th className="px-5 py-3.5 font-semibold text-right">Incident Timestamp</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
-                {failoverLogsResource.state === "ready" &&
-                  (failoverLogsResource.data as FailoverLog[]).map((item) => {
-                    const isDelivered = (item.provider_status || item.status) === "delivered";
-                    const timestamp = item.attempted_at || item.created_at;
-                    const formattedDate = timestamp
-                      ? new Date(timestamp).toLocaleString()
-                      : "Timestamp unavailable";
+                {failoverLogsResource.data.map((item) => {
+                  const isDelivered = item.provider_status === "delivered";
+                  const isNotified = item.status === "delivered" && !item.provider_sid;
+                  const rawTimestamp = item.attempted_at || item.delivered_at || item.created_at;
+                  const formattedDate = rawTimestamp
+                    ? new Date(rawTimestamp).toLocaleString()
+                    : "Timestamp unavailable";
 
-                    return (
-                      <tr
-                        key={item.id}
-                        className="border-b border-zinc-900/60 hover:bg-zinc-800/20 transition-all duration-150"
-                      >
-                        <td className="px-5 py-3.5 text-white flex items-center gap-2 font-bold font-mono">
-                          <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] uppercase text-emerald-400">
-                            Telegram
+                  return (
+                    <tr
+                      key={item.id}
+                      className="border-b border-zinc-900/60 hover:bg-zinc-800/20 transition-all duration-150"
+                    >
+                      <td className="px-5 py-3.5 font-bold text-white font-mono">
+                        {item.order_id || "Unavailable"}
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-300 font-mono text-[11px]">
+                        {item.domain_name || "Unavailable"}
+                      </td>
+                      <td className="px-5 py-3.5 text-amber-400 font-mono text-[11px]">
+                        {item.triggered_reason || "Delivery failure"}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] uppercase font-semibold text-emerald-400">
+                          <Radio className="w-3 h-3 text-emerald-400" />
+                          Telegram
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 font-mono">
+                        {isDelivered ? (
+                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1 font-mono">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            Delivered
                           </span>
-                        </td>
-                        <td className="px-5 py-3.5 font-bold text-white font-mono">{item.order_id || "Unavailable"}</td>
-                        <td className="px-5 py-3.5 text-amber-400 font-mono text-[11px]">
-                          {item.triggered_reason || "Delivery failure"}
-                        </td>
-                        <td className="px-5 py-3.5 text-zinc-300 font-mono text-[11px]">
-                          {item.domain_name || "Unavailable"}
-                        </td>
-                        <td className="px-5 py-3.5 font-mono">
-                          {isDelivered ? (
-                            <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1 font-mono">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              DELIVERED / NOTIFIED
-                            </span>
-                          ) : (
-                            <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 inline-flex items-center gap-1 font-mono">
-                              <XCircle className="w-3 h-3 text-rose-400" />
-                              {(item.provider_status || item.status || "failed").toUpperCase()}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 text-right text-zinc-500 text-[11px] font-mono">
-                          {formattedDate}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        ) : isNotified ? (
+                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 inline-flex items-center gap-1 font-mono">
+                            <Check className="w-3 h-3 text-teal-400" />
+                            Notified
+                          </span>
+                        ) : (
+                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 inline-flex items-center gap-1 font-mono">
+                            <XCircle className="w-3 h-3 text-rose-400" />
+                            Failed
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-right text-zinc-500 text-[11px] font-mono">
+                        {formattedDate}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
