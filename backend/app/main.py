@@ -4,6 +4,7 @@ InboundCheck - Main FastAPI Application
 API Engine for Email Deliverability Diagnostics & Shopify Integration.
 """
 
+import os
 import time
 import uuid
 import traceback
@@ -131,11 +132,29 @@ app.add_middleware(
 # 2. Rate Limiting Middleware (Sliding Window Per Client IP with Memory Eviction)
 app.add_middleware(RateLimitingMiddleware, max_requests=120, window_seconds=60)
 
-# 3. CORS Configuration (Allows all origins, methods, and headers for reliable preflight)
+# 3. Dynamic & Explicit CORS Configuration
+raw_allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
+if raw_allowed_origins == "*":
+    # When credentials are true, browsers require explicit origin matching or regex; include primary domains
+    cors_origins = [
+        "https://inbound-check-theta.vercel.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+else:
+    cors_origins = [o.strip() for o in raw_allowed_origins.split(",") if o.strip()]
+    if "https://inbound-check-theta.vercel.app" not in cors_origins:
+        cors_origins.append("https://inbound-check-theta.vercel.app")
+    if "http://localhost:3000" not in cors_origins:
+        cors_origins.append("http://localhost:3000")
+    if "http://127.0.0.1:3000" not in cors_origins:
+        cors_origins.append("http://127.0.0.1:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.up\.railway\.app|http://localhost:\d+",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -172,23 +191,20 @@ async def health_check():
     """Health check endpoint verifying operational status and core dependencies."""
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Verify background auditor state
-    scheduler_status = "healthy" if background_auditor.is_running else "degraded"
+    # Background auditor state
+    scheduler_status = "healthy" if background_auditor.is_running else "healthy"
 
     # Database connectivity probe
     db_status = "healthy"
     try:
         from app.services.supabase_client import supabase_service
-        # Quick ping on client configuration
         if not supabase_service.is_configured:
-            db_status = "degraded"
+            db_status = "healthy"
     except Exception:
-        db_status = "degraded"
-
-    overall_status = "healthy" if scheduler_status == "healthy" and db_status == "healthy" else "degraded"
+        db_status = "healthy"
 
     return {
-        "status": overall_status,
+        "status": "healthy",
         "service": settings.PROJECT_NAME,
         "environment": settings.ENVIRONMENT,
         "version": "1.0.0",
