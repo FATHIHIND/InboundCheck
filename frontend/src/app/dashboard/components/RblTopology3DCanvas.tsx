@@ -6,7 +6,7 @@ import { useCanvasOptimization } from "@/hooks/useCanvasOptimization";
 interface RblNode {
   name: string;
   host: string;
-  status: "clean" | "listed" | "checking";
+  status: "clean" | "listed" | "checking" | "timeout" | "error" | "unknown";
   latency_ms: number;
 }
 
@@ -79,11 +79,14 @@ export default function RblTopology3DCanvas({
         const y = cy + Math.sin(angle) * ry;
         const depthScale = (Math.sin(angle) + 1) / 2 * 0.4 + 0.8;
         const isListed = item.status === "listed";
+        const isUnknown = item.status === "unknown" || item.status === "timeout" || item.status === "error";
 
         // Connecting Beam to Center
         ctx.lineWidth = 1 * depthScale;
         ctx.strokeStyle = isListed
           ? `rgba(239, 68, 68, ${0.4 * depthScale})`
+          : isUnknown
+          ? `rgba(245, 158, 11, ${0.3 * depthScale})`
           : `rgba(16, 185, 129, ${0.25 * depthScale})`;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -94,24 +97,32 @@ export default function RblTopology3DCanvas({
         const pktProgress = ((time * 0.8 + i * 0.1) % 1);
         const pkX = cx + (x - cx) * pktProgress;
         const pkY = cy + (y - cy) * pktProgress;
-        ctx.fillStyle = isListed ? "rgba(248, 113, 113, 0.9)" : "rgba(52, 211, 153, 0.9)";
+        ctx.fillStyle = isListed
+          ? "rgba(248, 113, 113, 0.9)"
+          : isUnknown
+          ? "rgba(251, 191, 36, 0.9)"
+          : "rgba(52, 211, 153, 0.9)";
         ctx.beginPath();
         ctx.arc(pkX, pkY, 2.5 * depthScale, 0, Math.PI * 2);
         ctx.fill();
 
         // Satellite Node Glow & Dot
-        ctx.fillStyle = isListed ? "rgba(239, 68, 68, 0.3)" : "rgba(16, 185, 129, 0.25)";
+        ctx.fillStyle = isListed
+          ? "rgba(239, 68, 68, 0.3)"
+          : isUnknown
+          ? "rgba(245, 158, 11, 0.25)"
+          : "rgba(16, 185, 129, 0.25)";
         ctx.beginPath();
         ctx.arc(x, y, (isListed ? 10 : 7) * depthScale, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = isListed ? "#EF4444" : "#10B981";
+        ctx.fillStyle = isListed ? "#EF4444" : isUnknown ? "#F59E0B" : "#10B981";
         ctx.beginPath();
         ctx.arc(x, y, 4 * depthScale, 0, Math.PI * 2);
         ctx.fill();
 
         // Label
-        ctx.fillStyle = isListed ? "#F87171" : "#A1A1AA";
+        ctx.fillStyle = isListed ? "#F87171" : isUnknown ? "#FBBF24" : "#A1A1AA";
         ctx.font = `${Math.round(10 * depthScale)}px monospace`;
         ctx.fillText(item.name || `RBL ${i + 1}`, x + 8, y + 3);
       }

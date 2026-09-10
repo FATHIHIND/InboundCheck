@@ -17,9 +17,11 @@ import {
   Sparkles,
   ArrowUpRight,
   AlertCircle,
-  Check
+  Check,
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
+import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
+import { ApiError } from "@/lib/apiResource";
 
 interface SubscriptionInfo {
   tier: "starter" | "growth" | "enterprise" | string;
@@ -116,6 +118,7 @@ export default function BillingPortalPage() {
   });
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
+  const [invoiceError, setInvoiceError] = useState<ApiError | null>(null);
   const [isLoadingSub, setIsLoadingSub] = useState(true);
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
@@ -144,6 +147,8 @@ export default function BillingPortalPage() {
     }
 
     async function loadInvoices() {
+      setIsLoadingInvoices(true);
+      setInvoiceError(null);
       try {
         const res = await apiFetch("/api/v1/billing/invoices");
         if (res.ok) {
@@ -151,9 +156,21 @@ export default function BillingPortalPage() {
           if (Array.isArray(data.invoices)) {
             setInvoices(data.invoices);
           }
+        } else {
+          const body = await res.json().catch(() => ({}));
+          setInvoiceError({
+            message: body.detail || "Unable to retrieve Stripe invoice history",
+            status: res.status,
+            retryable: true,
+            endpoint: "/api/v1/billing/invoices",
+          });
         }
-      } catch (err) {
-        console.error("Failed to load invoices:", err);
+      } catch (err: any) {
+        setInvoiceError({
+          message: err?.message || "Failed to reach Stripe billing telemetry service",
+          retryable: true,
+          endpoint: "/api/v1/billing/invoices",
+        });
       } finally {
         setIsLoadingInvoices(false);
       }
@@ -491,6 +508,12 @@ export default function BillingPortalPage() {
             <RefreshCw className="w-5 h-5 animate-spin text-emerald-400" />
             <span>Retrieving live Stripe invoices...</span>
           </div>
+        ) : invoiceError ? (
+          <OperationalErrorCard
+            title="Stripe Invoice Telemetry Unavailable"
+            error={invoiceError}
+            compact
+          />
         ) : invoices.length === 0 ? (
           <div className="text-center py-10 px-4 bg-[#08080A] rounded-xl border border-white/[0.04] space-y-2 font-mono">
             <Clock className="w-6 h-6 text-zinc-600 mx-auto" />

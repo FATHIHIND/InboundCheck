@@ -147,3 +147,70 @@ class GenerateRecordRequest(BaseModel):
     dmarc_policy: str = Field(default="quarantine", description="reject | quarantine | none")
     dmarc_report_email: Optional[str] = None
     custom_dkim_selector: Optional[str] = "shopify"
+
+
+class DeliverabilityResult(BaseModel):
+    """
+    Normalized payload representing domain deliverability audit calculation result.
+    Compatible with DNSAuditResponse and internal calculation pipelines.
+    """
+    health_score: int = Field(..., ge=0, le=100, description="Overall deliverability health score (0-100)")
+    status: str = Field(default="warning", description="optimal | warning | critical")
+    category_scores: Optional[CategoryScoreBreakdown] = None
+    summary: Optional[DiagnosticSummary] = None
+    issues: List[DiagnosticIssue] = []
+    fixes: List[DNSRecordFix] = []
+    raw_responses: Dict[str, Any] = {}
+
+
+class DNSAuditLogCreate(BaseModel):
+    """
+    Strict schema corresponding to public.dns_audit_logs production table columns.
+    Eliminates schema drift by explicitly mapping all required DNS status fields.
+    """
+    user_id: str = Field(..., description="UUID of user profile owning the domain")
+    domain_id: Optional[str] = Field(default=None, description="Nullable UUID referencing public.monitored_domains(id)")
+    domain_name: str = Field(..., description="Normalized target domain name")
+    health_score: int = Field(..., ge=0, le=100, description="Compliance score 0-100")
+    spf_record: Optional[str] = Field(default=None, description="Raw SPF TXT record")
+    spf_status: str = Field(default="missing", description="optimal | warning | critical | missing")
+    dkim_records: List[Dict[str, Any]] = Field(default_factory=list, description="Discovered DKIM selectors and records")
+    dkim_status: str = Field(default="missing", description="optimal | warning | critical | missing")
+    dmarc_record: Optional[str] = Field(default=None, description="Raw DMARC TXT record")
+    dmarc_status: str = Field(default="missing", description="optimal | warning | critical | missing")
+    mx_records: List[Dict[str, Any]] = Field(default_factory=list, description="Resolved MX mail exchange hosts")
+    mx_status: str = Field(default="missing", description="optimal | warning | critical | missing")
+    bimi_record: Optional[str] = Field(default=None, description="Raw BIMI record")
+    bimi_status: str = Field(default="missing", description="optimal | missing")
+    fixes: List[Dict[str, Any]] = Field(default_factory=list, description="Actionable DNS record remediation fixes")
+    raw_responses: Dict[str, Any] = Field(default_factory=dict, description="Raw resolver query responses")
+    created_at: Optional[str] = Field(default=None, description="ISO 8601 creation timestamp")
+
+
+class RBLScanRequest(BaseModel):
+    domain: str = Field(..., description="Target domain or hostname to scan, e.g. brandshop.com", min_length=3)
+
+
+class RBLZoneResult(BaseModel):
+    id: str = Field(..., description="Unique zone identifier (e.g. spamhaus_zen)")
+    name: str = Field(..., description="Human-readable provider name")
+    host: str = Field(..., description="Authoritative DNSBL root host")
+    category: str = Field(..., description="'ip' or 'domain'")
+    status: str = Field(..., description="'clean' | 'listed' | 'timeout' | 'error'")
+    return_code: Optional[str] = Field(default=None, description="Raw 127.0.0.x response if listed")
+    latency_ms: float = Field(..., description="Query latency in milliseconds")
+    delisting_url: str = Field(..., description="Direct remediation URL")
+    description: str = Field(..., description="Provider coverage description")
+    listed_details: Optional[str] = Field(default=None, description="Diagnostic classification message")
+
+
+class RBLScanResponse(BaseModel):
+    domain: str
+    target_ip: Optional[str] = None
+    clean_count: int = Field(..., ge=0, le=10)
+    total_count: int = Field(default=10)
+    listed_count: int = Field(..., ge=0, le=10)
+    predicted_risk_48h: str = Field(..., description="'low' | 'medium' | 'high'")
+    scan_time_ms: float
+    results: List[RBLZoneResult]
+    timestamp: datetime

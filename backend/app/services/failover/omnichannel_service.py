@@ -186,31 +186,32 @@ class TelegramAlertService:
             text=alert_text
         )
 
-        log_entry = {
-            "id": f"tg_{len(_mock_failover_logs.get(user_id, [])) + 900}",
-            "order_id": order_id,
-            "store_name": store_name,
-            "target_chat_id": chat_id,
-            "customer_phone": customer_phone or chat_id,
-            "customer_email": customer_email or "admin@store.com",
-            "channel": "telegram",
-            "provider": "telegram_bot_api",
-            "status": "delivered",
-            "triggered_reason": trigger_reason,
-            "domain_name": domain_name,
-            "timestamp": "Just now"
-        }
+        dispatch_status = "delivered" if dispatch_res.get("success") else "failed"
 
-        if user_id not in _mock_failover_logs:
-            _mock_failover_logs[user_id] = []
-        _mock_failover_logs[user_id].insert(0, log_entry)
+        # Persist to database via repository
+        from app.services.supabase_client import supabase_service
+        log_record = supabase_service.persist_failover_log(
+            user_id=user_id,
+            order_id=order_id,
+            channel="telegram",
+            provider="telegram_bot_api",
+            status=dispatch_status,
+            domain_name=domain_name,
+            store_name=store_name,
+            triggered_reason=trigger_reason,
+            target_chat_id=chat_id,
+            customer_email=customer_email,
+            customer_phone=customer_phone,
+            dispatch_payload=dispatch_res,
+            error_message=dispatch_res.get("error") if not dispatch_res.get("success") else None,
+        )
 
         return {
             "dispatched": True,
             "channel": "telegram",
             "target_chat_id": chat_id,
             "dispatch_res": dispatch_res,
-            "log": log_entry
+            "log": log_record
         }
 
     async def send_test_ping(
@@ -231,10 +232,15 @@ class TelegramAlertService:
         )
         return await self.send_telegram_alert(bot_token=bot_token, chat_id=chat_id, text=text)
 
-    def get_logs(self, user_id: str) -> List[Dict[str, Any]]:
-        """Fetch Telegram alert dispatch logs."""
-        return _mock_failover_logs.get(user_id, _mock_failover_logs["demo-user-123"])
+    def get_logs(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """Fetch Telegram alert dispatch logs from database/repository."""
+        from app.services.supabase_client import supabase_service
+        logs = supabase_service.get_failover_logs(user_id=user_id, limit=limit, offset=offset)
+        if not logs and user_id == "demo-user-123":
+            return _mock_failover_logs.get("demo-user-123", [])
+        return logs
 
 
 omnichannel_service = TelegramAlertService()
 telegram_alert_service = omnichannel_service
+

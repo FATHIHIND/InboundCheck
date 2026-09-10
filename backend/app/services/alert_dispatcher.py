@@ -235,11 +235,31 @@ class AlertDispatcherService:
             f"👉 [Review Failover Logs]({settings.FRONTEND_URL}/dashboard/shopify)"
         )
 
-        return await telegram_alert_service.send_telegram_alert(
+        res = await telegram_alert_service.send_telegram_alert(
             bot_token=bot_token,
             chat_id=chat_id,
             text=alert_text
         )
 
+        # Persist incident record in failover_logs
+        dispatch_status = "delivered" if res.get("success") else "failed"
+        supabase_service.persist_failover_log(
+            user_id=user_id,
+            order_id=order_id,
+            channel="telegram",
+            provider="telegram_bot_api",
+            status=dispatch_status,
+            domain_name=domain_name,
+            store_name="Store Sync",
+            triggered_reason=trigger_reason,
+            target_chat_id=chat_id,
+            customer_email=customer_email,
+            dispatch_payload=res,
+            error_message=res.get("error") if not res.get("success") else None,
+        )
+
+        return res
+
 
 alert_dispatcher = AlertDispatcherService()
+

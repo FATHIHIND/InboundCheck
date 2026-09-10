@@ -69,6 +69,7 @@ function SettingsContent() {
 
   // Global Save state
   const [isSaved, setIsSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -87,7 +88,7 @@ function SettingsContent() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await apiFetch("/api/v1/settings/profile", {
+      const res = await apiFetch("/api/v1/settings/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -96,11 +97,17 @@ function SettingsContent() {
           shopify_store: shopifyStore,
         }),
       });
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
-    } catch {
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      if (res.ok) {
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setSaveError(body.detail || "Failed to update profile settings.");
+        setTimeout(() => setSaveError(null), 5000);
+      }
+    } catch (err: any) {
+      setSaveError(err?.message || "Network exception updating profile.");
+      setTimeout(() => setSaveError(null), 5000);
     } finally {
       setIsLoading(false);
     }
@@ -238,6 +245,16 @@ function SettingsContent() {
             Configuration saved successfully to Supabase database.
           </span>
           <span className="text-[10px] text-zinc-400">RFC 1035 Synchronized</span>
+        </div>
+      )}
+
+      {saveError && (
+        <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-xs font-mono flex items-center justify-between animate-fadeIn">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            {saveError}
+          </span>
+          <span className="text-[10px] text-zinc-400">Save Failed (Draft Retained)</span>
         </div>
       )}
 

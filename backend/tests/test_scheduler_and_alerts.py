@@ -115,8 +115,21 @@ async def test_background_auditor_cycle():
 @pytest.mark.asyncio
 async def test_reputation_trend_endpoint():
     """Verify /api/v1/analytics/reputation-trend returns trajectory points."""
+    test_user = "test-user-1"
+    supabase_service._in_memory_reputation[test_user] = [
+        {
+            "id": "chk_trend_1",
+            "domain_name": "shopify.com",
+            "score": 92,
+            "dns_score": 94,
+            "rbl_clean_count": 10,
+            "rbl_total_count": 10,
+            "predicted_risk_48h": "low",
+            "created_at": "2026-09-09T12:00:00Z"
+        }
+    ]
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers("test-user-1")) as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(test_user)) as ac:
         res = await ac.get("/api/v1/analytics/reputation-trend")
         assert res.status_code == 200
         data = res.json()

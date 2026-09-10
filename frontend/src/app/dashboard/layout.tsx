@@ -13,9 +13,10 @@ import {
   Sparkles,
   TerminalSquare,
   Menu,
-  X
+  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { BackendStatusBadge } from "@/components/operational/BackendStatusBadge";
 
 export default function DashboardLayout({
   children,
@@ -243,12 +244,9 @@ export default function DashboardLayout({
         </div>
 
         {/* Bottom Status & Sign Out */}
-        <div className="pt-4 border-t border-white/[0.08] space-y-2 font-mono text-xs">
-          <div className="flex items-center justify-between px-2 text-zinc-400">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[11px] text-zinc-300">Live Telemetry</span>
-            </div>
+        <div className="pt-4 border-t border-white/[0.08] space-y-3 font-mono text-xs">
+          <div className="flex items-center justify-between px-1">
+            <BackendStatusBadge />
             <span className="text-[10px] text-zinc-500 font-mono">RFC 1035</span>
           </div>
 

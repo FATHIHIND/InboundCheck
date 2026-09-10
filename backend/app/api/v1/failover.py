@@ -110,9 +110,14 @@ async def send_test_telegram_ping(
 
 
 @router.get("/logs")
-async def get_failover_logs(user_id: str = Depends(get_current_user_id)):
+async def get_failover_logs(
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(get_current_user_id)
+):
     """
-    Get recent Telegram alert incident audit logs.
+    Get recent Telegram alert incident audit logs from public.failover_logs.
     """
-    logs = omnichannel_service.get_logs(user_id)
+    logs = omnichannel_service.get_logs(user_id=user_id, limit=limit, offset=offset)
     return {"success": True, "logs": logs}
+

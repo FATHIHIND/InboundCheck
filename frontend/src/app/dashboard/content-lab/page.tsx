@@ -56,59 +56,8 @@ interface VariantItem {
   rationale: string;
 }
 
-const DEFAULT_FLAGGED_EMAILS: FlaggedEmail[] = [
-  {
-    id: "tpl_01",
-    template_name: "Order Confirmation Receipt",
-    subject: "Thank you for your purchase! ACT NOW to claim 100% FREE shipping!",
-    original_body:
-      "<p>Hi {{ customer.first_name }},</p><p>Thank you for buying from our store! ACT NOW to claim 100% FREE shipping on your next purchase. CLICK HERE to confirm your entry into our weekly prize draw!</p><p>View your order: {{ checkout.order_status_url }}</p>",
-    detected_triggers: ["100% FREE", "ACT NOW", "CLICK HERE", "PRIZE DRAW"],
-    spam_score: 78,
-    risk_level: "high",
-    promo_density: 40.8,
-    shopify_template_key: "orders/confirmation",
-  },
-  {
-    id: "tpl_02",
-    template_name: "Abandoned Cart Recovery",
-    subject: "URGENT: Your items are selling out! CLICK HERE for guaranteed discount",
-    original_body:
-      "<p>Hi {{ customer.first_name }},</p><p>You left items in your cart! URGENT: 100% FREE discount expires in 2 hours. CLICK HERE to claim your GUARANTEED CASH PRIZE now!</p><p>Checkout: {{ checkout.order_status_url }}</p>",
-    detected_triggers: ["URGENT", "CLICK HERE", "100% FREE", "GUARANTEED", "CASH PRIZE"],
-    spam_score: 86,
-    risk_level: "critical",
-    promo_density: 48.5,
-    shopify_template_key: "checkouts/abandoned",
-  },
-  {
-    id: "tpl_03",
-    template_name: "Fulfillment & Shipment Notice",
-    subject: "Order #{{ order.name }} is on the way! FREE bonus offer inside!",
-    original_body:
-      "<p>Hi {{ customer.first_name }},</p><p>Great news! Your package for order #{{ order.name }} is dispatched. ACT NOW to claim your FREE BONUS gift before stocks run out!</p><p>Tracking: {{ fulfillment.tracking_url }}</p>",
-    detected_triggers: ["FREE BONUS", "ACT NOW", "SPECIAL OFFER"],
-    spam_score: 64,
-    risk_level: "medium",
-    promo_density: 28.0,
-    shopify_template_key: "fulfillments/out_for_delivery",
-  },
-  {
-    id: "tpl_04",
-    template_name: "Customer VIP Welcome Sequence",
-    subject: "Welcome to VIP club! Claim 100% FREE rewards and cash vouchers!",
-    original_body:
-      "<p>Hi {{ customer.first_name }},</p><p>Welcome to our exclusive store! CLICK HERE to claim your 100% FREE welcome cash vouchers and unlock unlimited entry prizes!</p>",
-    detected_triggers: ["100% FREE", "CLICK HERE", "CASH VOUCHERS", "UNLIMITED"],
-    spam_score: 82,
-    risk_level: "critical",
-    promo_density: 44.2,
-    shopify_template_key: "customers/welcome",
-  },
-];
-
 export default function AIContentLabPage() {
-  const [flaggedEmails, setFlaggedEmails] = useState<FlaggedEmail[]>(DEFAULT_FLAGGED_EMAILS);
+  const [flaggedEmails, setFlaggedEmails] = useState<FlaggedEmail[]>([]);
   const [activeEmail, setActiveEmail] = useState<FlaggedEmail | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeVariants, setActiveVariants] = useState<VariantItem[]>([]);
@@ -116,6 +65,7 @@ export default function AIContentLabPage() {
   const [copiedClean, setCopiedClean] = useState(false);
   const [syncedShopify, setSyncedShopify] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Close AI modal on Escape key
   useEffect(() => {
@@ -148,41 +98,15 @@ export default function AIContentLabPage() {
 
       if (res.ok) {
         const data = await res.json();
-        setActiveVariants(data.variants);
+        setActiveVariants(data.variants || []);
+        setAiError(null);
       } else {
-        throw new Error("Local fallback");
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || "AI generation service unavailable");
       }
-    } catch {
-      // High-precision fallback variations preserving Liquid tags
-      setActiveVariants([
-        {
-          variant_id: "v1_professional",
-          variant_name: "High-Deliverability Transactional (Recommended)",
-          subject: `Order Confirmation: #${"{{ order.name }}"} - Receipt & Delivery Status`,
-          body_html: `<p>Hello {{ customer.first_name }},</p><p>Thank you for your order with our store. This email confirms receipt of order <strong>#{{ order.name }}</strong>. We are currently processing your package for fulfillment.</p><p>You can inspect your complete order status and receipt details anytime here: <a href="{{ checkout.order_status_url }}">View Order Receipt</a></p>`,
-          estimated_spam_risk: 4,
-          rationale:
-            "Replaced all high-friction promotional trigger phrases with strict RFC transactional wording. Preserved all Liquid variables and eliminated spam penalty risk.",
-        },
-        {
-          variant_id: "v2_minimalist",
-          variant_name: "Conversational Minimalist",
-          subject: `Your order #${"{{ order.name }}"} has been received`,
-          body_html: `<p>Hi {{ customer.first_name }},</p><p>We have successfully received your order #{{ order.name }}. Our warehouse team will notify you as soon as your tracking details are generated.</p><p>Review your purchase details: <a href="{{ checkout.order_status_url }}">Order Summary</a></p>`,
-          estimated_spam_risk: 2,
-          rationale:
-            "Stripped heavy HTML markup and sensational punctuation to achieve 0.0% promotional density across Spamhaus and Barracuda filters.",
-        },
-        {
-          variant_id: "v3_vip_standard",
-          variant_name: "Verified Brand Standard",
-          subject: `Order receipt #${"{{ order.name }}"} confirmed`,
-          body_html: `<p>Dear {{ customer.first_name }},</p><p>Your order receipt for #{{ order.name }} is confirmed and archived in your account. Thank you for choosing our store.</p><p>Track fulfillment progress: <a href="{{ checkout.order_status_url }}">Manage Order</a></p>`,
-          estimated_spam_risk: 5,
-          rationale:
-            "Optimized for Gmail Priority Inbox sorting and Apple Mail privacy protection.",
-        },
-      ]);
+    } catch (err: any) {
+      setActiveVariants([]);
+      setAiError(err?.message || "Failed to generate polymorphic email variations.");
     } finally {
       setIsGenerating(false);
     }
@@ -285,24 +209,33 @@ export default function AIContentLabPage() {
       </div>
 
       {/* 3. Main Section: Flagged Spam Emails Registry (Table View) */}
-      <GlassEmeraldCard
-        title="Flagged Spam Emails Registry"
-        subtitle="Live emails flagged by IMAP inbox simulation for promotional word density and spam triggers"
-        badgeText={`${flaggedEmails.length} Monitored Templates`}
-        badgeVariant="emerald"
-        icon={<AlertTriangle className="w-5 h-5 text-amber-400" />}
-      >
-        <div className="overflow-x-auto max-h-[480px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
-          <table className="w-full text-left text-xs font-mono border-collapse">
-            <thead className="sticky top-0 bg-[#0E0E12] z-10 backdrop-blur-md border-b border-zinc-800/80 text-zinc-400 text-[10px] uppercase">
-              <tr>
-                <th className="px-5 py-3.5 font-semibold">Template / Subject</th>
-                <th className="px-5 py-3.5 font-semibold">Detected Spam Triggers</th>
-                <th className="px-5 py-3.5 font-semibold">Spam Risk Score</th>
-                <th className="px-5 py-3.5 font-semibold text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
+      {flaggedEmails.length === 0 ? (
+        <div className="obsidian-card p-12 rounded-2xl border border-white/[0.08] text-center space-y-3 font-mono shadow-2xl">
+          <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto" />
+          <h3 className="text-base font-bold text-white">No Flagged Email Templates</h3>
+          <p className="text-xs text-zinc-400 max-w-md mx-auto font-sans leading-relaxed">
+            All transactional email templates are currently clean of high-friction promotional words, uppercase spam triggers, and excessive spam density.
+          </p>
+        </div>
+      ) : (
+        <GlassEmeraldCard
+          title="Flagged Spam Emails Registry"
+          subtitle="Live emails flagged by IMAP inbox simulation for promotional word density and spam triggers"
+          badgeText={`${flaggedEmails.length} Monitored Templates`}
+          badgeVariant="emerald"
+          icon={<AlertTriangle className="w-5 h-5 text-amber-400" />}
+        >
+          <div className="overflow-x-auto max-h-[480px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
+            <table className="w-full text-left text-xs font-mono border-collapse">
+              <thead className="sticky top-0 bg-[#0E0E12] z-10 backdrop-blur-md border-b border-zinc-800/80 text-zinc-400 text-[10px] uppercase">
+                <tr>
+                  <th className="px-5 py-3.5 font-semibold">Template / Subject</th>
+                  <th className="px-5 py-3.5 font-semibold">Detected Spam Triggers</th>
+                  <th className="px-5 py-3.5 font-semibold">Spam Risk Score</th>
+                  <th className="px-5 py-3.5 font-semibold text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
               {flaggedEmails.map((email) => (
                 <tr key={email.id} className="border-b border-zinc-900/60 hover:bg-zinc-800/25 transition-colors duration-150">
                   {/* Column 1: Template & Subject */}
@@ -375,6 +308,7 @@ export default function AIContentLabPage() {
           </table>
         </div>
       </GlassEmeraldCard>
+      )}
 
       {/* 4. Output Modal / Expansion: AI Clean Variant Drawer */}
       {activeEmail && (

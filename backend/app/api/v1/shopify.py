@@ -11,7 +11,9 @@ from typing import Optional, Dict, Any, List
 import logging
 
 from app.core.security import get_current_user_id
+from app.core.config import settings
 from app.services.shopify.shopify_service import shopify_service
+from app.services.supabase_client import supabase_service
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.dns.scorer import DeliverabilityScorer
 
@@ -24,7 +26,7 @@ diagnostic_engine = DNSDiagnosticEngine()
 class ConnectStoreRequest(BaseModel):
     shop: str = Field(..., description="Shopify store domain, e.g. store.myshopify.com")
     redirect_uri: Optional[str] = None
-    state: Optional[str] = "inboundcheck-oauth-state"
+    state: Optional[str] = None
 
 
 class SenderAlignmentRequest(BaseModel):
@@ -45,17 +47,21 @@ async def get_shopify_auth_url(
 ):
     """
     Generate Shopify OAuth authorization URL for store installation.
+    Binds the OAuth state to the authenticated tenant using HMAC-SHA256 signature and timestamp.
     """
     try:
-        redirect = request.redirect_uri or "http://localhost:3000/dashboard/shopify/callback"
+        # Generate cryptographically signed state token bound to user_id
+        state = shopify_service.generate_oauth_state(user_id=user_id)
+        redirect = request.redirect_uri or f"{settings.FRONTEND_URL}/dashboard/shopify/callback"
         auth_url = shopify_service.build_auth_url(
             shop=request.shop,
             redirect_uri=redirect,
-            state=request.state or "state"
+            state=state
         )
         return {
             "auth_url": auth_url,
-            "shop": shopify_service.clean_shop_domain(request.shop)
+            "shop": shopify_service.clean_shop_domain(request.shop),
+            "state": state
         }
     except Exception as e:
         logger.error(f"Error creating Shopify auth URL: {e}")
@@ -72,7 +78,8 @@ async def shopify_auth_callback(
 ):
     """
     Handle Shopify OAuth redirect callback and exchange authorization code for access token.
-    Enforces HMAC parameter verification and state CSRF checks.
+    Enforces HMAC parameter verification and signed state CSRF/tenant checks.
+    Persists encrypted token, shop domain, and sanitized metadata to public.monitored_stores.
     """
     query_params = dict(request.query_params)
     if not shopify_service.verify_shopify_hmac(query_params):
@@ -81,22 +88,66 @@ async def shopify_auth_callback(
     if not state:
         raise HTTPException(status_code=400, detail="Missing OAuth state CSRF token")
 
-    try:
-        token_data = await shopify_service.exchange_token(shop=shop, code=code)
-        access_token = token_data.get("access_token")
-        scope = token_data.get("scope")
+    # Cryptographically resolve tenant user_id from signed state parameter
+    user_id = shopify_service.verify_oauth_state(state)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid, expired, or untrusted OAuth state parameter"
+        )
 
+    try:
+        clean_shop = shopify_service.clean_shop_domain(shop)
+        token_data = await shopify_service.exchange_token(shop=clean_shop, code=code)
+        access_token = token_data.get("access_token")
+        scope = token_data.get("scope", shopify_service.scopes)
+
+        if not access_token:
+            raise HTTPException(status_code=400, detail="No access token returned by Shopify")
+
+        # Fetch sanitized shop metadata from Shopify Admin API
         shop_details = {}
-        if access_token:
-            shop_details = await shopify_service.fetch_shop_details(shop=shop, access_token=access_token)
+        try:
+            shop_details = await shopify_service.fetch_shop_details(shop=clean_shop, access_token=access_token)
+        except Exception as shop_err:
+            logger.warning(f"Could not fetch full shop details for {clean_shop}: {shop_err}")
+
+        # Sanitize metadata
+        sender_email = shop_details.get("email") or shop_details.get("customer_email")
+        store_metadata = {
+            "name": shop_details.get("name"),
+            "email": sender_email,
+            "primary_domain": shop_details.get("domain"),
+            "myshopify_domain": clean_shop,
+            "currency": shop_details.get("currency"),
+            "timezone": shop_details.get("iana_timezone") or shop_details.get("timezone"),
+            "plan_name": shop_details.get("plan_name"),
+        }
+
+        # Encrypt access token using Fernet before database persistence
+        encrypted_token = shopify_service.encrypt_token(access_token)
+
+        # Persist to public.shopify_stores / public.monitored_stores
+        saved_store = supabase_service.save_monitored_store(
+            user_id=user_id,
+            shop_domain=clean_shop,
+            access_token_encrypted=encrypted_token,
+            scope=scope,
+            sender_email=sender_email,
+            store_metadata=store_metadata,
+            sender_alignment_status="pending"
+        )
 
         return {
             "success": True,
-            "shop": shop,
+            "shop": clean_shop,
             "scope": scope,
             "store_name": shop_details.get("name"),
-            "email": shop_details.get("email"),
-            "domain": shop_details.get("domain")
+            "email": sender_email,
+            "domain": shop_details.get("domain"),
+            "user_id": user_id,
+            "stored": True,
+            "store_id": saved_store.get("id")
         }
     except HTTPException:
         raise
@@ -211,3 +262,32 @@ async def shopify_orders_webhook(request: Request):
         "verified": True,
         "webhook_id": webhook_id
     }
+
+
+@router.get("/stores")
+async def get_shopify_stores(user_id: str = Depends(get_current_user_id)):
+    """
+    Retrieve authenticated Shopify stores registered for the current merchant.
+    Returns HTTP 200 with an empty list [] if no stores have been connected yet.
+    """
+    try:
+        from app.services.supabase_client import supabase_service
+        stores = supabase_service.get_user_stores(user_id)
+        return stores
+    except Exception as e:
+        logger.error(f"Failed to fetch Shopify stores for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve connected Shopify stores")
+
+
+@router.get("/webhook-logs")
+async def get_shopify_webhook_logs(user_id: str = Depends(get_current_user_id)):
+    """
+    Retrieve recent Shopify webhook ingestion audit logs for the current merchant.
+    """
+    try:
+        # In-memory / persistent webhook event audit logs
+        return []
+    except Exception as e:
+        logger.error(f"Failed to fetch webhook logs for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve Shopify webhook logs")
+

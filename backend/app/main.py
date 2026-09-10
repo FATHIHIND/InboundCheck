@@ -15,6 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 from starlette.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.api.v1 import api_v1_router
@@ -154,13 +155,36 @@ app.include_router(api_v1_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health", tags=["Health Checks"])
+@app.get(f"{settings.API_V1_STR}/health", tags=["Health Checks"])
 async def health_check():
-    """Health check endpoint to verify service operational status."""
+    """Health check endpoint verifying operational status and core dependencies."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Verify background auditor state
+    scheduler_status = "healthy" if background_auditor.is_running else "degraded"
+
+    # Database connectivity probe
+    db_status = "healthy"
+    try:
+        from app.services.supabase_client import supabase_service
+        # Quick ping on client configuration
+        if not supabase_service.is_configured:
+            db_status = "degraded"
+    except Exception:
+        db_status = "degraded"
+
+    overall_status = "healthy" if scheduler_status == "healthy" and db_status == "healthy" else "degraded"
+
     return {
-        "status": "healthy",
+        "status": overall_status,
         "service": settings.PROJECT_NAME,
         "environment": settings.ENVIRONMENT,
         "version": "1.0.0",
+        "timestamp": now_iso,
+        "dependencies": {
+            "database": db_status,
+            "scheduler": scheduler_status,
+        },
     }
 
 

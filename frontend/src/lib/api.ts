@@ -40,10 +40,18 @@ export async function apiFetch(endpoint: string, init: RequestInit = {}): Promis
     ? endpoint
     : `${base}${path}`;
 
-  const headers = await getAuthHeaders(init.headers as Record<string, string>);
+  const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+  const authHeaders = await getAuthHeaders(init.headers as Record<string, string>);
 
   return fetch(url, {
     ...init,
-    headers,
+    headers: {
+      "X-Request-ID": requestId,
+      ...authHeaders,
+    },
   });
 }
+

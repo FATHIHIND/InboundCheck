@@ -15,11 +15,14 @@ from app.schemas.dns import (
     DNSAuditRequest,
     DNSAuditResponse,
     GenerateRecordRequest,
-    DNSRecordFix
+    DNSRecordFix,
+    RBLScanRequest,
+    RBLScanResponse,
 )
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine, DEFAULT_DKIM_SELECTORS
 from app.services.dns.scorer import DeliverabilityScorer
 from app.services.dns.record_generator import DNSRecordGenerator
+from app.services.dns.rbl_scanner import rbl_scanner
 from app.services.alert_dispatcher import alert_dispatcher
 
 logger = logging.getLogger("DNSRoutes")
@@ -122,3 +125,66 @@ async def get_recommended_selectors():
             "mailchimp": ["k1", "mandrill"]
         }
     }
+
+
+from app.services.dns.rbl_scanner import rbl_scanner, RBLScanResult
+from app.services.supabase_client import supabase_service
+
+
+@router.post("/rbl-scan", response_model=RBLScanResult)
+async def scan_domain_rbl(
+    request: RBLScanRequest,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Execute on-demand asynchronous DNSBL reputation scan across 10 authoritative RBL databases.
+    Enforces SSRF domain sanitization, reverse-IP query formatting, and 1.5s per-zone timeout protection.
+    Persists granular evidence for auditability.
+    """
+    try:
+        clean_domain = request.domain.strip().lower()
+        if not clean_domain or len(clean_domain) < 3:
+            raise HTTPException(status_code=400, detail="A valid domain name or IP is required.")
+
+        # Anti-SSRF check
+        if DNSDiagnosticEngine.is_ssrf_restricted(clean_domain):
+            raise HTTPException(status_code=400, detail="Restricted IP or domain target is not permitted for scanning.")
+
+        result = await rbl_scanner.scan_domain(clean_domain)
+
+        # Persist audit evidence
+        supabase_service.persist_rbl_scan(
+            user_id=user_id,
+            domain_name=clean_domain,
+            scan=result,
+        )
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error scanning RBL for domain {request.domain}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute asynchronous RBL blacklist scan: {str(e)}"
+        )
+
+
+@router.get("/rbl-status", response_model=RBLScanResult)
+async def get_latest_rbl_status(
+    domain: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Retrieve the latest recorded DNSBL scan evidence for the user domain.
+    Returns HTTP 404 if no previous scan has been conducted.
+    """
+    clean_domain = domain.strip().lower()
+    if not clean_domain:
+        raise HTTPException(status_code=400, detail="Domain parameter is required.")
+
+    scan = supabase_service.get_latest_rbl_scan(user_id=user_id, domain_name=clean_domain)
+    if not scan:
+        raise HTTPException(status_code=404, detail="No RBL scan recorded for this domain.")
+
+    return scan

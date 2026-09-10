@@ -14,20 +14,41 @@ export interface ReputationPoint {
   rbl_status: string;
 }
 
-const DEFAULT_REPUTATION_DATA: ReputationPoint[] = [
-  { checked_at: "Aug 01", unified_score: 82, dns_health_score: 90, spam_risk_pct: 12, risk_level: "medium", blacklist_count: 1, rbl_status: "SpamCop listed" },
-  { checked_at: "Aug 05", unified_score: 88, dns_health_score: 92, spam_risk_pct: 8, risk_level: "low", blacklist_count: 0, rbl_status: "Clean" },
-  { checked_at: "Aug 10", unified_score: 85, dns_health_score: 88, spam_risk_pct: 9, risk_level: "low", blacklist_count: 0, rbl_status: "Clean" },
-  { checked_at: "Aug 15", unified_score: 92, dns_health_score: 94, spam_risk_pct: 4, risk_level: "low", blacklist_count: 0, rbl_status: "Clean" },
-  { checked_at: "Aug 19", unified_score: 90, dns_health_score: 94, spam_risk_pct: 5, risk_level: "low", blacklist_count: 0, rbl_status: "Clean" },
-  { checked_at: "Aug 24", unified_score: 96, dns_health_score: 98, spam_risk_pct: 2, risk_level: "low", blacklist_count: 0, rbl_status: "Clean" },
-];
 
-export default function ReputationTrendChart({ data = DEFAULT_REPUTATION_DATA }: { data?: ReputationPoint[] }) {
+
+export default function ReputationTrendChart({ data = [] }: { data?: ReputationPoint[] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const currentPoint = data[data.length - 1] || DEFAULT_REPUTATION_DATA[DEFAULT_REPUTATION_DATA.length - 1];
-  const firstPoint = data[0] || DEFAULT_REPUTATION_DATA[0];
+  if (!data || data.length === 0) {
+    return (
+      <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              Reputation Trajectory & 48h Radar Forecast
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5 font-normal">
+              Continuous multi-resolver reputation checks and predictive blacklist risk scoring
+            </p>
+          </div>
+          <span className="text-[11px] font-mono text-zinc-400 px-2.5 py-1 rounded-full bg-zinc-800/80 border border-zinc-700/50">
+            Awaiting Data
+          </span>
+        </div>
+        <div className="py-14 text-center space-y-2">
+          <Activity className="w-8 h-8 text-zinc-600 mx-auto animate-pulse" />
+          <div className="text-xs font-semibold text-zinc-300">No reputation history recorded yet</div>
+          <div className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+            Periodic background audit checks will compile your domain&apos;s deliverability trajectory over time.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentPoint = data[data.length - 1];
+  const firstPoint = data[0];
   const scoreDelta = currentPoint.unified_score - firstPoint.unified_score;
 
   // SVG Coordinates Math

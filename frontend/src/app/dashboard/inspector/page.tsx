@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
+import { ApiError } from "@/lib/apiResource";
 
 interface AuditResult {
   domain: string;
@@ -91,6 +93,7 @@ function DNSInspectorContent() {
   const [activeTab, setActiveTab] = useState<"generator" | "inspector">("generator");
   const [isLoading, setIsLoading] = useState(false);
   const [auditData, setAuditData] = useState<AuditResult | null>(null);
+  const [auditError, setAuditError] = useState<ApiError | null>(null);
 
   // Generator State
   const [includeShopify, setIncludeShopify] = useState(true);
@@ -153,60 +156,24 @@ function DNSInspectorContent() {
       if (res.ok) {
         const data: AuditResult = await res.json();
         setAuditData(data);
+        setAuditError(null);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setAuditError({
+          message: body.detail || "DNS resolution failed for the specified domain",
+          status: res.status,
+          retryable: true,
+          endpoint: "/api/v1/dns/audit",
+        });
+        setAuditData(null);
       }
-    } catch {
-      // Fallback audit payload for demo
-      setAuditData({
-        domain: d,
-        health_score: 98,
-        status: "optimal",
-        execution_time_ms: 237.92,
-        category_scores: {
-          dmarc_score: 25,
-          dmarc_max: 25,
-          spf_score: 25,
-          spf_max: 25,
-          dkim_score: 25,
-          dkim_max: 25,
-          mx_score: 15,
-          mx_max: 15,
-          bimi_score: 8,
-          bimi_max: 10,
-        },
-        summary: {
-          spf: {
-            status: "optimal",
-            dns_lookup_count: 3,
-            record_count: 1,
-            raw_record: "v=spf1 include:shops.shopify.com include:_spf.google.com include:klaviyomail.com ~all",
-          },
-          dkim: {
-            status: "optimal",
-            found_selectors: ["shopify", "shopify2", "shopify3"],
-            records: [
-              { selector: "shopify", record: "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgK...", key_size_bits: 2048, status: "valid" },
-              { selector: "shopify2", record: "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgK...", key_size_bits: 2048, status: "valid" },
-              { selector: "shopify3", record: "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgK...", key_size_bits: 2048, status: "valid" },
-            ],
-          },
-          dmarc: {
-            status: "optimal",
-            policy: dmarcPolicy,
-            rua_emails: [dmarcReportEmail],
-            raw_record: `v=DMARC1; p=${dmarcPolicy}; pct=100; rua=mailto:${dmarcReportEmail}; aspf=r; adkim=r;`,
-            alignment_mode: "relaxed",
-          },
-          bimi: {
-            status: "optimal",
-            svg_url: `https://${d}/bimi.svg`,
-          },
-        },
-        raw_responses: {
-          timestamp: new Date().toISOString(),
-          resolvers: ["1.1.1.1", "8.8.8.8", "9.9.9.9"],
-          query_latency_ms: 237.92,
-        },
+    } catch (err: any) {
+      setAuditError({
+        message: err?.message || "Failed to reach DNS diagnostic endpoint",
+        retryable: true,
+        endpoint: "/api/v1/dns/audit",
       });
+      setAuditData(null);
     } finally {
       setIsLoading(false);
     }
@@ -246,69 +213,12 @@ function DNSInspectorContent() {
         }));
         setGeneratedRecords(mapped);
         return;
+      } else {
+        setGeneratedRecords([]);
       }
     } catch {
-      // Fallback
+      setGeneratedRecords([]);
     }
-
-    // Default 5 Records (SPF, DMARC, DKIM 1, DKIM 2, DKIM 3)
-    setGeneratedRecords([
-      {
-        id: "spf_1",
-        category: "SPF Record",
-        record_type: "TXT",
-        host: "@",
-        value: `v=spf1 include:shops.shopify.com include:_spf.google.com include:klaviyomail.com ~all`,
-        explanation: "Authorizes your chosen eCommerce and email providers to send transactional mail without SPF failures.",
-        ttl: "300s (5 minutes standard)",
-        compliance_spec: "RFC 7208 Aligned SPF Mechanism",
-        authoritative_target: "Direct Apex Resolver Node (Cloudflare 1.1.1.1 / Google 8.8.8.8)",
-      },
-      {
-        id: "dmarc_1",
-        category: "DMARC Record",
-        record_type: "TXT",
-        host: "_dmarc",
-        value: `v=DMARC1; p=${dmarcPolicy}; pct=100; rua=mailto:${dmarcReportEmail}; aspf=r; adkim=r;`,
-        explanation: `Enforces strict DMARC p=${dmarcPolicy} policy to eliminate domain spoofing and report aggregate failure telemetry.`,
-        ttl: "300s (5 minutes standard)",
-        compliance_spec: `RFC 7489 DMARC Enforcement (p=${dmarcPolicy})`,
-        authoritative_target: `_dmarc.${d}`,
-      },
-      {
-        id: "dkim_1",
-        category: "DKIM 1 Selector",
-        record_type: "CNAME",
-        host: "shopify._domainkey",
-        value: "dkim1.custom.shopify.com.",
-        explanation: "Shopify primary 2048-bit RSA cryptographic DKIM signing key selector.",
-        ttl: "300s (5 minutes standard)",
-        compliance_spec: "2048-bit RSA Cryptographic DKIM Selector",
-        authoritative_target: "dkim1.custom.shopify.com",
-      },
-      {
-        id: "dkim_2",
-        category: "DKIM 2 Selector",
-        record_type: "CNAME",
-        host: "shopify2._domainkey",
-        value: "dkim2.custom.shopify.com.",
-        explanation: "Shopify secondary rotated 2048-bit RSA DKIM signing selector.",
-        ttl: "300s (5 minutes standard)",
-        compliance_spec: "2048-bit RSA Secondary Rotated Key Selector",
-        authoritative_target: "dkim2.custom.shopify.com",
-      },
-      {
-        id: "dkim_3",
-        category: "DKIM 3 Selector",
-        record_type: "CNAME",
-        host: "shopify3._domainkey",
-        value: "dkim3.custom.shopify.com.",
-        explanation: "Shopify tertiary automated failover DKIM signing key selector.",
-        ttl: "300s (5 minutes standard)",
-        compliance_spec: "2048-bit RSA Automated Failover Key Selector",
-        authoritative_target: "dkim3.custom.shopify.com",
-      },
-    ]);
   };
 
   const toggleRecordExpansion = (id: string) => {
@@ -469,6 +379,18 @@ function DNSInspectorContent() {
           </EmeraldHoverButton>
         </div>
       </div>
+
+      {auditError && (
+        <OperationalErrorCard
+          title="DNS Audit Resolution Failed"
+          error={auditError}
+          onRetry={() => {
+            handleRunAudit();
+            handleGenerateRecords();
+          }}
+          retryLabel="Retry DNS Query"
+        />
+      )}
 
       {/* 3. Main Generator / Inspector Content */}
       {activeTab === "generator" && (

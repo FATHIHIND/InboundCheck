@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import dynamic from "next/dynamic";
 import {
   ShieldCheck,
@@ -14,142 +14,164 @@ import {
   Radio,
   Clock,
   Server,
-  ChevronDown
+  ChevronDown,
+  HelpCircle,
+  Flame,
+  AlertCircle
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { apiFetch } from "@/lib/api";
+import { ApiError, normalizeApiError } from "@/lib/apiResource";
 
 const RblTopology3DCanvas = dynamic(() => import("../components/RblTopology3DCanvas"), {
   ssr: false,
 });
 
-interface RblItem {
-  id: string;
-  name: string;
-  host: string;
-  category: "ip" | "domain";
-  status: "clean" | "listed" | "checking";
-  latency_ms: number;
+export type RBLStatus = "clean" | "listed" | "unknown" | "error";
+export type RBLTargetType = "ip" | "domain";
+export type RBLSeverity = "none" | "low" | "medium" | "high" | "critical";
+
+export interface RblItem {
+  provider_id: string;
+  provider_name: string;
+  zone: string;
+  target_type: RBLTargetType;
+  status: RBLStatus;
+  severity: RBLSeverity;
+  queried_target: string;
+  response_codes: string[];
+  latency_ms: number | null;
+  message: string | null;
   delisting_url: string;
-  description: string;
+  checked_at: string;
+}
+
+export interface RblScanResponse {
+  domain: string;
+  resolved_ips: string[];
+  results: RblItem[];
+  rbl_clean_count: number;
+  rbl_listed_count: number;
+  rbl_unknown_count: number;
+  rbl_error_count: number;
+  rbl_total_count: number;
+  overall_status: "clean" | "listed" | "partial" | "unavailable";
+  highest_severity: RBLSeverity;
+  execution_time_ms: number;
+  scanned_at: string;
+}
+
+async function toApiError(response: Response, defaultMessage = "Request failed"): Promise<ApiError> {
+  let detail = `${defaultMessage} (Status ${response.status})`;
+  let retryAfterSeconds: number | undefined;
+
+  const retryHeader = response.headers.get("Retry-After");
+  if (retryHeader) {
+    const parsed = parseInt(retryHeader, 10);
+    if (!isNaN(parsed)) retryAfterSeconds = parsed;
+  }
+
+  try {
+    const json = await response.json();
+    if (json.detail) {
+      detail = typeof json.detail === "string" ? json.detail : JSON.stringify(json.detail);
+    }
+  } catch {}
+
+  return {
+    message: detail,
+    status: response.status,
+    retryable: response.status >= 500 || response.status === 429,
+    endpoint: response.url,
+    code: response.status === 429 ? "RATE_LIMITED" : `HTTP_${response.status}`,
+    referenceId: retryAfterSeconds ? `Retry after ${retryAfterSeconds}s` : undefined
+  };
 }
 
 export default function BlacklistRadarPage() {
   const [target, setTarget] = useState("brandshop.com");
+  const [scan, setScan] = useState<RblScanResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
-  const [lastScanned, setLastScanned] = useState("Just now");
+  const [error, setError] = useState<ApiError | null>(null);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState<number | null>(null);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
-  const [rbls] = useState<RblItem[]>([
-    {
-      id: "spamhaus_zen",
-      name: "Spamhaus ZEN",
-      host: "zen.spamhaus.org",
-      category: "ip",
-      status: "clean",
-      latency_ms: 38,
-      delisting_url: "https://www.spamhaus.org/lookup/",
-      description: "Combines SBL, SBLP, XBL and PBL datasets for high-consequence IP reputation auditing."
-    },
-    {
-      id: "barracuda",
-      name: "Barracuda BRBL",
-      host: "b.barracudacentral.org",
-      category: "ip",
-      status: "clean",
-      latency_ms: 42,
-      delisting_url: "https://www.barracudacentral.org/rbl",
-      description: "Real-time list of IP addresses verified to send spam to Barracuda networks."
-    },
-    {
-      id: "spamcop",
-      name: "SpamCop SCBL",
-      host: "bl.spamcop.net",
-      category: "ip",
-      status: "clean",
-      latency_ms: 55,
-      delisting_url: "https://www.spamcop.net/bl.shtml",
-      description: "Determined dynamically from unsolicited email report submissions."
-    },
-    {
-      id: "invaluement",
-      name: "Invaluement URI",
-      host: "ival.invaluement.com",
-      category: "domain",
-      status: "clean",
-      latency_ms: 46,
-      delisting_url: "https://www.invaluement.com/lookup/",
-      description: "Leading anti-spam reputation blacklist specialized in evasive spam and phishing domains."
-    },
-    {
-      id: "uceprotect_1",
-      name: "UCEPROTECT Level 1",
-      host: "dnsbl-1.uceprotect.net",
-      category: "ip",
-      status: "clean",
-      latency_ms: 48,
-      delisting_url: "http://www.uceprotect.net/en/rblcheck.php",
-      description: "Strict single-IP address blacklist for direct spam transmitters."
-    },
-    {
-      id: "spamhaus_dbl",
-      name: "Spamhaus DBL",
-      host: "dbl.spamhaus.org",
-      category: "domain",
-      status: "clean",
-      latency_ms: 39,
-      delisting_url: "https://www.spamhaus.org/lookup/",
-      description: "Authoritative domain-name blacklist covering phishing and spam domain URI links."
-    },
-    {
-      id: "cbl",
-      name: "Composite Blocking List (CBL)",
-      host: "cbl.abuseat.org",
-      category: "ip",
-      status: "clean",
-      latency_ms: 45,
-      delisting_url: "https://www.abuseat.org/lookup.cgi",
-      description: "Specializes in detecting botnet infections, Trojan relays, and open proxies."
-    },
-    {
-      id: "abuse_ro",
-      name: "Abuse.ro Network",
-      host: "rbl.abuse.ro",
-      category: "ip",
-      status: "clean",
-      latency_ms: 70,
-      delisting_url: "https://rbl.abuse.ro/",
-      description: "Regional and global spam origin blacklist."
-    },
-    {
-      id: "surbl",
-      name: "SURBL Multi-Depth",
-      host: "multi.surbl.org",
-      category: "domain",
-      status: "clean",
-      latency_ms: 50,
-      delisting_url: "http://www.surbl.org/surbl-analysis",
-      description: "Detects websites appearing in unsolicited email body text links."
-    },
-    {
-      id: "mailspike",
-      name: "Mailspike Reputation",
-      host: "rep.mailspike.net",
-      category: "ip",
-      status: "clean",
-      latency_ms: 52,
-      delisting_url: "https://mailspike.org/iplookup.html",
-      description: "Distributed real-time sender reputation scoring network."
-    }
-  ]);
+  // Countdown timer for rate limiting
+  useEffect(() => {
+    if (rateLimitCountdown === null || rateLimitCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setRateLimitCountdown((prev) => (prev && prev > 1 ? prev - 1 : null));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [rateLimitCountdown]);
 
-  const handleScan = () => {
+  const loadLatest = useCallback(async (domainToQuery?: string) => {
+    const dom = (domainToQuery || target).trim();
+    if (!dom) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiFetch(`/api/v1/dns/rbl-status?domain=${encodeURIComponent(dom)}`);
+
+      if (response.status === 404) {
+        setScan(null); // true empty state: no scan yet
+        return;
+      }
+
+      if (!response.ok) {
+        throw await toApiError(response, "Failed to fetch RBL reputation status");
+      }
+
+      const data: RblScanResponse = await response.json();
+      setScan(data);
+    } catch (cause) {
+      setError(normalizeApiError(cause, "/api/v1/dns/rbl-status"));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [target]);
+
+  const runScan = async (domainOverride?: string) => {
+    const domainToScan = (domainOverride || target).trim();
+    if (!domainToScan) return;
+
     setIsScanning(true);
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      const response = await apiFetch("/api/v1/dns/rbl-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: domainToScan }),
+      });
+
+      if (response.status === 429) {
+        const retryHeader = response.headers.get("Retry-After");
+        const seconds = retryHeader ? parseInt(retryHeader, 10) : 60;
+        setRateLimitCountdown(isNaN(seconds) ? 60 : seconds);
+        throw await toApiError(response, "Rate limit reached. Please wait before scanning again.");
+      }
+
+      if (!response.ok) {
+        throw await toApiError(response, "RBL real-time scan failed");
+      }
+
+      const data: RblScanResponse = await response.json();
+      setScan(data);
+    } catch (cause) {
+      setError(normalizeApiError(cause, "/api/v1/dns/rbl-scan"));
+    } finally {
       setIsScanning(false);
-      setLastScanned("Just now");
-    }, 800);
+    }
   };
+
+  useEffect(() => {
+    loadLatest("brandshop.com");
+  }, []);
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => ({
@@ -158,7 +180,24 @@ export default function BlacklistRadarPage() {
     }));
   };
 
-  const listedCount = rbls.filter((r) => r.status === "listed").length;
+  const canvasNodes = scan
+    ? scan.results.map((r) => ({
+        name: r.provider_name,
+        host: r.zone,
+        status: r.status,
+        latency_ms: r.latency_ms ?? 0,
+      }))
+    : [];
+
+  const avgLatency = scan && scan.results.length > 0
+    ? (() => {
+        const measured = scan.results
+          .map((r) => r.latency_ms)
+          .filter((l): l is number => typeof l === "number" && !isNaN(l));
+        if (measured.length === 0) return "--";
+        return `${(measured.reduce((a, b) => a + b, 0) / measured.length).toFixed(1)}ms`;
+      })()
+    : "--";
 
   return (
     <div className="space-y-6 max-w-[1360px] mx-auto animate-fadeIn pb-12">
@@ -170,21 +209,79 @@ export default function BlacklistRadarPage() {
             Blacklist Radar & RBL Intelligence
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Real-time monitoring across 10 authoritative RBL databases with 48-72h predictive risk forecasting.
+            Real-time DNSBL reputation telemetry across 10 authoritative RBL databases with evidence-based status verification.
           </p>
         </div>
 
-        <EmeraldHoverButton
-          onClick={handleScan}
-          isLoading={isScanning}
-          loadingText="Probing RBL Networks..."
-          icon={<RefreshCw className="w-3.5 h-3.5" />}
-          size="sm"
-          variant="primary"
-        >
-          Run Real-Time RBL Audit
-        </EmeraldHoverButton>
+        <div className="flex items-center gap-2">
+          {scan && (
+            <button
+              onClick={() => loadLatest()}
+              disabled={isLoading || isScanning}
+              className="px-3 py-2 text-xs font-mono rounded-lg border border-zinc-800 bg-[#0E0E12] text-zinc-300 hover:text-white hover:border-zinc-700 transition flex items-center gap-1.5"
+              title="Refresh latest stored audit"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          )}
+
+          <EmeraldHoverButton
+            onClick={() => runScan()}
+            isLoading={isScanning}
+            disabled={rateLimitCountdown !== null}
+            loadingText="Probing RBL Networks..."
+            icon={<RefreshCw className="w-3.5 h-3.5" />}
+            size="sm"
+            variant="primary"
+          >
+            {rateLimitCountdown !== null
+              ? `Cooldown (${rateLimitCountdown}s)`
+              : "Run Real-Time RBL Audit"}
+          </EmeraldHoverButton>
+        </div>
       </div>
+
+      {/* Rate Limit Notice Banner */}
+      {rateLimitCountdown !== null && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs font-mono flex items-center justify-between animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+            <span>
+              <strong>Rate Limit Active:</strong> Next live scan permitted in{" "}
+              <span className="font-bold text-white underline">{rateLimitCountdown} seconds</span>.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Error Banner */}
+      {error && (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-mono flex items-start justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-rose-200">RBL Telemetry Request Failed</div>
+              <div className="text-rose-300/90 mt-0.5">{error.message}</div>
+              {error.code && <span className="inline-block mt-1 text-[10px] text-rose-400/70 font-mono">Code: {error.code}</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => runScan()}
+              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded border border-rose-500/40 text-[11px] transition"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => setError(null)}
+              className="text-zinc-400 hover:text-white text-xs px-2 py-1 rounded"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. Target Search & Control Bar */}
       <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -194,246 +291,417 @@ export default function BlacklistRadarPage() {
             type="text"
             value={target}
             onChange={(e) => setTarget(e.target.value)}
-            placeholder="Enter domain or IP, e.g. brandshop.com"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") runScan();
+            }}
+            placeholder="Enter domain, e.g. brandshop.com"
             className="w-full pl-9 pr-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500/50 transition-colors"
           />
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-mono text-zinc-400">
+        <div className="flex items-center gap-4 text-xs font-mono text-zinc-400 flex-wrap">
           <span>
-            Target: <strong className="text-emerald-400 font-mono text-xs">{target}</strong>
+            Target: <strong className="text-emerald-400 font-mono text-xs">{scan ? scan.domain : target}</strong>
           </span>
+          {scan && scan.resolved_ips && scan.resolved_ips.length > 0 && (
+            <>
+              <span className="text-zinc-700">•</span>
+              <span>
+                Public A-Records:{" "}
+                <strong className="text-cyan-400 font-mono text-xs">
+                  {scan.resolved_ips.join(", ")}
+                </strong>
+              </span>
+            </>
+          )}
           <span className="text-zinc-700">•</span>
           <span>
-            Last Audited: <strong className="text-white font-mono text-xs">{lastScanned}</strong>
+            Scanned:{" "}
+            <strong className="text-white font-mono text-xs">
+              {scan ? new Date(scan.scanned_at).toLocaleTimeString() : "Pending"}
+            </strong>
           </span>
         </div>
       </div>
 
-      {/* 3. 3D Real-Time RBL Node Topology Canvas */}
+      {/* 3. Listed Incident Notification Banner if Any Provider is Listed */}
+      {scan && scan.rbl_listed_count > 0 && (
+        <div className="p-4 bg-rose-950/40 border border-rose-500/50 rounded-xl animate-fadeIn">
+          <div className="flex items-start gap-3">
+            <Flame className="w-5 h-5 text-rose-400 shrink-0 mt-0.5 animate-bounce" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-rose-200 uppercase tracking-wide flex items-center gap-2">
+                  Active Blacklist Incident Detected ({scan.rbl_listed_count} of {scan.rbl_total_count} Lists)
+                </h2>
+                <span className="text-[11px] font-mono text-rose-300 font-bold px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/40">
+                  SEVERITY: {scan.highest_severity.toUpperCase()}
+                </span>
+              </div>
+              <p className="text-xs text-rose-300/90 mt-1">
+                One or more authoritative DNSBL operators are actively rejecting or flagging traffic from this domain/IP. Outbound transactional and marketing receipts face severe delivery degradation.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {scan.results
+                  .filter((r) => r.status === "listed")
+                  .map((r) => (
+                    <a
+                      key={r.provider_id}
+                      href={r.delisting_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-mono border border-rose-500/40 transition"
+                    >
+                      <span>{r.provider_name}</span>
+                      <span className="text-rose-400 font-bold">[{r.response_codes.join(", ") || "LISTED"}]</span>
+                      <ExternalLink className="w-3 h-3 ml-1 text-rose-300" />
+                    </a>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Partial Scan Warning Banner */}
+      {scan && scan.overall_status === "partial" && scan.rbl_listed_count === 0 && (
+        <div className="p-4 bg-amber-950/30 border border-amber-500/40 rounded-xl text-amber-300 text-xs font-mono flex items-start gap-3 animate-fadeIn">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold text-amber-200">Incomplete DNSBL Measurement (Partial Status)</div>
+            <p className="text-amber-300/90 mt-0.5">
+              {scan.rbl_unknown_count} of {scan.rbl_total_count} DNSBL providers did not respond within the 1.5s multi-resolver timeout window or returned inconclusive responses. Clean status cannot be guaranteed until all authoritative providers respond with definitive negative records.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 5. 3D Real-Time RBL Node Topology Canvas */}
       <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 space-y-3 relative overflow-hidden">
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 text-xs">
           <span className="font-mono text-emerald-400 font-bold flex items-center gap-2">
             <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
             3D REAL-TIME RBL NODE TOPOLOGY & PROBING MATRIX
           </span>
-          <span className="text-[10px] font-mono text-zinc-400">10 AUTHORITATIVE LISTS</span>
+          <span className="text-[10px] font-mono text-zinc-400">
+            {scan ? `${scan.rbl_total_count} AUTHORITATIVE LISTS` : "AWAITING TELEMETRY"}
+          </span>
         </div>
-        <RblTopology3DCanvas rbls={rbls} className="h-44 w-full" />
+        <RblTopology3DCanvas rbls={canvasNodes} className="h-44 w-full" />
       </div>
 
-      {/* 4. Purpose-Driven Enterprise Metric Cards (Row 1) */}
+      {/* 6. Purpose-Driven Enterprise Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <GlassEmeraldCard
           title="Active Incidents"
           subtitle="Real-time RBL Status"
-          badgeText="Clean Posture"
-          badgeVariant="emerald"
-          metricValue={listedCount}
+          badgeText={
+            !scan
+              ? "Pending"
+              : scan.rbl_listed_count === 0
+              ? "Clean Posture"
+              : `${scan.rbl_listed_count} Listed`
+          }
+          badgeVariant={
+            !scan
+              ? undefined
+              : scan.rbl_listed_count === 0
+              ? "emerald"
+              : "rose"
+          }
+          metricValue={scan ? scan.rbl_listed_count : "--"}
           icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
         >
           <p className="text-xs text-zinc-400 font-mono">
-            Zero listings across authoritative realtime blacklists.
+            {!scan
+              ? "Awaiting first live reputation scan."
+              : scan.rbl_listed_count === 0
+              ? "Zero listings detected across authoritative realtime blacklists."
+              : `${scan.rbl_listed_count} blacklist listing(s) requiring immediate delisting.`}
           </p>
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
           title="RBL Hosts Queried"
           subtitle="Authoritative Probe Net"
-          badgeText="10 / 10 Active"
-          badgeVariant="emerald"
-          metricValue="10 / 10"
+          badgeText={
+            !scan
+              ? "Unchecked"
+              : `${scan.rbl_clean_count} / ${scan.rbl_total_count} Clean`
+          }
+          badgeVariant={
+            !scan
+              ? undefined
+              : scan.overall_status === "clean"
+              ? "emerald"
+              : scan.overall_status === "listed"
+              ? "rose"
+              : "amber"
+          }
+          metricValue={scan ? `${scan.rbl_clean_count} / ${scan.rbl_total_count}` : "--"}
           icon={<Server className="w-5 h-5 text-emerald-400" />}
         >
           <p className="text-xs text-zinc-400 font-mono line-clamp-1">
-            Spamhaus, Barracuda, SpamCop, SORBS, and UCEPROTECT.
+            {scan
+              ? `${scan.rbl_unknown_count} unknown, ${scan.rbl_error_count} resolver error`
+              : "Spamhaus, Barracuda, SpamCop, Invaluement, Mailspike."}
           </p>
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
-          title="48h Risk Index"
-          subtitle="Predictive Trajectory"
-          badgeText="Stable"
-          badgeVariant="emerald"
-          metricValue="< 5%"
+          title="Overall Posture"
+          subtitle="Evidence-Based Status"
+          badgeText={scan ? scan.overall_status.toUpperCase() : "PENDING"}
+          badgeVariant={
+            !scan
+              ? undefined
+              : scan.overall_status === "clean"
+              ? "emerald"
+              : scan.overall_status === "listed"
+              ? "rose"
+              : "amber"
+          }
+          metricValue={scan ? scan.overall_status.toUpperCase() : "--"}
           icon={<Activity className="w-5 h-5 text-emerald-400" />}
         >
           <p className="text-xs text-zinc-400 font-mono">
-            Predictive machine learning reputation trajectory.
+            {!scan
+              ? "Run live scan to compute overall posture."
+              : scan.overall_status === "clean"
+              ? "All active lists returned definitive negative records."
+              : scan.overall_status === "listed"
+              ? "High impact delivery block active."
+              : "Incomplete probe telemetry."}
           </p>
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
           title="Avg Lookup Latency"
           subtitle="Multi-Resolver UDP Window"
-          badgeText="Real-time"
+          badgeText={scan ? `${scan.execution_time_ms.toFixed(0)}ms scan` : "Real-time"}
           badgeVariant="cyan"
-          metricValue="47.8ms"
+          metricValue={avgLatency}
           icon={<Clock className="w-5 h-5 text-cyan-400" />}
         >
           <p className="text-xs text-zinc-400 font-mono">
-            Multi-resolver UDP query response window.
+            {scan
+              ? `Bounded 1.5s per-zone multi-resolver execution.`
+              : "Multi-resolver UDP query response window."}
           </p>
         </GlassEmeraldCard>
       </div>
 
-      {/* 5. Authoritative RBL Monitoring Matrix Table */}
-      <GlassEmeraldCard
-        title="Authoritative RBL Monitoring Matrix"
-        subtitle="Real-time DNSBL reputation telemetry and delisting gateway access"
-        badgeText="10 Lists Active"
-        badgeVariant="emerald"
-        icon={<Activity className="w-5 h-5 text-emerald-400" />}
-      >
+      {/* 7. Loading Skeleton State */}
+      {isLoading && !scan && (
+        <div className="bg-[#0E0E12]/80 backdrop-blur-md p-8 rounded-xl border border-zinc-800/80 animate-pulse space-y-4">
+          <div className="h-4 bg-zinc-800 rounded w-1/4"></div>
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-12 bg-zinc-900/80 rounded-lg flex items-center justify-between px-4">
+                <div className="h-3 bg-zinc-800 rounded w-1/3"></div>
+                <div className="h-3 bg-zinc-800 rounded w-1/6"></div>
+                <div className="h-3 bg-zinc-800 rounded w-1/12"></div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-zinc-500 font-mono text-center pt-2">
+            Probing authoritative DNSBL providers via dedicated recursive nameservers...
+          </p>
+        </div>
+      )}
 
-        {/* Viewport Bounding (Show Exactly 3 Rows with Scroll) */}
-        <div className="overflow-y-auto max-h-[260px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 rounded-lg">
-          <table className="w-full text-left text-xs font-mono border-collapse">
-            <thead className="sticky top-0 bg-[#0E0E12] z-10 backdrop-blur-md border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-400">
-              <tr>
-                <th className="py-3 px-4 font-semibold">RBL Provider</th>
-                <th className="py-3 px-4 font-semibold">DNSBL Host</th>
-                <th className="py-3 px-4 font-semibold">Type</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
-                <th className="py-3 px-4 font-semibold">Latency</th>
-                <th className="py-3 px-4 font-semibold text-right">Delisting Portal</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
-              {rbls.map((rbl) => {
-                const isListed = rbl.status === "listed";
-                const isWarning = rbl.latency_ms > 65;
-                const isExpanded = !!expandedRows[rbl.id];
+      {/* 8. True Empty State (404 / No prior scan recorded) */}
+      {!isLoading && !scan && !error && (
+        <div className="bg-[#0E0E12]/80 backdrop-blur-md p-10 rounded-xl border border-zinc-800/80 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
+            <Radio className="w-6 h-6 text-zinc-500" />
+          </div>
+          <div className="max-w-md mx-auto">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wide font-mono">
+              No RBL Scan Recorded
+            </h3>
+            <p className="text-xs text-zinc-400 mt-1">
+              No telemetry or historical DNSBL check exists for <strong className="text-emerald-400">{target}</strong>.
+              Execute an authoritative multi-resolver probing scan to establish reputation evidence.
+            </p>
+          </div>
+          <EmeraldHoverButton
+            onClick={() => runScan()}
+            isLoading={isScanning}
+            icon={<RefreshCw className="w-3.5 h-3.5" />}
+            size="md"
+            variant="primary"
+          >
+            Run First Real-Time RBL Audit
+          </EmeraldHoverButton>
+        </div>
+      )}
 
-                return (
-                  <Fragment key={rbl.id}>
-                    <tr
-                      className="border-b border-zinc-900/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
-                      onClick={() => toggleRow(rbl.id)}
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRow(rbl.id);
-                            }}
-                            className="p-0.5 rounded text-zinc-400 hover:text-emerald-400 transition cursor-pointer"
-                            title={isExpanded ? "Collapse Row" : "Expand Row"}
-                          >
-                            <ChevronDown
-                              className={`w-4 h-4 transition-transform duration-200 ${
-                                isExpanded ? "rotate-180 text-emerald-400" : "text-zinc-400"
-                              }`}
-                            />
-                          </button>
-                          <div>
-                            <div className="font-bold text-white text-xs font-sans flex items-center gap-1.5">
-                              {rbl.name}
-                            </div>
-                            <div className="text-xs text-zinc-400 mt-0.5 line-clamp-1 font-sans">
-                              {rbl.description}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs text-zinc-300">{rbl.host}</td>
-                      <td className="py-3 px-4">
-                        <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/50">
-                          {rbl.category}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {isListed ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20">
-                            <XCircle className="w-3.5 h-3.5" />
-                            LISTED
-                          </span>
-                        ) : isWarning ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            ELEVATED
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            CLEAN
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs text-zinc-300">
-                        <span className={isWarning ? "text-amber-400 font-semibold" : "text-zinc-300"}>
-                          {rbl.latency_ms}ms
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <a
-                          href={rbl.delisting_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-zinc-400 hover:text-emerald-400 font-mono text-xs inline-flex items-center gap-1 transition-colors"
-                        >
-                          Lookup <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </td>
-                    </tr>
+      {/* 9. Measured Authoritative RBL Monitoring Matrix Table */}
+      {scan && (
+        <GlassEmeraldCard
+          title="Authoritative RBL Monitoring Matrix"
+          subtitle="Real-time DNSBL reputation telemetry and delisting gateway access"
+          badgeText={`${scan.rbl_total_count} Lists Monitored`}
+          badgeVariant="emerald"
+          icon={<Activity className="w-5 h-5 text-emerald-400" />}
+        >
+          <div className="overflow-y-auto max-h-[360px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 rounded-lg">
+            <table className="w-full text-left text-xs font-mono border-collapse">
+              <thead className="sticky top-0 bg-[#0E0E12] z-10 backdrop-blur-md border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-400">
+                <tr>
+                  <th className="py-3 px-4 font-semibold">RBL Provider</th>
+                  <th className="py-3 px-4 font-semibold">DNSBL Zone</th>
+                  <th className="py-3 px-4 font-semibold">Target Type</th>
+                  <th className="py-3 px-4 font-semibold">Measured Status</th>
+                  <th className="py-3 px-4 font-semibold">Latency</th>
+                  <th className="py-3 px-4 font-semibold text-right">Delisting Portal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
+                {scan.results.map((rbl) => {
+                  const isListed = rbl.status === "listed";
+                  const isUnknown = rbl.status === "unknown";
+                  const isError = rbl.status === "error";
+                  const isExpanded = !!expandedRows[rbl.provider_id];
 
-                    {/* Collapsible Accordion Drawer */}
-                    {isExpanded && (
-                      <tr className="bg-[#08080A]/90 border-b border-zinc-800/80 animate-fadeIn">
-                        <td colSpan={6} className="p-4">
-                          <div className="space-y-3 font-mono text-xs">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
-                                <span className="text-[10px] text-zinc-500 uppercase block">Incident History</span>
-                                <span className="text-xs text-emerald-400 font-bold block mt-0.5">
-                                  0 Incidents Recorded
-                                </span>
-                                <span className="text-[10px] text-zinc-400 block mt-0.5">Last checked: {lastScanned}</span>
+                  return (
+                    <Fragment key={rbl.provider_id}>
+                      <tr
+                        className="border-b border-zinc-900/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
+                        onClick={() => toggleRow(rbl.provider_id)}
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleRow(rbl.provider_id);
+                              }}
+                              className="p-0.5 rounded text-zinc-400 hover:text-emerald-400 transition cursor-pointer"
+                              title={isExpanded ? "Collapse Row" : "Expand Row"}
+                            >
+                              <ChevronDown
+                                className={`w-4 h-4 transition-transform duration-200 ${
+                                  isExpanded ? "rotate-180 text-emerald-400" : "text-zinc-400"
+                                }`}
+                              />
+                            </button>
+                            <div>
+                              <div className="font-bold text-white text-xs font-sans flex items-center gap-1.5">
+                                {rbl.provider_name}
                               </div>
-
-                              <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
-                                <span className="text-[10px] text-zinc-500 uppercase block">Delisting Gateway</span>
-                                <span className="text-xs text-zinc-300 block mt-0.5 font-sans">
-                                  Direct API & Manual Removal Request
-                                </span>
-                                <a
-                                  href={rbl.delisting_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[10px] text-emerald-400 hover:underline block mt-0.5"
-                                >
-                                  Open Delisting Portal ↗
-                                </a>
+                              <div className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1 font-sans">
+                                Target: {rbl.queried_target}
                               </div>
-
-                              <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
-                                <span className="text-[10px] text-zinc-500 uppercase block">RFC 1035 Query Log</span>
-                                <code className="text-[11px] text-emerald-400/90 block mt-0.5 break-all">
-                                  1.1.1.1 -&gt; {target}.{rbl.host} (NXDOMAIN)
-                                </code>
-                                <span className="text-[10px] text-zinc-400 block mt-0.5">Latency: {rbl.latency_ms}ms</span>
-                              </div>
-                            </div>
-
-                            <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80 flex items-center justify-between text-xs font-sans text-zinc-400">
-                              <span>{rbl.description}</span>
-                              <span className="font-mono text-[10px] text-zinc-500">Host: {rbl.host}</span>
                             </div>
                           </div>
                         </td>
+                        <td className="py-3 px-4 font-mono text-xs text-zinc-300">{rbl.zone}</td>
+                        <td className="py-3 px-4">
+                          <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/50">
+                            {rbl.target_type}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {isListed ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20">
+                              <XCircle className="w-3.5 h-3.5" />
+                              LISTED
+                            </span>
+                          ) : isUnknown ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              UNKNOWN
+                            </span>
+                          ) : isError ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-zinc-400 bg-zinc-800 border border-zinc-700">
+                              <HelpCircle className="w-3.5 h-3.5" />
+                              ERROR
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              CLEAN
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-xs text-zinc-300">
+                          {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "--"}
+                        </td>
+                        <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <a
+                            href={rbl.delisting_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-zinc-400 hover:text-emerald-400 font-mono text-xs inline-flex items-center gap-1 transition-colors"
+                          >
+                            Lookup <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </td>
                       </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </GlassEmeraldCard>
+
+                      {/* Collapsible Accordion Drawer */}
+                      {isExpanded && (
+                        <tr className="bg-[#08080A]/90 border-b border-zinc-800/80 animate-fadeIn">
+                          <td colSpan={6} className="p-4">
+                            <div className="space-y-3 font-mono text-xs">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Response Codes</span>
+                                  <span className="text-xs text-cyan-400 font-bold block mt-0.5">
+                                    {rbl.response_codes.length > 0
+                                      ? rbl.response_codes.join(", ")
+                                      : "NXDOMAIN (Definitive Negative)"}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400 block mt-0.5">
+                                    Severity: {rbl.severity.toUpperCase()}
+                                  </span>
+                                </div>
+
+                                <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Delisting Gateway</span>
+                                  <span className="text-xs text-zinc-300 block mt-0.5 font-sans">
+                                    Direct Provider Removal Portal
+                                  </span>
+                                  <a
+                                    href={rbl.delisting_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-emerald-400 hover:underline block mt-0.5"
+                                  >
+                                    Open Delisting Portal ↗
+                                  </a>
+                                </div>
+
+                                <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Diagnostics Message</span>
+                                  <span className="text-[11px] text-zinc-300 block mt-0.5">
+                                    {rbl.message || "Definitive DNS lookup response received."}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400 block mt-0.5">
+                                    Latency: {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "timeout"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80 flex items-center justify-between text-xs font-sans text-zinc-400">
+                                <span>Target: {rbl.queried_target} via {rbl.zone}</span>
+                                <span className="font-mono text-[10px] text-zinc-500">Checked: {new Date(rbl.checked_at).toISOString()}</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </GlassEmeraldCard>
+      )}
     </div>
   );
 }
-
-

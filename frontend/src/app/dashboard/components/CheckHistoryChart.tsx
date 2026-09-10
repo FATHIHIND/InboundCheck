@@ -14,24 +14,44 @@ export interface IMAPCheckLog {
   overall_score: number;
 }
 
-const DEFAULT_IMAP_LOGS: IMAPCheckLog[] = [
-  { id: "chk_1", order_id: "#10542", folder: "inbox", received_at: "10 mins ago", latency_sec: 4.2, dns_subscore: 100, overall_score: 98 },
-  { id: "chk_2", order_id: "#10541", folder: "inbox", received_at: "1 hour ago", latency_sec: 3.8, dns_subscore: 100, overall_score: 96 },
-  { id: "chk_3", order_id: "#10540", folder: "spam", received_at: "3 hours ago", latency_sec: 8.5, dns_subscore: 70, overall_score: 55 },
-  { id: "chk_4", order_id: "#10539", folder: "inbox", received_at: "6 hours ago", latency_sec: 4.1, dns_subscore: 95, overall_score: 94 },
-  { id: "chk_5", order_id: "#10538", folder: "inbox", received_at: "12 hours ago", latency_sec: 3.9, dns_subscore: 100, overall_score: 95 },
-];
-
-export default function CheckHistoryChart({ logs = DEFAULT_IMAP_LOGS }: { logs?: IMAPCheckLog[] }) {
+export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[] }) {
   const [selectedFolder, setSelectedFolder] = useState<"all" | "inbox" | "spam">("all");
 
   const filteredLogs = selectedFolder === "all"
     ? logs
     : logs.filter((l) => l.folder === selectedFolder);
 
-  const inboxRate = Math.round(
-    (logs.filter((l) => l.folder === "inbox").length / (logs.length || 1)) * 100
-  );
+  const inboxRate = logs.length > 0
+    ? Math.round((logs.filter((l) => l.folder === "inbox").length / logs.length) * 100)
+    : 0;
+
+  if (logs.length === 0) {
+    return (
+      <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-5 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+              <Inbox className="w-4 h-4 text-emerald-400" />
+              IMAP Ingestion & Simulation Feed
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5 font-normal">
+              Real order trigger → IMAP inbox folder verification
+            </p>
+          </div>
+          <span className="text-xs font-mono text-zinc-400 px-3 py-1 rounded-full bg-zinc-800/80 border border-zinc-700/50">
+            Awaiting Transactions
+          </span>
+        </div>
+        <div className="py-12 text-center space-y-2 font-mono">
+          <Inbox className="w-7 h-7 text-zinc-600 mx-auto" />
+          <div className="text-xs font-semibold text-zinc-300">No IMAP test deliveries observed yet</div>
+          <div className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+            Execute a test order simulation or ingest live Shopify order webhooks to populate delivery events.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-5 shadow-2xl">

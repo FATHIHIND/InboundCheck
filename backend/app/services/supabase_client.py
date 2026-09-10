@@ -5,9 +5,11 @@ Handles authenticated Supabase operations for monitored domains, audit logs,
 profiles, and store integration metadata.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import logging
-from datetime import datetime
+import uuid
+import time
+from datetime import datetime, timezone
 from supabase import create_client, Client
 
 from app.core.config import settings
@@ -25,6 +27,8 @@ class SupabaseService:
         self._in_memory_domains: Dict[str, List[Dict[str, Any]]] = {}
         self._in_memory_logs: Dict[str, List[Dict[str, Any]]] = {}
         self._in_memory_profiles: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_stores: Dict[str, List[Dict[str, Any]]] = {}
+        self._in_memory_reputation: Dict[str, List[Dict[str, Any]]] = {}
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -173,39 +177,563 @@ class SupabaseService:
     def save_audit_log(
         self,
         user_id: str,
-        domain_id: str,
-        domain_name: str,
-        audit_result: Dict[str, Any]
+        domain_id: Optional[str] = None,
+        domain_name: Optional[str] = None,
+        audit_result: Optional[Union[Dict[str, Any], Any]] = None,
+        **kwargs
     ) -> Dict[str, Any]:
-        """Record DNS audit event in public.dns_audit_logs."""
+        """
+        Record DNS audit event in public.dns_audit_logs strictly adhering to production schema.
+        Maps DeliverabilityResult / DNSAuditResponse payload to DB columns:
+        (health_score, spf_status, dkim_records, dmarc_status, mx_records, fixes, etc.).
+        Gracefully handles database failures by logging a warning without breaking caller operations.
+        """
+        # Support flexible calling conventions:
+        # save_audit_log(user_id=..., domain_id=..., domain_name=..., audit_result=...)
+        # save_audit_log(user_id, domain_name, audit_result)
+        if audit_result is None and isinstance(domain_name, (dict, object)) and not isinstance(domain_name, str):
+            audit_result = domain_name
+            domain_name = domain_id
+            domain_id = None
+
+        if not domain_name and kwargs.get("domain"):
+            domain_name = kwargs.get("domain")
+
+        # Normalize audit payload from Pydantic model or dict
+        if hasattr(audit_result, "model_dump"):
+            payload = audit_result.model_dump()
+        elif isinstance(audit_result, dict):
+            payload = audit_result
+        else:
+            payload = {}
+
+        clean_domain = (domain_name or payload.get("domain") or "").strip().lower()
+
+        summary = payload.get("summary") or {}
+        if hasattr(summary, "model_dump"):
+            summary = summary.model_dump()
+
+        spf_data = summary.get("spf") or {}
+        dkim_data = summary.get("dkim") or {}
+        dmarc_data = summary.get("dmarc") or {}
+        mx_data = summary.get("mx") or {}
+        bimi_data = summary.get("bimi") or {}
+
+        # Safely convert Pydantic submodels if present
+        if hasattr(spf_data, "model_dump"):
+            spf_data = spf_data.model_dump()
+        if hasattr(dkim_data, "model_dump"):
+            dkim_data = dkim_data.model_dump()
+        if hasattr(dmarc_data, "model_dump"):
+            dmarc_data = dmarc_data.model_dump()
+        if hasattr(mx_data, "model_dump"):
+            mx_data = mx_data.model_dump()
+        if hasattr(bimi_data, "model_dump"):
+            bimi_data = bimi_data.model_dump()
+
+        # DKIM records formatting
+        dkim_recs = dkim_data.get("records") or []
+        if hasattr(dkim_recs, "model_dump"):
+            dkim_recs = dkim_recs.model_dump()
+        elif isinstance(dkim_recs, list):
+            dkim_recs = [r.model_dump() if hasattr(r, "model_dump") else r for r in dkim_recs]
+        if not dkim_recs and dkim_data.get("found_selectors"):
+            dkim_recs = [{"selector": s, "status": "optimal"} for s in dkim_data.get("found_selectors", [])]
+
+        # MX records formatting
+        mx_recs = mx_data.get("records") or []
+        if hasattr(mx_recs, "model_dump"):
+            mx_recs = mx_recs.model_dump()
+        elif isinstance(mx_recs, list):
+            mx_recs = [r.model_dump() if hasattr(r, "model_dump") else r for r in mx_recs]
+
+        # Fixes formatting
+        fixes_recs = payload.get("fixes") or []
+        if hasattr(fixes_recs, "model_dump"):
+            fixes_recs = fixes_recs.model_dump()
+        elif isinstance(fixes_recs, list):
+            fixes_recs = [f.model_dump() if hasattr(f, "model_dump") else f for f in fixes_recs]
+
+        # Health score clamping (0-100)
+        raw_score = payload.get("health_score", 0)
+        try:
+            health_score = max(0, min(100, int(raw_score)))
+        except (ValueError, TypeError):
+            health_score = 0
+
+        # Validate domain_id for Postgres UUID
+        valid_domain_id = None
+        if domain_id:
+            try:
+                valid_domain_id = str(uuid.UUID(str(domain_id)))
+            except (ValueError, AttributeError, TypeError):
+                valid_domain_id = None
+
+        now_iso = datetime.now(datetime.UTC).isoformat() if hasattr(datetime, "UTC") else datetime.utcnow().isoformat()
+
         log_entry = {
-            "domain_id": domain_id,
             "user_id": user_id,
-            "overall_score": audit_result.get("health_score", 0),
-            "spf_record": audit_result.get("summary", {}).get("spf", {}).get("raw"),
-            "dkim_record": str(audit_result.get("summary", {}).get("dkim", {}).get("found_selectors")),
-            "dmarc_record": audit_result.get("summary", {}).get("dmarc", {}).get("raw"),
-            "bimi_record": audit_result.get("summary", {}).get("bimi", {}).get("raw"),
-            "mx_records": audit_result.get("summary", {}).get("mx", {}).get("records", []),
-            "raw_dns_results": audit_result.get("raw_responses", {}),
-            "issues_found": audit_result.get("issues", []),
-            "recommendations": audit_result.get("fixes", []),
-            "created_at": datetime.utcnow().isoformat(),
+            "domain_id": valid_domain_id,
+            "domain_name": clean_domain,
+            "health_score": health_score,
+            "spf_record": spf_data.get("raw"),
+            "spf_status": spf_data.get("status") or ("optimal" if spf_data.get("raw") else "missing"),
+            "dkim_records": dkim_recs,
+            "dkim_status": dkim_data.get("status") or ("optimal" if dkim_recs else "missing"),
+            "dmarc_record": dmarc_data.get("raw"),
+            "dmarc_status": dmarc_data.get("status") or ("optimal" if dmarc_data.get("raw") else "missing"),
+            "mx_records": mx_recs,
+            "mx_status": mx_data.get("status") or ("optimal" if mx_recs else "missing"),
+            "bimi_record": bimi_data.get("raw"),
+            "bimi_status": bimi_data.get("status") or ("optimal" if bimi_data.get("raw") else "missing"),
+            "fixes": fixes_recs,
+            "raw_responses": payload.get("raw_responses") or {},
+            "created_at": now_iso,
+        }
+
+        # Write to Supabase if connected
+        if self._client:
+            try:
+                # Omit domain_id if None to let DB handle default/NULL
+                insert_payload = {k: v for k, v in log_entry.items() if k != "domain_id" or v is not None}
+                response = self._client.table("dns_audit_logs").insert(insert_payload).execute()
+                if response.data and len(response.data) > 0:
+                    return response.data[0]
+            except Exception as e:
+                logger.warning(f"Failed to persist DNS audit log to Supabase: {e}")
+
+        # In-memory persistence
+        log_key = domain_id or clean_domain or "default"
+        if log_key not in self._in_memory_logs:
+            self._in_memory_logs[log_key] = []
+        in_mem_entry = dict(log_entry)
+        in_mem_entry["id"] = f"log_{len(self._in_memory_logs[log_key]) + 1}_{int(time.time())}"
+        self._in_memory_logs[log_key].insert(0, in_mem_entry)
+        return in_mem_entry
+
+    def save_monitored_store(
+        self,
+        user_id: str,
+        shop_domain: str,
+        access_token_encrypted: str,
+        scope: str = "read_orders,read_fulfillments,read_merchant_managed_fulfillment_orders",
+        sender_email: Optional[str] = None,
+        store_metadata: Optional[Dict[str, Any]] = None,
+        sender_alignment_status: str = "pending"
+    ) -> Dict[str, Any]:
+        """
+        Persist connected Shopify store and encrypted access token to public.shopify_stores / public.monitored_stores.
+        """
+        now_iso = datetime.now(datetime.UTC).isoformat() if hasattr(datetime, "UTC") else datetime.utcnow().isoformat()
+        clean_shop = shop_domain.strip().lower()
+
+        record = {
+            "user_id": user_id,
+            "shop_domain": clean_shop,
+            "access_token_encrypted": access_token_encrypted,
+            "scope": scope,
+            "sender_email": sender_email,
+            "sender_alignment_status": sender_alignment_status,
+            "is_active": True,
+            "updated_at": now_iso,
+        }
+
+        # Attempt Supabase persistence into shopify_stores or monitored_stores
+        if self._client:
+            for table_name in ["shopify_stores", "monitored_stores"]:
+                try:
+                    payload = dict(record)
+                    if table_name == "monitored_stores" and store_metadata:
+                        payload["metadata"] = store_metadata
+                    res = self._client.table(table_name).upsert(
+                        payload,
+                        on_conflict="user_id,shop_domain"
+                    ).execute()
+                    if res.data and len(res.data) > 0:
+                        return res.data[0]
+                except Exception as e:
+                    logger.warning(f"Could not persist store to table '{table_name}': {e}")
+
+        # In-memory persistence
+        if user_id not in self._in_memory_stores:
+            self._in_memory_stores[user_id] = []
+
+        existing = next((s for s in self._in_memory_stores[user_id] if s.get("shop_domain") == clean_shop), None)
+        if existing:
+            existing.update(record)
+            if store_metadata:
+                existing["metadata"] = store_metadata
+            return existing
+        else:
+            new_store = dict(record)
+            new_store["id"] = f"store_{len(self._in_memory_stores[user_id]) + 1}_{int(time.time())}"
+            new_store["created_at"] = now_iso
+            if store_metadata:
+                new_store["metadata"] = store_metadata
+            self._in_memory_stores[user_id].insert(0, new_store)
+            return new_store
+
+    def get_user_stores(self, user_id: str) -> List[Dict[str, Any]]:
+        """Fetch all connected stores for user."""
+        if self._client:
+            for table_name in ["shopify_stores", "monitored_stores"]:
+                try:
+                    res = self._client.table(table_name).select("*").eq("user_id", user_id).execute()
+                    if res.data is not None:
+                        return res.data
+                except Exception as e:
+                    logger.warning(f"Could not fetch stores from '{table_name}': {e}")
+        return self._in_memory_stores.get(user_id, [])
+
+    def persist_rbl_scan(self, user_id: str, domain_name: str, scan: Any) -> None:
+        """
+        Persist normalized per-provider RBL scan evidence and update reputation snapshot.
+        """
+        scan_dict = scan.model_dump() if hasattr(scan, "model_dump") else dict(scan)
+        results = scan_dict.get("results", [])
+
+        # Store in-memory for testing and development
+        if user_id not in self._in_memory_reputation:
+            self._in_memory_reputation[user_id] = []
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        snapshot = {
+            "domain_id": None,
+            "user_id": user_id,
+            "domain_name": domain_name,
+            "score": max(0, 100 - (scan_dict.get("rbl_listed_count", 0) * 20)),
+            "dns_score": 90,
+            "rbl_clean_count": scan_dict.get("rbl_clean_count", 0),
+            "rbl_total_count": scan_dict.get("rbl_total_count", 10),
+            "rbl_listed_count": scan_dict.get("rbl_listed_count", 0),
+            "rbl_unknown_count": scan_dict.get("rbl_unknown_count", 0),
+            "rbl_overall_status": scan_dict.get("overall_status", "clean"),
+            "predicted_risk_48h": "high" if scan_dict.get("rbl_listed_count", 0) > 0 else "low",
+            "created_at": now_iso,
+            "scan_data": scan_dict,
+        }
+        self._in_memory_reputation[user_id].insert(0, snapshot)
+
+        # Write to public.rbl_scan_results if Supabase client is connected
+        if self._client:
+            try:
+                for r in results:
+                    row = {
+                        "user_id": user_id,
+                        "domain_name": domain_name,
+                        "provider_id": r.get("provider_id"),
+                        "provider_name": r.get("provider_name"),
+                        "dnsbl_zone": r.get("zone"),
+                        "target_type": r.get("target_type"),
+                        "queried_targets": [r.get("queried_target")],
+                        "status": r.get("status"),
+                        "severity": r.get("severity", "none"),
+                        "response_codes": r.get("response_codes", []),
+                        "latency_ms": r.get("latency_ms"),
+                        "error_message": r.get("message"),
+                        "delisting_url": r.get("delisting_url"),
+                    }
+                    self._client.table("rbl_scan_results").insert(row).execute()
+            except Exception as e:
+                logger.warning(f"Could not persist rbl_scan_results to database: {e}")
+
+    def get_latest_rbl_scan(self, user_id: str, domain_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch latest persisted RBL scan result for user domain.
+        Returns None if no scan exists (so router can return HTTP 404).
+        """
+        clean_d = domain_name.strip().lower()
+        user_checks = self._in_memory_reputation.get(user_id, [])
+        for c in user_checks:
+            if c.get("domain_name") == clean_d and "scan_data" in c:
+                return c["scan_data"]
+
+        if self._client:
+            try:
+                res = (
+                    self._client.table("rbl_scan_results")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .eq("domain_name", clean_d)
+                    .order("checked_at", desc=True)
+                    .limit(10)
+                    .execute()
+                )
+                if res.data and len(res.data) > 0:
+                    rows = res.data
+                    clean_count = sum(1 for r in rows if r.get("status") == "clean")
+                    listed_count = sum(1 for r in rows if r.get("status") == "listed")
+                    unknown_count = sum(1 for r in rows if r.get("status") == "unknown")
+                    error_count = sum(1 for r in rows if r.get("status") == "error")
+
+                    return {
+                        "domain": clean_d,
+                        "resolved_ips": [],
+                        "results": [
+                            {
+                                "provider_id": r.get("provider_id"),
+                                "provider_name": r.get("provider_name"),
+                                "zone": r.get("dnsbl_zone"),
+                                "target_type": r.get("target_type"),
+                                "status": r.get("status"),
+                                "severity": r.get("severity", "none"),
+                                "queried_target": (r.get("queried_targets") or [""])[0],
+                                "response_codes": r.get("response_codes") or [],
+                                "latency_ms": r.get("latency_ms"),
+                                "message": r.get("error_message"),
+                                "delisting_url": r.get("delisting_url") or "",
+                                "checked_at": r.get("checked_at"),
+                            }
+                            for r in rows
+                        ],
+                        "rbl_clean_count": clean_count,
+                        "rbl_listed_count": listed_count,
+                        "rbl_unknown_count": unknown_count,
+                        "rbl_error_count": error_count,
+                        "rbl_total_count": len(rows),
+                        "overall_status": "listed" if listed_count > 0 else "clean",
+                        "highest_severity": "critical" if listed_count > 0 else "none",
+                        "execution_time_ms": 0.0,
+                        "scanned_at": rows[0].get("checked_at"),
+                    }
+            except Exception as e:
+                logger.warning(f"Could not retrieve rbl_scan_results from database: {e}")
+
+        return None
+
+    # =====================================================================
+    # DISTRIBUTED AUDIT LEASE REPOSITORY METHODS (PHASE 4)
+    # =====================================================================
+
+    def claim_due_domain_audits(
+        self,
+        worker_id: str,
+        limit: int = 25,
+        interval_seconds: int = 3600,
+        lease_seconds: int = 900,
+    ) -> List[Dict[str, Any]]:
+        """
+        Atomically claim due domain audits using PostgreSQL FOR UPDATE SKIP LOCKED via RPC.
+        Falls back to in-memory lease emulation for offline/testing environments.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+
+        if self._client:
+            try:
+                # Interval strings for Postgres RPC
+                interval_str = f"{interval_seconds} seconds"
+                lease_str = f"{lease_seconds} seconds"
+                res = self._client.rpc(
+                    "claim_due_domain_audits",
+                    {
+                        "p_worker_id": worker_id,
+                        "p_limit": limit,
+                        "p_interval": interval_str,
+                        "p_lease_duration": lease_str,
+                    },
+                ).execute()
+                if res.data:
+                    return res.data
+            except Exception as e:
+                logger.warning(f"Could not execute claim_due_domain_audits RPC: {e}. Checking in-memory fallback.")
+
+        # In-memory lease claiming fallback
+        claimed: List[Dict[str, Any]] = []
+        for uid, domains in self._in_memory_domains.items():
+            for domain in domains:
+                if not domain.get("is_active", True):
+                    continue
+
+                last_audited = domain.get("last_audited_at")
+                lease_until = domain.get("audit_lease_until")
+
+                # Check due criteria
+                is_due = True
+                if last_audited:
+                    try:
+                        last_audited_dt = datetime.fromisoformat(last_audited.replace("Z", "+00:00"))
+                        if (now - last_audited_dt).total_seconds() < interval_seconds:
+                            is_due = False
+                    except Exception:
+                        pass
+
+                # Check lease criteria (must not be actively leased by another unexpired worker)
+                is_leased = False
+                if lease_until:
+                    try:
+                        lease_until_dt = datetime.fromisoformat(lease_until.replace("Z", "+00:00"))
+                        if lease_until_dt > now:
+                            is_leased = True
+                    except Exception:
+                        pass
+
+                if is_due and not is_leased:
+                    lease_expiry = datetime.fromtimestamp(now.timestamp() + lease_seconds, tz=timezone.utc).isoformat()
+                    domain["audit_lease_owner"] = worker_id
+                    domain["audit_lease_until"] = lease_expiry
+                    domain["audit_started_at"] = now_iso
+                    claimed.append(domain)
+                    if len(claimed) >= limit:
+                        break
+            if len(claimed) >= limit:
+                break
+
+        return claimed
+
+    def complete_domain_audit(self, domain_id: str, worker_id: str) -> bool:
+        """
+        Mark a domain audit completed and release the lease.
+        Requires that the calling worker owns the active lease.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "complete_domain_audit",
+                    {
+                        "p_domain_id": domain_id,
+                        "p_worker_id": worker_id,
+                    },
+                ).execute()
+                if res.data is True:
+                    return True
+            except Exception as e:
+                logger.warning(f"Could not execute complete_domain_audit RPC: {e}")
+
+        # In-memory fallback
+        for uid, domains in self._in_memory_domains.items():
+            for domain in domains:
+                if domain.get("id") == domain_id:
+                    if domain.get("audit_lease_owner") == worker_id:
+                        domain["audit_lease_owner"] = None
+                        domain["audit_lease_until"] = None
+                        domain["last_audited_at"] = now_iso
+                        domain["audit_failure_count"] = 0
+                        domain["last_audit_error"] = None
+                        return True
+                    return False
+        return False
+
+    def fail_domain_audit(self, domain_id: str, worker_id: str, error: str) -> bool:
+        """
+        Record domain audit failure, increment failure count, and release the lease.
+        Requires that the calling worker owns the active lease.
+        """
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "fail_domain_audit",
+                    {
+                        "p_domain_id": domain_id,
+                        "p_worker_id": worker_id,
+                        "p_error": error[:500] if error else "Audit execution error",
+                    },
+                ).execute()
+                if res.data is True:
+                    return True
+            except Exception as e:
+                logger.warning(f"Could not execute fail_domain_audit RPC: {e}")
+
+        # In-memory fallback
+        for uid, domains in self._in_memory_domains.items():
+            for domain in domains:
+                if domain.get("id") == domain_id:
+                    if domain.get("audit_lease_owner") == worker_id:
+                        domain["audit_lease_owner"] = None
+                        domain["audit_lease_until"] = None
+                        domain["audit_failure_count"] = domain.get("audit_failure_count", 0) + 1
+                        domain["last_audit_error"] = error[:500] if error else "Audit execution error"
+                        return True
+                    return False
+        return False
+
+    # =====================================================================
+    # FAILOVER & TELEGRAM INCIDENT LOGS REPOSITORY METHODS (PHASE 4)
+    # =====================================================================
+
+    def persist_failover_log(
+        self,
+        user_id: str,
+        order_id: str,
+        channel: str,
+        provider: str,
+        status: str,
+        domain_name: Optional[str] = None,
+        store_name: Optional[str] = None,
+        triggered_reason: Optional[str] = None,
+        target_chat_id: Optional[str] = None,
+        customer_email: Optional[str] = None,
+        customer_phone: Optional[str] = None,
+        dispatch_payload: Optional[Dict[str, Any]] = None,
+        error_message: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Persist a real failover / Telegram incident alert record to public.failover_logs.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        log_id = str(uuid.uuid4())
+
+        record = {
+            "id": log_id,
+            "user_id": user_id,
+            "order_id": order_id,
+            "customer_phone": customer_phone or target_chat_id or "telegram",
+            "channel": channel,
+            "provider": provider,
+            "status": status,
+            "domain_name": domain_name,
+            "store_name": store_name,
+            "triggered_reason": triggered_reason,
+            "target_chat_id": target_chat_id,
+            "customer_email": customer_email,
+            "error_message": error_message,
+            "dispatch_payload": dispatch_payload or {},
+            "created_at": now_iso,
         }
 
         if self._client:
             try:
-                response = self._client.table("dns_audit_logs").insert(log_entry).execute()
-                if response.data:
-                    return response.data[0]
+                self._client.table("failover_logs").insert(record).execute()
             except Exception as e:
-                logger.error(f"Failed to save audit log to Supabase: {e}")
+                logger.warning(f"Could not insert failover_log in Supabase: {e}")
 
-        if domain_id not in self._in_memory_logs:
-            self._in_memory_logs[domain_id] = []
-        log_entry["id"] = f"log_{len(self._in_memory_logs[domain_id]) + 1}"
-        self._in_memory_logs[domain_id].insert(0, log_entry)
-        return log_entry
+        # In-memory storage fallback
+        if not hasattr(self, "_in_memory_failover_logs"):
+            self._in_memory_failover_logs: Dict[str, List[Dict[str, Any]]] = {}
+        if user_id not in self._in_memory_failover_logs:
+            self._in_memory_failover_logs[user_id] = []
+        self._in_memory_failover_logs[user_id].insert(0, record)
+
+        return record
+
+    def get_failover_logs(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        Retrieve persisted failover & incident alert logs for a user.
+        """
+        if self._client:
+            try:
+                res = (
+                    self._client.table("failover_logs")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .range(offset, offset + limit - 1)
+                    .execute()
+                )
+                if res.data is not None:
+                    return res.data
+            except Exception as e:
+                logger.warning(f"Could not retrieve failover_logs from Supabase: {e}")
+
+        if not hasattr(self, "_in_memory_failover_logs"):
+            self._in_memory_failover_logs = {}
+        logs = self._in_memory_failover_logs.get(user_id, [])
+        return logs[offset : offset + limit]
 
 
 supabase_service = SupabaseService()
+

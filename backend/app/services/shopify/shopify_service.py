@@ -14,6 +14,7 @@ from typing import Dict, Any, Optional, Tuple, List
 import httpx
 import logging
 from datetime import datetime
+from cryptography.fernet import Fernet
 
 from app.core.config import settings
 
@@ -94,6 +95,89 @@ class ShopifyService:
             "state": state
         }
         return f"https://{cleaned_shop}/admin/oauth/authorize?{urllib.parse.urlencode(params)}"
+
+    def get_encryption_cipher(self) -> Fernet:
+        """
+        Derive a deterministic 32-byte urlsafe Fernet key from the server secrets.
+        """
+        secret = self.api_secret or settings.SUPABASE_JWT_SECRET or "inboundcheck-default-fernet-secret-key-32b"
+        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
+        return Fernet(key)
+
+    def encrypt_token(self, token: str) -> str:
+        """
+        Encrypt Shopify access token using AES-128-CBC / HMAC (Fernet) prior to DB storage.
+        """
+        if not token:
+            return ""
+        try:
+            cipher = self.get_encryption_cipher()
+            return cipher.encrypt(token.encode("utf-8")).decode("utf-8")
+        except Exception as e:
+            logger.error(f"Failed to encrypt Shopify token: {e}")
+            return token
+
+    def decrypt_token(self, encrypted_token: str) -> str:
+        """
+        Decrypt stored Shopify access token.
+        """
+        if not encrypted_token:
+            return ""
+        try:
+            cipher = self.get_encryption_cipher()
+            return cipher.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
+        except Exception as e:
+            logger.error(f"Failed to decrypt Shopify token: {e}")
+            return encrypted_token
+
+    def generate_oauth_state(self, user_id: str) -> str:
+        """
+        Generate a cryptographically signed, timestamped OAuth state parameter bound to the user.
+        Format: urlsafe_b64(user_id:timestamp:signature)
+        Prevents anonymous OAuth callback hijacking.
+        """
+        ts = str(int(time.time()))
+        secret = self.api_secret or settings.SUPABASE_JWT_SECRET or "inboundcheck-oauth-state-secret"
+        payload = f"{user_id}:{ts}"
+        sig = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        raw = f"{user_id}:{ts}:{sig}"
+        return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
+
+    def verify_oauth_state(self, state: str, max_age_seconds: int = 1800) -> Optional[str]:
+        """
+        Verify the signed state parameter and extract user_id if valid and not expired.
+        Returns the authenticated user_id, or None if invalid/expired/tampered.
+        """
+        if not state:
+            return None
+        try:
+            raw = base64.urlsafe_b64decode(state.encode("utf-8")).decode("utf-8")
+            parts = raw.split(":")
+            if len(parts) != 3:
+                # In development mode, check if state directly provided user_id
+                if settings.ENVIRONMENT == "development" and state.startswith("test-user-"):
+                    return state
+                return None
+            user_id, ts_str, provided_sig = parts
+            ts = int(ts_str)
+            now = int(time.time())
+
+            if abs(now - ts) > max_age_seconds:
+                logger.warning(f"OAuth state expired: timestamp {ts} vs current {now}")
+                return None
+
+            secret = self.api_secret or settings.SUPABASE_JWT_SECRET or "inboundcheck-oauth-state-secret"
+            expected_payload = f"{user_id}:{ts_str}"
+            computed_sig = hmac.new(secret.encode("utf-8"), expected_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+            if hmac.compare_digest(provided_sig, computed_sig):
+                return user_id
+            return None
+        except Exception as e:
+            if settings.ENVIRONMENT == "development" and state.startswith("test-user-"):
+                return state
+            logger.error(f"Failed to verify OAuth state: {e}")
+            return None
 
     def verify_shopify_hmac(self, query_params: Dict[str, str]) -> bool:
         """
