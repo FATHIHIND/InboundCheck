@@ -6,7 +6,7 @@ Verifies:
 2. audit_claimed_domain completes domain lease upon success.
 3. audit_claimed_domain fails domain lease and logs sanitized error on failure.
 4. run_audit_worker loop honors stop_event termination.
-5. failover_worker process_failover_event dispatches alert and returns status.
+5. failover_worker processes eligible delivery failures as Telegram incidents.
 """
 
 import pytest
@@ -112,8 +112,9 @@ async def test_failover_worker_processing():
         "order_id": "#10999",
         "domain_name": "testshop.com",
         "store_name": "Test Store",
-        "triggered_reason": "email_spam_detected",
-        "customer_email": "customer@gmail.com",
+        "event_type": "bounce",
+        "esp_provider": "postmark",
+        "event_payload": {"details": "550 mailbox unavailable"},
     }
     worker_id = str(uuid.uuid4())
 
@@ -122,3 +123,5 @@ async def test_failover_worker_processing():
         success = await process_failover_event(event, worker_id)
         assert success is True
         mock_dispatch.assert_called_once()
+        assert mock_dispatch.call_args.kwargs["channel"] == "telegram"
+        assert mock_dispatch.call_args.kwargs["esp_provider"] == "postmark"

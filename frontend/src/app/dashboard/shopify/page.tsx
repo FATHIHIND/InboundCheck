@@ -27,16 +27,17 @@ import {
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 
-interface WebhookLog {
+interface FailoverLog {
   id: string;
-  event: string;
-  order_id: string;
-  customer_email: string;
-  sender_domain: string;
-  status: "primary_inbox" | "spam_folder" | "hard_bounce";
-  alert_status: "delivered" | "telegram_alert_dispatched";
-  timestamp: string;
-  isNew?: boolean;
+  order_id: string | null;
+  triggered_reason: string | null;
+  channel: "telegram";
+  provider: "telegram";
+  provider_status: "delivered" | "failed" | null;
+  status: "delivered" | "failed";
+  domain_name: string | null;
+  attempted_at: string | null;
+  created_at: string | null;
 }
 
 interface ShopifyStoreItem {
@@ -91,16 +92,13 @@ export default function ShopifyHubPage() {
     retry: retryFailoverLogs,
     reload: reloadFailoverLogs,
   } = useApiResource<any[]>({
-    endpoint: "/api/v1/failover/logs",
+    endpoint: "/api/v1/failover/logs?limit=50&offset=0",
     parse: async (res) => {
       const json = await res.json();
       return Array.isArray(json.logs) ? json.logs : [];
     },
     isEmpty: (data) => !data || data.length === 0,
   });
-
-  // Local state for simulated order insertions
-  const [simulatedLogs, setSimulatedLogs] = useState<any[]>([]);
 
   // Update default inputs when stores load
   useEffect(() => {
@@ -160,20 +158,7 @@ export default function ShopifyHubPage() {
       const data = await res.json();
       const sim = data.simulation;
 
-      const newLog: WebhookLog = {
-        id: `log_${Date.now()}`,
-        event: "orders/create (simulation)",
-        order_id: sim?.order_id || `#${Math.floor(10500 + Math.random() * 100)}`,
-        customer_email: targetCustomer,
-        sender_domain: customDomain || targetShop,
-        status: sim?.status === "primary_inbox" ? "primary_inbox" : "spam_folder",
-        alert_status: sim?.status === "primary_inbox" ? "delivered" : "telegram_alert_dispatched",
-        timestamp: "Just now",
-        isNew: true,
-      };
-
       setSimulationResult(sim);
-      setSimulatedLogs((prev) => [newLog, ...prev]);
       reloadFailoverLogs();
     } catch (err: any) {
       setSimulationError(err?.message || "Failed to execute order delivery simulation.");
@@ -468,7 +453,7 @@ export default function ShopifyHubPage() {
       <GlassEmeraldCard
         title="Real-Time Telegram Incident & Failover Audit"
         subtitle="Live delivery degradation events and Telegram dispatches logged to public.failover_logs"
-        badgeText={`${(failoverLogsResource.state === "ready" ? failoverLogsResource.data.length : 0) + simulatedLogs.length} Records`}
+        badgeText={`${failoverLogsResource.state === "ready" ? failoverLogsResource.data.length : 0} Incidents`}
         badgeVariant="emerald"
         icon={<Activity className="w-5 h-5 text-emerald-400" />}
       >
@@ -489,12 +474,12 @@ export default function ShopifyHubPage() {
           />
         )}
 
-        {failoverLogsResource.state === "empty" && simulatedLogs.length === 0 && (
+        {failoverLogsResource.state === "empty" && (
           <OperationalEmptyState
             icon={<Activity className="w-8 h-8 text-emerald-400" />}
             badge="Incident Radar Clear"
             title="No Transactional Failover Incidents Recorded"
-            description="All orders and deliverability thresholds are currently passing without incident dispatches. Simulate a test order or wait for an automated background audit cycle."
+            description="No delivery-failure webhook has produced a Telegram incident alert for this store. New verified incidents will appear here."
             action={{
               label: "Simulate Order",
               onClick: handleSimulateOrder,
@@ -502,52 +487,27 @@ export default function ShopifyHubPage() {
           />
         )}
 
-        {(failoverLogsResource.state === "ready" || simulatedLogs.length > 0) && (
+        {failoverLogsResource.state === "ready" && (
           <div className="overflow-x-auto max-h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
             <table className="w-full text-left text-xs font-mono">
               <thead className="text-zinc-400 border-b border-zinc-800 text-[10px] uppercase bg-[#0E0E12] sticky top-0 z-10 backdrop-blur-sm">
                 <tr>
-                  <th className="px-5 py-3.5 font-semibold">Channel / Route</th>
+                  <th className="px-5 py-3.5 font-semibold">Channel</th>
                   <th className="px-5 py-3.5 font-semibold">Order ID</th>
-                  <th className="px-5 py-3.5 font-semibold">Recipient / Chat</th>
-                  <th className="px-5 py-3.5 font-semibold">Incident Reason</th>
-                  <th className="px-5 py-3.5 font-semibold">Carrier / Bot Status</th>
-                  <th className="px-5 py-3.5 font-semibold text-right">Timestamp</th>
+                  <th className="px-5 py-3.5 font-semibold">Triggered Reason / Bounce Code</th>
+                  <th className="px-5 py-3.5 font-semibold">Domain</th>
+                  <th className="px-5 py-3.5 font-semibold">Telegram Status</th>
+                  <th className="px-5 py-3.5 font-semibold text-right">Incident Time</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
-                {/* Simulated Logs */}
-                {simulatedLogs.map((log) => (
-                  <tr
-                    key={log.id}
-                    className="border-b border-zinc-900/60 bg-emerald-500/10 animate-fadeIn hover:bg-emerald-500/15 transition-all duration-150"
-                  >
-                    <td className="px-5 py-3.5 text-white flex items-center gap-2 font-bold font-mono">
-                      <Zap className="w-3.5 h-3.5 text-emerald-400 fill-current" />
-                      SIMULATION
-                    </td>
-                    <td className="px-5 py-3.5 font-bold text-white font-mono">{log.order_id}</td>
-                    <td className="px-5 py-3.5 text-zinc-300 font-sans text-xs">{log.customer_email}</td>
-                    <td className="px-5 py-3.5 text-emerald-400 font-mono">{log.status}</td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1 font-mono">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                        {log.alert_status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right text-zinc-500 text-[11px] font-mono">
-                      {log.timestamp}
-                    </td>
-                  </tr>
-                ))}
-
-                {/* Real Persisted Failover Logs */}
                 {failoverLogsResource.state === "ready" &&
-                  failoverLogsResource.data.map((item: any) => {
-                    const isDelivered = item.status === "delivered";
-                    const formattedDate = item.created_at
-                      ? new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-                      : item.timestamp || "Recent";
+                  (failoverLogsResource.data as FailoverLog[]).map((item) => {
+                    const isDelivered = (item.provider_status || item.status) === "delivered";
+                    const timestamp = item.attempted_at || item.created_at;
+                    const formattedDate = timestamp
+                      ? new Date(timestamp).toLocaleString()
+                      : "Timestamp unavailable";
 
                     return (
                       <tr
@@ -556,26 +516,27 @@ export default function ShopifyHubPage() {
                       >
                         <td className="px-5 py-3.5 text-white flex items-center gap-2 font-bold font-mono">
                           <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="capitalize">{item.channel || "telegram"}</span>
-                          <span className="text-[10px] text-zinc-500 font-normal">({item.provider || "telegram_bot_api"})</span>
+                          <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] uppercase text-emerald-400">
+                            Telegram
+                          </span>
                         </td>
-                        <td className="px-5 py-3.5 font-bold text-white font-mono">{item.order_id || "#N/A"}</td>
-                        <td className="px-5 py-3.5 text-zinc-300 font-sans text-xs">
-                          {item.target_chat_id || item.customer_email || item.customer_phone || "@inboundcheck_alerts"}
-                        </td>
+                        <td className="px-5 py-3.5 font-bold text-white font-mono">{item.order_id || "Unavailable"}</td>
                         <td className="px-5 py-3.5 text-amber-400 font-mono text-[11px]">
-                          {item.triggered_reason || "degradation_alert"}
+                          {item.triggered_reason || "Delivery failure"}
+                        </td>
+                        <td className="px-5 py-3.5 text-zinc-300 font-mono text-[11px]">
+                          {item.domain_name || "Unavailable"}
                         </td>
                         <td className="px-5 py-3.5 font-mono">
                           {isDelivered ? (
                             <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1 font-mono">
                               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                              DELIVERED
+                              DELIVERED / NOTIFIED
                             </span>
                           ) : (
                             <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 inline-flex items-center gap-1 font-mono">
                               <XCircle className="w-3 h-3 text-rose-400" />
-                              {item.status?.toUpperCase() || "FAILED"}
+                              {(item.provider_status || item.status || "failed").toUpperCase()}
                             </span>
                           )}
                         </td>

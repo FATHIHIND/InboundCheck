@@ -1,8 +1,8 @@
 """
 InboundCheck - Delivery-Failure Ingestion & Transactional Message Registry Tests (Phase 4 Step 3)
 =================================================================================================
-Verifies transactional message correlation, SHA-256 recipient hashing, consent enforcement,
-delivery-failure event idempotency, and failover log channel dispatch limits.
+Verifies transactional message correlation, delivery-failure event idempotency,
+and Telegram incident-log persistence.
 """
 
 import pytest
@@ -28,7 +28,6 @@ async def test_transactional_message_registration_and_hash():
         esp_provider=esp_provider,
         provider_message_id=provider_message_id,
         recipient_email=raw_email,
-        recipient_phone_encrypted="enc_phone_+1555019999",
         phone_consent_status="consented",
         message_type="order_confirmation"
     )
@@ -91,7 +90,7 @@ async def test_delivery_failure_event_idempotency():
 
 @pytest.mark.asyncio
 async def test_failover_log_with_delivery_correlation_fields():
-    """Verify failover_logs accepts correlation fields for exact-once dispatch tracking."""
+    """Verify failover_logs persist Telegram incident correlation fields."""
     user_id = f"test-user-{uuid.uuid4()}"
     event_id = str(uuid.uuid4())
     msg_id = str(uuid.uuid4())
@@ -99,17 +98,15 @@ async def test_failover_log_with_delivery_correlation_fields():
     log = supabase_service.persist_failover_log(
         user_id=user_id,
         order_id="#10992",
-        channel="whatsapp",
-        provider="twilio",
+        channel="telegram",
+        provider="telegram",
         status="delivered",
         domain_name="brandshop.com",
         store_name="BrandShop DTC",
         triggered_reason="hard_bounce",
-        customer_phone="+1555019999",
         delivery_failure_event_id=event_id,
         transactional_message_id=msg_id,
-        fallback_channel="whatsapp",
-        provider_sid="SM1234567890abcdef",
+        fallback_channel="telegram",
         provider_status="delivered"
     )
 
@@ -117,7 +114,7 @@ async def test_failover_log_with_delivery_correlation_fields():
     assert log["order_id"] == "#10992"
     assert log["delivery_failure_event_id"] == event_id
     assert log["transactional_message_id"] == msg_id
-    assert log["fallback_channel"] == "whatsapp"
-    assert log["provider_sid"] == "SM1234567890abcdef"
+    assert log["fallback_channel"] == "telegram"
+    assert log["provider"] == "telegram"
     assert log["status"] == "delivered"
     assert log["delivered_at"] is not None

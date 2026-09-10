@@ -23,6 +23,9 @@ from app.services.failover.event_normalizers import (
     hash_email,
 )
 from app.services.supabase_client import supabase_service
+from app.workers.failover_worker import process_failover_event
+from app.services.failover.omnichannel_service import omnichannel_service
+from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio
@@ -297,3 +300,39 @@ async def test_event_normalizers_and_failover_eligibility():
     assert len(norm_kl) == 1
     assert norm_kl[0].event_type == "dropped"
     assert norm_kl[0].is_failover_eligible("delivery_update") is True
+
+
+@pytest.mark.asyncio
+async def test_delivery_failure_generates_telegram_dispatch_log():
+    """An eligible event is recorded as a Telegram-only merchant incident."""
+    user_id = f"telegram-worker-{uuid.uuid4()}"
+    message_id = f"pm-message-{uuid.uuid4()}"
+    supabase_service.register_transactional_message(
+        user_id=user_id,
+        order_id="#11001",
+        esp_provider="postmark",
+        provider_message_id=message_id,
+        recipient_email="merchant@example.com",
+    )
+    event = supabase_service.record_delivery_failure_event(
+        esp_provider="postmark",
+        provider_event_id=f"event-{uuid.uuid4()}",
+        provider_message_id=message_id,
+        event_type="bounce",
+        user_id=user_id,
+        event_payload={"details": "550 5.1.1 mailbox unavailable", "domain_name": "brandshop.com"},
+    )
+
+    with patch.object(
+        omnichannel_service,
+        "send_telegram_alert",
+        new=AsyncMock(return_value={"success": True, "data": {"ok": True}}),
+    ):
+        assert await process_failover_event(event, "worker-test") is True
+
+    logs = supabase_service.get_failover_logs(user_id=user_id)
+    assert len(logs) == 1
+    assert logs[0]["channel"] == "telegram"
+    assert logs[0]["provider"] == "telegram"
+    assert logs[0]["provider_status"] == "delivered"
+    assert logs[0]["delivery_failure_event_id"] == event["id"]

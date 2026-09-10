@@ -20,17 +20,15 @@ router = APIRouter(prefix="/failover", tags=["Telegram Alert Engine"])
 class UpdateTelegramConfigRequest(BaseModel):
     is_enabled: bool = True
     primary_channel: str = Field(default="telegram", description="telegram")
-    provider: str = Field(default="telegram_bot_api", description="telegram_bot_api")
-    telegram_bot_token: Optional[str] = "7198234891:AAH8Fj90qWz1x9_example"
-    telegram_chat_id: Optional[str] = "@inboundcheck_alerts"
+    provider: str = Field(default="telegram", description="telegram")
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
     trigger_events: List[str] = ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"]
     store_name: Optional[str] = "BrandShop DTC"
 
 
 class TriggerTelegramAlertRequest(BaseModel):
     order_id: str = Field(..., description="e.g. #10499")
-    customer_phone: Optional[str] = None
-    customer_email: Optional[str] = "customer@gmail.com"
     trigger_reason: Optional[str] = "email_spam_detected"
     domain_name: Optional[str] = "brandshop.com"
     store_name: Optional[str] = "BrandShop DTC"
@@ -77,8 +75,6 @@ async def trigger_failover_dispatch(
         res = await omnichannel_service.trigger_failover_dispatch(
             user_id=user_id,
             order_id=payload.order_id,
-            customer_phone=payload.customer_phone,
-            customer_email=payload.customer_email,
             trigger_reason=payload.trigger_reason or "email_spam_detected",
             domain_name=payload.domain_name or "brandshop.com",
             store_name=payload.store_name or "BrandShop DTC"
@@ -120,4 +116,3 @@ async def get_failover_logs(
     """
     logs = omnichannel_service.get_logs(user_id=user_id, limit=limit, offset=offset)
     return {"success": True, "logs": logs}
-

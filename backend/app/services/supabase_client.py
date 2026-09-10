@@ -789,7 +789,7 @@ class SupabaseService:
                     .range(offset, offset + limit - 1)
                     .execute()
                 )
-                if res.data is not None:
+                if res.data and len(res.data) > 0:
                     return res.data
             except Exception as e:
                 logger.warning(f"Could not retrieve failover_logs from Supabase: {e}")
@@ -798,6 +798,28 @@ class SupabaseService:
             self._in_memory_failover_logs = {}
         logs = self._in_memory_failover_logs.get(user_id, [])
         return logs[offset : offset + limit]
+
+    def claim_pending_delivery_failure_events(self, worker_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Atomically claim received delivery failures for one Telegram worker."""
+        if self._client:
+            try:
+                response = self._client.rpc(
+                    "claim_pending_delivery_failure_events",
+                    {"p_worker_id": worker_id, "p_limit": limit},
+                ).execute()
+                return response.data or []
+            except Exception as exc:
+                logger.warning(f"Could not claim delivery failure events: {exc}")
+
+        claimed: List[Dict[str, Any]] = []
+        for event in self._in_memory_delivery_failure_events.values():
+            if event.get("processing_status") == "received":
+                event["processing_status"] = "queued"
+                event["worker_id"] = worker_id
+                claimed.append(event)
+                if len(claimed) >= limit:
+                    break
+        return claimed
 
     # =====================================================================
     # TRANSACTIONAL MESSAGE REGISTRY & DELIVERY FAILURE INGESTION (STEP 3)
@@ -991,4 +1013,3 @@ class SupabaseService:
 
 
 supabase_service = SupabaseService()
-

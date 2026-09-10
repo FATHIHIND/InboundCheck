@@ -6,14 +6,50 @@ flags spam folder routing, hard bounces, RBL blacklists, or broken DMARC policie
 """
 
 import re
-from typing import Dict, Any, List, Optional
+import uuid
+from typing import Dict, Any, List, Optional, Literal, Union
+from urllib.parse import quote_plus
 import httpx
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 
 logger = logging.getLogger("TelegramAlertEngine")
+
+
+class TelegramIncidentContext(BaseModel):
+    delivery_failure_event_id: str
+    user_id: str
+    order_id: Optional[str] = None
+    domain_name: Optional[str] = None
+    store_name: Optional[str] = None
+    esp_provider: str
+    failure_type: str
+    failure_reason: Optional[str] = None
+    recommended_dns_action: str = "Review SPF, DKIM, DMARC, and the DNS Inspector remediation plan."
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class TelegramDispatchResult(BaseModel):
+    success: bool
+    provider: Literal["telegram"] = "telegram"
+    provider_status: Literal["delivered", "failed"]
+    telegram_message_id: Optional[str] = None
+    target_chat_id: Optional[str] = None
+    error_message: Optional[str] = None
+
+    # Dict-like compatibility for callers expecting dict or .get("status")
+    def __getitem__(self, item: str) -> Any:
+        if item == "status":
+            return self.provider_status
+        return getattr(self, item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        if item == "status":
+            return self.provider_status
+        return getattr(self, item, default)
 
 
 def sanitize_log_message(message: str, token: Optional[str] = None) -> str:
@@ -39,43 +75,13 @@ _mock_failover_configs: Dict[str, Dict[str, Any]] = {
     "demo-user-123": {
         "is_enabled": True,
         "primary_channel": "telegram",
-        "provider": "telegram_bot_api",
-        "telegram_bot_token": "7198234891:AAH8Fj90qWz1x9_example",
-        "telegram_chat_id": "@inboundcheck_alerts",
+        "provider": "telegram",
+        "telegram_bot_token": "",
+        "telegram_chat_id": "",
         "trigger_events": ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"],
         "store_name": "BrandShop DTC"
     }
 }
-
-_mock_failover_logs: Dict[str, List[Dict[str, Any]]] = {
-    "demo-user-123": [
-        {
-            "id": "tg_901",
-            "order_id": "#10488",
-            "store_name": "BrandShop DTC",
-            "target_chat_id": "@inboundcheck_alerts",
-            "channel": "telegram",
-            "provider": "telegram_bot_api",
-            "status": "delivered",
-            "triggered_reason": "email_spam_detected",
-            "domain_name": "brandshop.com",
-            "timestamp": "12 mins ago"
-        },
-        {
-            "id": "tg_902",
-            "order_id": "#10482",
-            "store_name": "BrandShop DTC",
-            "target_chat_id": "@inboundcheck_alerts",
-            "channel": "telegram",
-            "provider": "telegram_bot_api",
-            "status": "delivered",
-            "triggered_reason": "hard_bounce",
-            "domain_name": "brandshop.com",
-            "timestamp": "1 hour ago"
-        }
-    ]
-}
-
 
 class TelegramAlertService:
     """
@@ -89,7 +95,7 @@ class TelegramAlertService:
         return {
             "is_enabled": True,
             "primary_channel": "telegram",
-            "provider": "telegram_bot_api",
+            "provider": "telegram",
             "telegram_bot_token": settings.TELEGRAM_BOT_TOKEN or "",
             "telegram_chat_id": settings.TELEGRAM_CHAT_ID or "",
             "trigger_events": ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"],
@@ -102,7 +108,7 @@ class TelegramAlertService:
             _mock_failover_configs[user_id] = {}
         _mock_failover_configs[user_id].update(payload)
         _mock_failover_configs[user_id]["primary_channel"] = "telegram"
-        _mock_failover_configs[user_id]["provider"] = "telegram_bot_api"
+        _mock_failover_configs[user_id]["provider"] = "telegram"
         return _mock_failover_configs[user_id]
 
     async def send_telegram_alert(
@@ -165,8 +171,8 @@ class TelegramAlertService:
                 "reason": "Telegram alert engine is disabled in user settings"
             }
 
-        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN or "7198234891:AAH8Fj90qWz1x9_example"
-        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID or "@inboundcheck_alerts"
+        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN
+        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID
 
         # Build Rich Actionable Telegram Alert Message
         alert_text = (
@@ -194,7 +200,7 @@ class TelegramAlertService:
             user_id=user_id,
             order_id=order_id,
             channel="telegram",
-            provider="telegram_bot_api",
+            provider="telegram",
             status=dispatch_status,
             domain_name=domain_name,
             store_name=store_name,
@@ -216,34 +222,106 @@ class TelegramAlertService:
 
     async def dispatch_alert(
         self,
-        user_id: str,
-        order_id: str,
-        store_name: str = "BrandShop DTC",
-        customer_email: Optional[str] = None,
-        domain_name: str = "brandshop.com",
-        reason: str = "email_spam_detected",
-        channel: str = "telegram",
-        customer_phone: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        incident: Union[TelegramIncidentContext, Dict[str, Any], None] = None,
+        **kwargs
+    ) -> TelegramDispatchResult:
         """
-        Unified alert dispatch method for background workers and failover pipeline.
+        Dispatches an actionable delivery incident alert to the merchant's connected Telegram bot/channel.
+        Guarantees zero-PII: customer phone, email, and raw payloads are never included.
         """
-        res = await self.trigger_failover_dispatch(
-            user_id=user_id,
-            order_id=order_id,
-            customer_phone=customer_phone,
-            customer_email=customer_email,
-            trigger_reason=reason,
-            domain_name=domain_name,
-            store_name=store_name,
+        if isinstance(incident, TelegramIncidentContext):
+            ctx = incident
+        elif isinstance(incident, dict):
+            ctx = TelegramIncidentContext(**incident)
+        elif kwargs:
+            uid = kwargs.get("user_id", "demo-user-123")
+            ctx = TelegramIncidentContext(
+                delivery_failure_event_id=kwargs.get("delivery_failure_event_id") or str(uuid.uuid4()),
+                user_id=uid,
+                order_id=kwargs.get("order_id"),
+                domain_name=kwargs.get("domain_name"),
+                store_name=kwargs.get("store_name"),
+                esp_provider=kwargs.get("esp_provider") or kwargs.get("channel", "unknown"),
+                failure_type=kwargs.get("failure_type") or kwargs.get("reason", "delivery_failure"),
+                failure_reason=kwargs.get("failure_reason") or kwargs.get("bounce_reason") or kwargs.get("reason"),
+                recommended_dns_action=kwargs.get("recommended_action") or "Review SPF, DKIM, DMARC, and the DNS Inspector remediation plan.",
+                occurred_at=datetime.now(timezone.utc),
+            )
+        else:
+            raise ValueError("dispatch_alert requires either an incident context or kwargs")
+
+        config = self.get_config(ctx.user_id)
+        if not config.get("is_enabled", True):
+            logger.info(f"Telegram alert engine disabled for user {ctx.user_id}")
+            return TelegramDispatchResult(
+                success=False,
+                provider="telegram",
+                provider_status="failed",
+                telegram_message_id=None,
+                target_chat_id=None,
+                error_message="Telegram alert engine is disabled in user settings",
+            )
+
+        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN or "7198234891:AAH8Fj90qWz1x9_example"
+        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID or "@inboundcheck_alerts"
+
+        if not bot_token or not chat_id:
+            logger.warning(f"Telegram credentials unconfigured for user {ctx.user_id}; alert skipped.")
+            return TelegramDispatchResult(
+                success=False,
+                provider="telegram",
+                provider_status="failed",
+                telegram_message_id=None,
+                target_chat_id=None,
+                error_message="Telegram Bot Token and Chat ID must be configured in settings",
+            )
+
+        store_str = ctx.store_name or "Shopify Store"
+        domain_str = ctx.domain_name or "store.com"
+        order_str = ctx.order_id or "N/A"
+        esp_str = ctx.esp_provider.upper()
+        failure_str = ctx.failure_type.upper()
+        reason_str = ctx.failure_reason or "Permanent delivery rejection"
+        encoded_domain = quote_plus(domain_str)
+
+        alert_text = (
+            "🚨 *INBOUNDCHECK DELIVERY INCIDENT*\n\n"
+            f"Store: {store_str}\n"
+            f"Domain: `{domain_str}`\n"
+            f"Order: `{order_str}`\n"
+            f"ESP: {esp_str}\n"
+            f"Failure: {failure_str}\n"
+            f"Reason: {reason_str}\n"
+            f"Recommended action: {ctx.recommended_dns_action}\n\n"
+            f"[Open DNS Inspector](/dashboard/inspector?domain={encoded_domain})"
         )
-        status = "delivered" if (res.get("dispatched") and res.get("dispatch_res", {}).get("success")) else "failed"
-        return {
-            "status": status,
-            "dispatched": res.get("dispatched", False),
-            "log_id": res.get("log", {}).get("id") if isinstance(res.get("log"), dict) else None,
-            "details": res,
-        }
+
+        send_res = await self.send_telegram_alert(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            text=alert_text,
+        )
+
+        if send_res.get("success"):
+            data = send_res.get("data", {})
+            tg_msg_id = str(data.get("result", {}).get("message_id") or data.get("message_id") or "")
+            return TelegramDispatchResult(
+                success=True,
+                provider="telegram",
+                provider_status="delivered",
+                telegram_message_id=tg_msg_id or None,
+                target_chat_id=chat_id,
+                error_message=None,
+            )
+        else:
+            return TelegramDispatchResult(
+                success=False,
+                provider="telegram",
+                provider_status="failed",
+                telegram_message_id=None,
+                target_chat_id=chat_id,
+                error_message=send_res.get("error") or "Failed to deliver Telegram alert",
+            )
 
     async def send_test_ping(
         self,
@@ -267,11 +345,8 @@ class TelegramAlertService:
         """Fetch Telegram alert dispatch logs from database/repository."""
         from app.services.supabase_client import supabase_service
         logs = supabase_service.get_failover_logs(user_id=user_id, limit=limit, offset=offset)
-        if not logs and user_id == "demo-user-123":
-            return _mock_failover_logs.get("demo-user-123", [])
         return logs
 
 
 omnichannel_service = TelegramAlertService()
 telegram_alert_service = omnichannel_service
-
