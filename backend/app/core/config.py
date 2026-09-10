@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     # Distributed Worker & Scheduler Configuration (Phase 4)
     RUN_IN_PROCESS_SCHEDULER: bool = False
 
+    # Phase 4 Step 4 - ESP Delivery Failure Webhook Secrets (KMS / Secret Store Backed)
+    POSTMARK_WEBHOOK_SECRET: str = ""
+    SENDGRID_WEBHOOK_VERIFICATION_KEY: str = ""
+    MAILGUN_WEBHOOK_SIGNING_KEY: str = ""
+    SES_WEBHOOK_SECRET: str = ""
+    KLAVIYO_WEBHOOK_SECRET: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

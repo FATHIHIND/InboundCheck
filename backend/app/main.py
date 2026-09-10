@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.api.v1 import api_v1_router
+from app.api.v1.failover_webhooks import router as failover_webhooks_router
 from app.services.scheduler.background_auditor import background_auditor
 from app.core.env_guard import validate_runtime_environment
 
@@ -188,8 +189,9 @@ async def global_exception_shield(request: Request, exc: Exception):
         }
     )
 
-# 4. Mount API v1 Router
+# 4. Mount API v1 Router and Root Webhook Handlers
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
+app.include_router(failover_webhooks_router)
 
 
 @app.get("/health", tags=["Health Checks"])
