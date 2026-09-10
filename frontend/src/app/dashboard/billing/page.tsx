@@ -167,7 +167,7 @@ export default function BillingPortalPage() {
         }
       } catch (err: any) {
         setInvoiceError({
-          message: err?.message || "Failed to reach Stripe billing telemetry service",
+          message: err?.message || "Failed to load billing invoices",
           retryable: true,
           endpoint: "/api/v1/billing/invoices",
         });
@@ -335,7 +335,7 @@ export default function BillingPortalPage() {
                 ? "Hourly Automated Audits"
                 : "Daily Proactive Audits"}
             </span>
-            <span className="text-[10px] text-emerald-400 block">RFC 1035 & Google/Yahoo 2024</span>
+            <span className="text-[10px] text-emerald-400 block">Google & Yahoo 2024 Compliant</span>
           </div>
 
           {/* Meter 3 */}
@@ -510,7 +510,7 @@ export default function BillingPortalPage() {
           </div>
         ) : invoiceError ? (
           <OperationalErrorCard
-            title="Stripe Invoice Telemetry Unavailable"
+            title="Invoice History Temporarily Unavailable"
             error={invoiceError}
             compact
           />

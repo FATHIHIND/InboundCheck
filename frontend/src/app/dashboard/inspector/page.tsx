@@ -335,7 +335,7 @@ function DNSInspectorContent() {
             }`}
           >
             <Code2 className="w-3.5 h-3.5" />
-            Raw Inspector
+            Detailed Audit
           </button>
         </div>
       </div>
@@ -751,49 +751,51 @@ function DNSInspectorContent() {
         </div>
       )}
 
-      {/* 4. COLLAPSIBLE RAW DIAGNOSTIC JSON PAYLOAD DRAWER */}
-      <div className="bg-[#0E0E12]/80 backdrop-blur-md rounded-xl border border-zinc-800/80 overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowRawDrawer(!showRawDrawer)}
-          className="w-full p-4 flex items-center justify-between text-left hover:bg-zinc-800/25 transition cursor-pointer font-mono text-xs"
-        >
-          <div className="flex items-center gap-2.5">
-            <Code2 className="w-4 h-4 text-emerald-400" />
-            <span className="font-bold text-white">Raw Diagnostic JSON Payload</span>
-            <span className="text-xs px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
-              {auditData ? `${auditData.execution_time_ms}ms execution` : "237.92ms execution"}
-            </span>
-          </div>
-          <ChevronDown
-            className={`w-4 h-4 transition-transform duration-200 ${
-              showRawDrawer ? "rotate-180 text-emerald-400" : "text-zinc-400"
-            }`}
-          />
-        </button>
-
-        {showRawDrawer && (
-          <div className="p-4 border-t border-zinc-800/80 bg-[#08080A] space-y-3 animate-fadeIn">
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(JSON.stringify(auditData || { domain: domainInput, status: "optimal" }, null, 2));
-                  setCopiedJson(true);
-                  setTimeout(() => setCopiedJson(false), 2000);
-                }}
-                className="border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs font-mono px-3 py-1 transition flex items-center gap-1.5 cursor-pointer"
-              >
-                {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedJson ? "Payload Copied" : "Copy JSON"}
-              </button>
+      {/* 4. COLLAPSIBLE RAW DIAGNOSTIC JSON PAYLOAD DRAWER (Development Only) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-[#0E0E12]/80 backdrop-blur-md rounded-xl border border-zinc-800/80 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowRawDrawer(!showRawDrawer)}
+            className="w-full p-4 flex items-center justify-between text-left hover:bg-zinc-800/25 transition cursor-pointer font-mono text-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <Code2 className="w-4 h-4 text-emerald-400" />
+              <span className="font-bold text-white">Raw Diagnostic JSON Payload</span>
+              <span className="text-xs px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                {auditData ? `${auditData.execution_time_ms}ms execution` : "237.92ms execution"}
+              </span>
             </div>
-            <pre className="text-emerald-400/90 font-mono text-xs overflow-x-auto max-h-80 p-4 bg-[#08080A] rounded-lg border border-zinc-800/80 selection:bg-emerald-500/30">
-              {JSON.stringify(auditData || { domain: domainInput, status: "optimal", execution_time_ms: 237.92 }, null, 2)}
-            </pre>
-          </div>
-        )}
-      </div>
+            <ChevronDown
+              className={`w-4 h-4 transition-transform duration-200 ${
+                showRawDrawer ? "rotate-180 text-emerald-400" : "text-zinc-400"
+              }`}
+            />
+          </button>
+
+          {showRawDrawer && (
+            <div className="p-4 border-t border-zinc-800/80 bg-[#08080A] space-y-3 animate-fadeIn">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(auditData || { domain: domainInput, status: "optimal" }, null, 2));
+                    setCopiedJson(true);
+                    setTimeout(() => setCopiedJson(false), 2000);
+                  }}
+                  className="border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs font-mono px-3 py-1 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedJson ? "Payload Copied" : "Copy JSON"}
+                </button>
+              </div>
+              <pre className="text-emerald-400/90 font-mono text-xs overflow-x-auto max-h-80 p-4 bg-[#08080A] rounded-lg border border-zinc-800/80 selection:bg-emerald-500/30">
+                {JSON.stringify(auditData || { domain: domainInput, status: "optimal", execution_time_ms: 237.92 }, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

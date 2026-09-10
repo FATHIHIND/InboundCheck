@@ -242,9 +242,9 @@ function SettingsContent() {
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-mono flex items-center justify-between animate-fadeIn">
           <span className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            Configuration saved successfully to Supabase database.
+            Configuration saved successfully.
           </span>
-          <span className="text-[10px] text-zinc-400">RFC 1035 Synchronized</span>
+          <span className="text-[10px] text-emerald-400 font-semibold">Synchronized</span>
         </div>
       )}
 

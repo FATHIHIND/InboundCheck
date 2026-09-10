@@ -7,6 +7,26 @@ import { useBackendHealth } from "@/hooks/useBackendHealth";
 export function BackendStatusBadge() {
   const { status, data, refreshHealth } = useBackendHealth(60000);
 
+  // In production, render as a subtle unlabelled status dot without technical text
+  if (process.env.NODE_ENV !== "development") {
+    return (
+      <div
+        className="flex items-center justify-center cursor-default"
+        title="Deliverability Network Active"
+      >
+        <div
+          className={`w-2 h-2 rounded-full transition-colors ${
+            status === "healthy" || status === "operational"
+              ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+              : status === "degraded"
+              ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
+              : "bg-rose-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]"
+          }`}
+        />
+      </div>
+    );
+  }
+
   const getStatusConfig = () => {
     switch (status) {
       case "healthy":

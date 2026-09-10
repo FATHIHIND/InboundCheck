@@ -32,21 +32,21 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
           <div>
             <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
               <Inbox className="w-4 h-4 text-emerald-400" />
-              IMAP Ingestion & Simulation Feed
+              Store Inbox Deliverability Feed
             </h3>
             <p className="text-xs text-zinc-400 mt-0.5 font-normal">
-              Real order trigger → IMAP inbox folder verification
+              Live verification of customer receipts and order notification delivery
             </p>
           </div>
           <span className="text-xs font-mono text-zinc-400 px-3 py-1 rounded-full bg-zinc-800/80 border border-zinc-700/50">
-            Awaiting Transactions
+            Monitoring Store Deliverability
           </span>
         </div>
         <div className="py-12 text-center space-y-2 font-mono">
           <Inbox className="w-7 h-7 text-zinc-600 mx-auto" />
-          <div className="text-xs font-semibold text-zinc-300">No IMAP test deliveries observed yet</div>
+          <div className="text-xs font-semibold text-zinc-300">Monitoring store inbox deliverability...</div>
           <div className="text-[11px] text-zinc-500 max-w-sm mx-auto">
-            Execute a test order simulation or ingest live Shopify order webhooks to populate delivery events.
+            Live order receipts and customer notification verification events will appear here as orders process.
           </div>
         </div>
       </div>
@@ -60,10 +60,10 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
         <div>
           <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
             <Inbox className="w-4 h-4 text-emerald-400" />
-            IMAP Ingestion & Simulation Feed
+            Store Inbox Deliverability Feed
           </h3>
           <p className="text-xs text-zinc-400 mt-0.5 font-normal">
-            Real order trigger → IMAP inbox folder verification
+            Live verification of customer receipts and order notification delivery
           </p>
         </div>
 

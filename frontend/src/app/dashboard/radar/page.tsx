@@ -209,7 +209,7 @@ export default function BlacklistRadarPage() {
             Blacklist Radar & RBL Intelligence
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Real-time DNSBL reputation telemetry across 10 authoritative RBL databases with evidence-based status verification.
+            Real-time blacklist monitoring across 10 major anti-spam databases with automated delisting guidance.
           </p>
         </div>
 
@@ -261,7 +261,7 @@ export default function BlacklistRadarPage() {
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div>
-              <div className="font-bold text-rose-200">RBL Telemetry Request Failed</div>
+              <div className="font-bold text-rose-200">Reputation Scan Request Failed</div>
               <div className="text-rose-300/90 mt-0.5">{error.message}</div>
               {error.code && <span className="inline-block mt-1 text-[10px] text-rose-400/70 font-mono">Code: {error.code}</span>}
             </div>
@@ -384,7 +384,7 @@ export default function BlacklistRadarPage() {
             3D REAL-TIME RBL NODE TOPOLOGY & PROBING MATRIX
           </span>
           <span className="text-[10px] font-mono text-zinc-400">
-            {scan ? `${scan.rbl_total_count} AUTHORITATIVE LISTS` : "AWAITING TELEMETRY"}
+            {scan ? `${scan.rbl_total_count} AUTHORITATIVE LISTS` : "AWAITING SCAN"}
           </span>
         </div>
         <RblTopology3DCanvas rbls={canvasNodes} className="h-44 w-full" />
@@ -471,7 +471,7 @@ export default function BlacklistRadarPage() {
               ? "All active lists returned definitive negative records."
               : scan.overall_status === "listed"
               ? "High impact delivery block active."
-              : "Incomplete probe telemetry."}
+              : "Incomplete scan results."}
           </p>
         </GlassEmeraldCard>
 
@@ -521,7 +521,7 @@ export default function BlacklistRadarPage() {
               No RBL Scan Recorded
             </h3>
             <p className="text-xs text-zinc-400 mt-1">
-              No telemetry or historical DNSBL check exists for <strong className="text-emerald-400">{target}</strong>.
+              No reputation check has been run yet for <strong className="text-emerald-400">{target}</strong>.
               Execute an authoritative multi-resolver probing scan to establish reputation evidence.
             </p>
           </div>
@@ -541,7 +541,7 @@ export default function BlacklistRadarPage() {
       {scan && (
         <GlassEmeraldCard
           title="Authoritative RBL Monitoring Matrix"
-          subtitle="Real-time DNSBL reputation telemetry and delisting gateway access"
+          subtitle="Real-time reputation monitoring and delisting gateway access"
           badgeText={`${scan.rbl_total_count} Lists Monitored`}
           badgeVariant="emerald"
           icon={<Activity className="w-5 h-5 text-emerald-400" />}

@@ -322,12 +322,12 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
 
-        {/* KPI 2: IMAP Inboxing Status */}
+        {/* KPI 2: Primary Inbox Rate */}
         <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
           <InboxWitnessCanvas />
           <div className="flex items-center justify-between relative z-10">
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              IMAP Inboxing Status
+              Primary Inbox Rate
             </span>
             <Inbox className="w-4 h-4 text-emerald-400" />
           </div>
@@ -337,7 +337,7 @@ export default function DashboardOverviewPage() {
               Primary Inbox
             </div>
             <div className="text-[11px] text-zinc-400 font-mono">
-              {imapLogs.length > 0 ? `${imapLogs.length} verified deliveries` : "Awaiting test order telemetry"}
+              {imapLogs.length > 0 ? `${imapLogs.length} verified deliveries` : "Monitoring order receipts"}
             </div>
           </div>
         </div>
@@ -375,7 +375,7 @@ export default function DashboardOverviewPage() {
               {stores.length > 0 ? "< 5%" : "--"}
             </div>
             <div className="text-[11px] text-zinc-400 font-mono">
-              <span className="text-emerald-400 font-semibold">Predictive Telemetry</span> Model
+              <span className="text-emerald-400 font-semibold">Predictive Risk</span> Model
             </div>
           </div>
         </div>
@@ -445,8 +445,8 @@ export default function DashboardOverviewPage() {
       {/* 4. Bottom Section: Monitored Stores & Domains Table with 4-State Governance */}
       {domainsResource.state === "loading" && (
         <OperationalLoadingState
-          label="Loading registered domain telemetry..."
-          subtext="Fetching authenticated domains from Supabase database"
+          label="Loading monitored sending domains..."
+          subtext="Verifying DNS deliverability status and records"
         />
       )}
 

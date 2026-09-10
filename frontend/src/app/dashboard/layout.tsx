@@ -26,6 +26,23 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Load authenticated user profile details
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email) {
+          setUserEmail(user.email);
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    }
+    loadUser();
+  }, []);
 
   // Automatically close mobile menu on route change
   useEffect(() => {
@@ -243,11 +260,25 @@ export default function DashboardLayout({
           </div>
         </div>
 
-        {/* Bottom Status & Sign Out */}
-        <div className="pt-4 border-t border-white/[0.08] space-y-3 font-mono text-xs">
-          <div className="flex items-center justify-between px-1">
-            <BackendStatusBadge />
-            <span className="text-[10px] text-zinc-500 font-mono">RFC 1035</span>
+        {/* Bottom User Profile & Sign Out */}
+        <div className="pt-4 border-t border-white/[0.08] space-y-3 font-sans text-xs">
+          <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0 font-mono">
+                {userEmail ? userEmail.charAt(0).toUpperCase() : "M"}
+              </div>
+              <div className="min-w-0 flex flex-col">
+                <span className="text-xs font-semibold text-white truncate">
+                  {userEmail ? userEmail.split("@")[0] : "Merchant Account"}
+                </span>
+                <span className="text-[10px] text-zinc-400 truncate font-mono">
+                  {userEmail || "Connected"}
+                </span>
+              </div>
+            </div>
+            <div className="shrink-0 pl-1">
+              <BackendStatusBadge />
+            </div>
           </div>
 
           <button
