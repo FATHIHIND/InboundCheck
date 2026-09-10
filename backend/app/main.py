@@ -34,13 +34,20 @@ async def lifespan(app: FastAPI):
     # Startup 1: Perform Fail-Fast Runtime Environment Integrity Validation
     validate_runtime_environment()
 
-    # Startup 2: Launch autonomous background DNS & RBL audit scheduler
-    logger.info("Starting InboundCheck background auditor daemon...")
-    background_auditor.start()
+    # Startup 2: Conditionally launch in-process background auditor only if explicitly enabled (dev flag)
+    run_scheduler = settings.RUN_IN_PROCESS_SCHEDULER or os.getenv("RUN_IN_PROCESS_SCHEDULER", "false").lower() in ("true", "1", "yes")
+    if run_scheduler:
+        logger.info("RUN_IN_PROCESS_SCHEDULER enabled: Starting background auditor daemon...")
+        background_auditor.start()
+    else:
+        logger.info("In-process scheduler disabled. Scheduled audits delegated to dedicated workers.")
+
     yield
-    # Shutdown: Terminate background daemon cleanly
-    logger.info("Stopping InboundCheck background auditor daemon...")
-    await background_auditor.stop()
+
+    # Shutdown: Terminate background daemon if active
+    if run_scheduler:
+        logger.info("Stopping InboundCheck background auditor daemon...")
+        await background_auditor.stop()
 
 
 app = FastAPI(

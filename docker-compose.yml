@@ -12,6 +12,26 @@ services:
       - PORT=8000
     restart: unless-stopped
 
+  audit-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: inboundcheck-audit-worker
+    command: python -m app.workers.runner audit
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
+  failover-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: inboundcheck-failover-worker
+    command: python -m app.workers.runner failover
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     GODADDY_API_KEY: str = ""
     GODADDY_API_SECRET: str = ""
 
+    # Distributed Worker & Scheduler Configuration (Phase 4)
+    RUN_IN_PROCESS_SCHEDULER: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

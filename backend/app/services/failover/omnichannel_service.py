@@ -214,6 +214,37 @@ class TelegramAlertService:
             "log": log_record
         }
 
+    async def dispatch_alert(
+        self,
+        user_id: str,
+        order_id: str,
+        store_name: str = "BrandShop DTC",
+        customer_email: Optional[str] = None,
+        domain_name: str = "brandshop.com",
+        reason: str = "email_spam_detected",
+        channel: str = "telegram",
+        customer_phone: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Unified alert dispatch method for background workers and failover pipeline.
+        """
+        res = await self.trigger_failover_dispatch(
+            user_id=user_id,
+            order_id=order_id,
+            customer_phone=customer_phone,
+            customer_email=customer_email,
+            trigger_reason=reason,
+            domain_name=domain_name,
+            store_name=store_name,
+        )
+        status = "delivered" if (res.get("dispatched") and res.get("dispatch_res", {}).get("success")) else "failed"
+        return {
+            "status": status,
+            "dispatched": res.get("dispatched", False),
+            "log_id": res.get("log", {}).get("id") if isinstance(res.get("log"), dict) else None,
+            "details": res,
+        }
+
     async def send_test_ping(
         self,
         bot_token: str,

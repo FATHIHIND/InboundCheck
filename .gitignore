@@ -47,3 +47,6 @@ Thumbs.db
 *.p12
 *.cert
 *.crt
+
+# Agent metadata
+.claude/
