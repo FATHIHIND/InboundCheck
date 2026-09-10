@@ -5,6 +5,7 @@ Handles authenticated Supabase operations for monitored domains, audit logs,
 profiles, and store integration metadata.
 """
 
+import hashlib
 from typing import List, Dict, Any, Optional, Union
 import logging
 import uuid
@@ -29,6 +30,8 @@ class SupabaseService:
         self._in_memory_profiles: Dict[str, Dict[str, Any]] = {}
         self._in_memory_stores: Dict[str, List[Dict[str, Any]]] = {}
         self._in_memory_reputation: Dict[str, List[Dict[str, Any]]] = {}
+        self._in_memory_transactional_messages: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_delivery_failure_events: Dict[str, Dict[str, Any]] = {}
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -713,9 +716,17 @@ class SupabaseService:
         customer_phone: Optional[str] = None,
         dispatch_payload: Optional[Dict[str, Any]] = None,
         error_message: Optional[str] = None,
+        delivery_failure_event_id: Optional[str] = None,
+        transactional_message_id: Optional[str] = None,
+        fallback_channel: Optional[str] = None,
+        provider_sid: Optional[str] = None,
+        provider_status: Optional[str] = None,
+        provider_error_code: Optional[str] = None,
+        provider_error_message: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Persist a real failover / Telegram incident alert record to public.failover_logs.
+        Supports delivery-failure event correlation and idempotency keys.
         """
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
@@ -736,6 +747,16 @@ class SupabaseService:
             "customer_email": customer_email,
             "error_message": error_message,
             "dispatch_payload": dispatch_payload or {},
+            "delivery_failure_event_id": delivery_failure_event_id,
+            "transactional_message_id": transactional_message_id,
+            "fallback_channel": fallback_channel,
+            "provider_sid": provider_sid,
+            "provider_status": provider_status,
+            "provider_error_code": provider_error_code,
+            "provider_error_message": provider_error_message,
+            "attempted_at": now_iso,
+            "delivered_at": now_iso if status == "delivered" else None,
+            "updated_at": now_iso,
             "created_at": now_iso,
         }
 
@@ -777,6 +798,196 @@ class SupabaseService:
             self._in_memory_failover_logs = {}
         logs = self._in_memory_failover_logs.get(user_id, [])
         return logs[offset : offset + limit]
+
+    # =====================================================================
+    # TRANSACTIONAL MESSAGE REGISTRY & DELIVERY FAILURE INGESTION (STEP 3)
+    # =====================================================================
+
+    def register_transactional_message(
+        self,
+        user_id: str,
+        order_id: str,
+        esp_provider: str,
+        provider_message_id: str,
+        recipient_email: str,
+        recipient_phone_encrypted: Optional[str] = None,
+        phone_consent_status: str = "unknown",
+        message_type: str = "order_confirmation",
+        shopify_store_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Register an outbound transactional email into transactional_message_registry
+        with SHA-256 hashed recipient email and encrypted phone for failover correlation.
+        """
+        clean_email = recipient_email.strip().lower()
+        email_hash = hashlib.sha256(clean_email.encode("utf-8")).hexdigest()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        reg_id = str(uuid.uuid4())
+
+        record = {
+            "id": reg_id,
+            "user_id": user_id,
+            "shopify_store_id": shopify_store_id,
+            "order_id": order_id,
+            "esp_provider": esp_provider.strip().lower(),
+            "provider_message_id": provider_message_id.strip(),
+            "recipient_email_hash": email_hash,
+            "recipient_phone_encrypted": recipient_phone_encrypted,
+            "phone_consent_status": phone_consent_status,
+            "message_type": message_type,
+            "created_at": now_iso,
+        }
+
+        key = (record["esp_provider"], record["provider_message_id"])
+
+        if self._client:
+            try:
+                res = (
+                    self._client.table("transactional_message_registry")
+                    .upsert(record, on_conflict="esp_provider,provider_message_id")
+                    .execute()
+                )
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+            except Exception as e:
+                logger.warning(f"Could not upsert transactional_message_registry: {e}")
+
+        # In-memory storage fallback
+        self._in_memory_transactional_messages[str(key)] = record
+        return record
+
+    def get_transactional_message(
+        self,
+        esp_provider: str,
+        provider_message_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Lookup transactional message by ESP provider and provider message id.
+        """
+        clean_prov = esp_provider.strip().lower()
+        clean_msg_id = provider_message_id.strip()
+
+        if self._client:
+            try:
+                res = (
+                    self._client.table("transactional_message_registry")
+                    .select("*")
+                    .eq("esp_provider", clean_prov)
+                    .eq("provider_message_id", clean_msg_id)
+                    .limit(1)
+                    .execute()
+                )
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+            except Exception as e:
+                logger.warning(f"Could not fetch transactional_message from Supabase: {e}")
+
+        key = str((clean_prov, clean_msg_id))
+        return self._in_memory_transactional_messages.get(key)
+
+    def record_delivery_failure_event(
+        self,
+        esp_provider: str,
+        provider_event_id: str,
+        provider_message_id: Optional[str],
+        event_type: str,
+        event_timestamp: Optional[str] = None,
+        signature_verified: bool = False,
+        event_payload: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None,
+        processing_status: str = "received",
+    ) -> Dict[str, Any]:
+        """
+        Ingest and buffer a delivery failure webhook event with deduplication on (esp_provider, provider_event_id).
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        clean_prov = esp_provider.strip().lower()
+        clean_evt_id = provider_event_id.strip()
+        key = str((clean_prov, clean_evt_id))
+
+        # 1. Check in-memory cache first
+        if key in self._in_memory_delivery_failure_events:
+            return self._in_memory_delivery_failure_events[key]
+
+        # 2. Check remote database if connected
+        if self._client:
+            try:
+                existing = (
+                    self._client.table("delivery_failure_events")
+                    .select("*")
+                    .eq("esp_provider", clean_prov)
+                    .eq("provider_event_id", clean_evt_id)
+                    .limit(1)
+                    .execute()
+                )
+                if existing.data and len(existing.data) > 0:
+                    self._in_memory_delivery_failure_events[key] = existing.data[0]
+                    return existing.data[0]
+            except Exception as e:
+                logger.warning(f"Could not check existing delivery_failure_events: {e}")
+
+        # 3. Insert new record
+        evt_id = str(uuid.uuid4())
+        record = {
+            "id": evt_id,
+            "user_id": user_id,
+            "esp_provider": clean_prov,
+            "provider_event_id": clean_evt_id,
+            "provider_message_id": provider_message_id.strip() if provider_message_id else None,
+            "event_type": event_type,
+            "event_timestamp": event_timestamp or now_iso,
+            "signature_verified": signature_verified,
+            "processing_status": processing_status,
+            "event_payload": event_payload or {},
+            "received_at": now_iso,
+            "processed_at": None,
+        }
+
+        if self._client:
+            try:
+                res = (
+                    self._client.table("delivery_failure_events")
+                    .insert(record)
+                    .execute()
+                )
+                if res.data and len(res.data) > 0:
+                    self._in_memory_delivery_failure_events[key] = res.data[0]
+                    return res.data[0]
+            except Exception as e:
+                logger.warning(f"Could not insert delivery_failure_events: {e}")
+
+        self._in_memory_delivery_failure_events[key] = record
+        return record
+
+    def update_delivery_failure_event_status(
+        self,
+        event_id: str,
+        processing_status: str,
+        user_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Update processing status of a delivery failure event.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload: Dict[str, Any] = {
+            "processing_status": processing_status,
+            "processed_at": now_iso if processing_status in ("processed", "failed", "ignored") else None,
+        }
+        if user_id:
+            payload["user_id"] = user_id
+
+        if self._client:
+            try:
+                self._client.table("delivery_failure_events").update(payload).eq("id", event_id).execute()
+                return True
+            except Exception as e:
+                logger.warning(f"Could not update delivery_failure_events status: {e}")
+
+        for evt in self._in_memory_delivery_failure_events.values():
+            if evt.get("id") == event_id:
+                evt.update(payload)
+                return True
+        return False
 
 
 supabase_service = SupabaseService()
