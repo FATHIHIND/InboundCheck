@@ -22,15 +22,21 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
   const [data, setData] = useState<BackendHealthData | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
 
-  const checkHealth = useCallback(async () => {
+  const checkHealth = useCallback(async (retryCount = 0) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    let isTimeout = false;
+    // Extended 15-second timeout ceiling to handle cold-starts and network latency
+    const timeoutId = setTimeout(() => {
+      isTimeout = true;
+      controller.abort();
+    }, 15000);
 
     try {
       // Primary health endpoint is /api/v1/health, fallback to /health if 404 or missing
@@ -45,7 +51,16 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
           });
         }
       } catch (err: any) {
-        if (err?.name === "AbortError") throw err;
+        const isSoftAbort =
+          err?.name === "AbortError" ||
+          (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError") ||
+          (typeof err?.message === "string" && err.message.toLowerCase().includes("aborted"));
+
+        if (isSoftAbort && !isTimeout) {
+          // Do not switch UI to degraded/unavailable on soft aborts
+          return;
+        }
+
         // Fallback to root /health probe if /api/v1/health route was unreachable
         response = await apiFetch("/health", {
           signal: controller.signal,
@@ -67,6 +82,8 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
         payload: result,
       });
 
+      if (!isMountedRef.current) return;
+
       if (!response.ok) {
         setStatus(response.status >= 500 ? "unavailable" : "degraded");
         setData(result);
@@ -83,16 +100,43 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
 
       setData(result);
       setLastChecked(new Date());
-    } catch (err) {
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+
+      const isAbort =
+        err?.name === "AbortError" ||
+        (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError") ||
+        (typeof err?.message === "string" && err.message.toLowerCase().includes("aborted"));
+
+      if (isAbort && !isTimeout) {
+        // Soft abort from StrictMode remount or component unmount: do not set unavailable
+        return;
+      }
+
       console.warn("[Health Badge Error] Health probe failed:", err);
-      setStatus("unavailable");
-      setData(null);
+
+      // Attempt clean retry with exponential backoff on transient failure
+      if (retryCount < 2 && isMountedRef.current) {
+        const delay = Math.pow(2, retryCount) * 1000;
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            void checkHealth(retryCount + 1);
+          }
+        }, delay);
+        return;
+      }
+
+      if (isMountedRef.current) {
+        setStatus("unavailable");
+        setData(null);
+      }
     } finally {
       clearTimeout(timeoutId);
     }
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     void checkHealth();
 
     const interval = setInterval(() => {
@@ -108,15 +152,19 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
     };
 
     window.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("online", checkHealth);
+    window.addEventListener("online", () => void checkHealth());
 
     return () => {
+      isMountedRef.current = false;
       clearInterval(interval);
       window.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("online", checkHealth);
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      window.removeEventListener("online", () => void checkHealth());
+      // Avoid killing request on initial StrictMode double-mount
+      setTimeout(() => {
+        if (!isMountedRef.current && abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      }, 100);
     };
   }, [checkHealth, pollIntervalMs]);
 
@@ -124,6 +172,6 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
     status,
     data,
     lastChecked,
-    refreshHealth: checkHealth,
+    refreshHealth: () => checkHealth(0),
   };
 }

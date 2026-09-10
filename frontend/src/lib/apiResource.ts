@@ -29,6 +29,19 @@ export function normalizeApiError(cause: unknown, endpoint: string): ApiError {
     if (typeof obj.message === "string" && typeof obj.retryable === "boolean") {
       return cause as ApiError;
     }
+    const isAbort =
+      obj.name === "AbortError" ||
+      (typeof obj.message === "string" && obj.message.toLowerCase().includes("aborted"));
+
+    if (isAbort) {
+      return {
+        message: "Request timed out or was interrupted. Retrying connection...",
+        retryable: true,
+        endpoint,
+        code: "REQUEST_ABORTED",
+      };
+    }
+
     return {
       message: obj.detail || obj.message || "An unexpected error occurred while communicating with the server.",
       status: typeof obj.status === "number" ? obj.status : undefined,
