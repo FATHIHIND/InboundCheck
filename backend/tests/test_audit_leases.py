@@ -174,3 +174,19 @@ def test_telegram_failover_persistence_and_api(test_client):
     logs = omnichannel_service.get_logs(user_id=user_id)
     assert len(logs) >= 1
     assert any(l["order_id"] == order_ref for l in logs)
+
+
+def test_options_cors_preflight_bypasses_and_succeeds(test_client):
+    """Verify that OPTIONS /api/v1/domains returns HTTP 200 without requiring auth or failing preflight."""
+    res = test_client.options(
+        "/api/v1/domains",
+        headers={
+            "Origin": "https://inboundcheck.up.railway.app",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert res.status_code == 200
+    assert res.headers.get("access-control-allow-origin") == "*"
+    assert "GET" in res.headers.get("access-control-allow-methods", "")
+

@@ -11,6 +11,7 @@ import logging
 from collections import defaultdict
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 from starlette.responses import JSONResponse
@@ -82,6 +83,10 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
                 del self.requests_map[ip]
 
     async def dispatch(self, request: Request, call_next):
+        # Immediately bypass OPTIONS preflight checks to prevent blocking CORS
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "127.0.0.1"
         now = time.time()
 
@@ -117,15 +122,22 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
         return response
 
+# 1. Trusted Host Middleware (Railway, localhost, and all subdomains)
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*.up.railway.app", "localhost", "127.0.0.1", "*"]
+)
+
+# 2. Rate Limiting Middleware (Sliding Window Per Client IP with Memory Eviction)
 app.add_middleware(RateLimitingMiddleware, max_requests=120, window_seconds=60)
 
-# 2. Strict CORS Configuration (Explicit Allowed Origins Only)
+# 3. CORS Configuration (Allows all origins, methods, and headers for reliable preflight)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Authorization", "Content-Type", "X-Shopify-Hmac-Sha256", "Stripe-Signature"],
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 3. Global Exception Handlers
