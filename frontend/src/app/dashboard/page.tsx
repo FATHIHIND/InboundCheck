@@ -66,28 +66,40 @@ export default function DashboardOverviewPage() {
   const [reputationPoints, setReputationPoints] = useState<ReputationPoint[]>([]);
   const [imapLogs, setImapLogs] = useState<IMAPCheckLog[]>([]);
 
-  // 1. Data-State Contract: Query monitored domains
+  // 1. Data-State Contract: Query monitored domains with defensive structure parsing
   const { resource: domainsResource, retry: retryDomains, reload: reloadDomains } = useApiResource<MonitoredStore[]>({
     endpoint: "/api/v1/domains",
     parse: async (res) => {
-      const data = await res.json();
-      if (!Array.isArray(data)) return [];
+      const json = await res.json().catch(() => []);
+      console.log("[Dashboard Domains Raw Response]", json);
+
+      let data: any[] = [];
+      if (Array.isArray(json)) {
+        data = json;
+      } else if (Array.isArray(json?.domains)) {
+        data = json.domains;
+      } else if (Array.isArray(json?.data)) {
+        data = json.data;
+      } else if (Array.isArray(json?.items)) {
+        data = json.items;
+      }
+
       return data.map((d: any) => ({
-        id: String(d.id),
-        domain_name: d.domain_name,
-        shopify_store: d.shopify_store || `${d.domain_name.replace(/\.[^/.]+$/, "")}.myshopify.com`,
+        id: String(d.id || Math.random()),
+        domain_name: d.domain_name || d.domain || "unknown-domain.com",
+        shopify_store: d.shopify_store || `${(d.domain_name || d.domain || "store").replace(/\.[^/.]+$/, "")}.myshopify.com`,
         unified_score: typeof d.health_score === "number" ? d.health_score : 90,
         dns_health_score: typeof d.health_score === "number" ? d.health_score : 90,
-        imap_status: "inbox",
+        imap_status: d.imap_status || "inbox",
         spf_status: d.spf_status || "optimal",
         dkim_status: d.dkim_status || "optimal",
         dmarc_status: d.dmarc_status || "optimal",
-        rbl_clean_count: 10,
+        rbl_clean_count: typeof d.rbl_clean_count === "number" ? d.rbl_clean_count : 10,
         risk_level: (d.health_score || 90) > 85 ? "low" : "medium",
         last_checked_at: d.last_checked_at || "Recently synced",
       }));
     },
-    isEmpty: (data) => !data || data.length === 0,
+    isEmpty: (data) => !data || !Array.isArray(data) || data.length === 0,
   });
 
   // Query historical reputation trajectory
@@ -450,10 +462,10 @@ export default function DashboardOverviewPage() {
       {domainsResource.state === "empty" && (
         <OperationalEmptyState
           icon={<Globe className="w-8 h-8 text-zinc-500" />}
-          title="No Monitored Domains Registered Yet"
-          description="Register your first eCommerce apex domain to begin continuous DNS governance, SPF/DKIM verification, and blacklist surveillance."
+          title="No domains registered yet"
+          description="No domains registered yet - Add your first domain to begin continuous DNS governance, SPF/DKIM verification, and blacklist surveillance."
           action={{
-            label: "Register Monitored Domain",
+            label: "Add your first domain",
             onClick: () => setShowAddModal(true),
           }}
         />

@@ -10,6 +10,7 @@ export function BackendStatusBadge() {
   const getStatusConfig = () => {
     switch (status) {
       case "healthy":
+      case "operational":
         return {
           dotColor: "bg-emerald-400",
           pingColor: "bg-emerald-400/50",

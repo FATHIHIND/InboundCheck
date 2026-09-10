@@ -11,12 +11,18 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost
 
 /**
  * Retrieve the active Supabase JWT and format Authorization Bearer headers.
+ * Employs a defensive timeout safeguard so auth queries never lock up requests indefinitely.
  */
 export async function getAuthHeaders(customHeaders: HeadersInit = {}): Promise<HeadersInit> {
   const headers: Record<string, string> = {};
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const sessionPromise = supabase.auth.getSession();
+    const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) => {
+      setTimeout(() => resolve({ data: { session: null } }), 1500);
+    });
+
+    const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
     if (session?.access_token) {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
@@ -34,11 +40,12 @@ export async function getAuthHeaders(customHeaders: HeadersInit = {}): Promise<H
  * Execute an authenticated HTTP request to the InboundCheck backend.
  */
 export async function apiFetch(endpoint: string, init: RequestInit = {}): Promise<Response> {
-  const base = process.env.NEXT_PUBLIC_API_URL || API_BASE_URL;
+  const rawBase = process.env.NEXT_PUBLIC_API_URL || API_BASE_URL;
+  const cleanBase = rawBase.replace(/\/+$/, "");
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = endpoint.startsWith("http://") || endpoint.startsWith("https://")
     ? endpoint
-    : `${base}${path}`;
+    : `${cleanBase}${path}`;
 
   const requestId = typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()

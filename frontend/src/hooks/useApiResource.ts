@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 import { ApiError, ApiResource, normalizeApiError } from "@/lib/apiResource";
 
@@ -15,6 +15,9 @@ interface UseApiResourceOptions<T> {
  * Enterprise hook for managing deterministic API resource states.
  * Guarantees that empty data resolves to 'empty' and network/server failures
  * resolve to 'error' with technical reference correlation.
+ *
+ * Employs ref-stabilization on parse and isEmpty to prevent infinite re-render loops
+ * caused by inline callback props, and implements defensive request timeouts.
  */
 export function useApiResource<T>({
   endpoint,
@@ -28,11 +31,33 @@ export function useApiResource<T>({
     error: null,
   });
 
+  // Stabilize parse and isEmpty references to prevent re-triggering load on every render
+  const parseRef = useRef(parse);
+  parseRef.current = parse;
+
+  const isEmptyRef = useRef(isEmpty);
+  isEmptyRef.current = isEmpty;
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const load = useCallback(async () => {
-    setResource({ state: "loading", data: null, error: null });
+    // Abort previous in-flight request if any
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    setResource((prev) => (prev.state === "loading" ? prev : { state: "loading", data: null, error: null }));
 
     try {
-      const response = await apiFetch(endpoint);
+      const response = await apiFetch(endpoint, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -47,28 +72,48 @@ export function useApiResource<T>({
         throw apiError;
       }
 
-      const parsedData = await parse(response);
-      const isDataEmpty = isEmpty(parsedData);
+      const parsedData = await parseRef.current(response);
+      const isDataEmpty = isEmptyRef.current(parsedData);
+
+      console.log(`[ApiResource Response] ${endpoint}:`, {
+        status: response.status,
+        isEmpty: isDataEmpty,
+        data: parsedData,
+      });
 
       setResource({
         state: isDataEmpty ? "empty" : "ready",
         data: parsedData,
         error: null,
       });
-    } catch (cause) {
+    } catch (cause: any) {
+      clearTimeout(timeoutId);
+      if (cause?.name === "AbortError" && abortControllerRef.current !== controller) {
+        // Ignored aborted request from subsequent trigger
+        return;
+      }
+
       const error = normalizeApiError(cause, endpoint);
+      console.warn(`[ApiResource Error] ${endpoint}:`, error);
+
       setResource({
         state: "error",
         data: null,
         error,
       });
     }
-  }, [endpoint, parse, isEmpty]);
+  }, [endpoint]);
 
   useEffect(() => {
     if (autoLoad) {
       void load();
     }
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [autoLoad, load]);
 
   return {

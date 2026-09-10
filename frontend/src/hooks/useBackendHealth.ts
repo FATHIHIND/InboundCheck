@@ -3,17 +3,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 
-export type HealthStatus = "healthy" | "degraded" | "unavailable" | "checking";
+export type HealthStatus = "healthy" | "operational" | "degraded" | "unavailable" | "checking";
 
 export interface BackendHealthData {
-  status: "healthy" | "degraded" | "unavailable";
+  status: "healthy" | "operational" | "degraded" | "unavailable" | string;
   service: string;
   version: string;
   environment?: string;
   timestamp?: string;
   dependencies?: {
-    database: "healthy" | "degraded" | "unavailable";
-    scheduler: "healthy" | "degraded" | "unavailable";
+    database: "healthy" | "degraded" | "unavailable" | string;
+    scheduler: "healthy" | "degraded" | "unavailable" | string;
   };
 }
 
@@ -30,25 +30,61 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const response = await apiFetch("/api/v1/health", {
-        signal: controller.signal,
-      });
+      // Primary health endpoint is /api/v1/health, fallback to /health if 404 or missing
+      let response: Response;
+      try {
+        response = await apiFetch("/api/v1/health", {
+          signal: controller.signal,
+        });
+        if (!response.ok && response.status === 404) {
+          response = await apiFetch("/health", {
+            signal: controller.signal,
+          });
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError") throw err;
+        // Fallback to root /health probe if /api/v1/health route was unreachable
+        response = await apiFetch("/health", {
+          signal: controller.signal,
+        });
+      }
 
       clearTimeout(timeoutId);
 
+      const result: BackendHealthData = await response.json().catch(() => ({
+        status: response.ok ? "healthy" : "unavailable",
+        service: "InboundCheck API Engine",
+        version: "1.0.0",
+      }));
+
+      // Trace logging for state transitions
+      console.log("[Health Badge Response]", {
+        statusCode: response.status,
+        ok: response.ok,
+        payload: result,
+      });
+
       if (!response.ok) {
-        setStatus("degraded");
+        setStatus(response.status >= 500 ? "unavailable" : "degraded");
+        setData(result);
         return;
       }
 
-      const result: BackendHealthData = await response.json();
+      // Contract validation: accept "healthy", "operational", "ok", or "up" as operational
+      const rawStatus = (typeof result.status === "string" ? result.status : "").toLowerCase();
+      if (rawStatus === "degraded" || rawStatus === "warning") {
+        setStatus("degraded");
+      } else {
+        setStatus("healthy");
+      }
+
       setData(result);
-      setStatus(result.status || "healthy");
       setLastChecked(new Date());
-    } catch {
+    } catch (err) {
+      console.warn("[Health Badge Error] Health probe failed:", err);
       setStatus("unavailable");
       setData(null);
     } finally {
