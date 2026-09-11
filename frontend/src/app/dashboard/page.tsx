@@ -374,21 +374,21 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
 
-        {/* KPI 3: 10 RBL Radar Posture */}
+        {/* KPI 3: Global Spam Blacklist Monitor */}
         <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
           <RadarBeamCanvas />
           <div className="flex items-center justify-between relative z-10">
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              10 RBL Radar Posture
+              Global Spam Blacklist Monitor
             </span>
             <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
           </div>
           <div className="space-y-1 relative z-10">
             <div className="text-3xl font-bold text-white font-mono tracking-tight">
-              {stores.length > 0 ? "10/10 Probed" : "Standby"}
+              {stores.length > 0 ? "10/10 Probed" : "Protected"}
             </div>
             <div className="text-[11px] text-zinc-400 font-mono">
-              <span className="text-emerald-400 font-semibold">Spamhaus, Barracuda</span> DNSBL matrix
+              <span className="text-emerald-400 font-semibold">Protected</span> • Actively monitored against major spam databases
             </div>
           </div>
         </div>
@@ -650,7 +650,7 @@ export default function DashboardOverviewPage() {
                   type="text"
                   value={newDomainInput}
                   onChange={(e) => setNewDomainInput(e.target.value)}
-                  placeholder="e.g. brandshop.com"
+                  placeholder="e.g. store.com"
                   className="w-full px-3 py-2 bg-[#08080A] border border-white/[0.08] rounded-xl text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
                   required
                 />

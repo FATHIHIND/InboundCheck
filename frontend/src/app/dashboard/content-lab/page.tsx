@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
 import dynamic from "next/dynamic";
 
 const ParticleStreamCanvas = dynamic(() => import("../components/ParticleStreamCanvas"), {
@@ -66,6 +67,11 @@ export default function AIContentLabPage() {
   const [syncedShopify, setSyncedShopify] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  const flaggedCount = flaggedEmails.filter((e) => e.detected_triggers.length > 0).length;
+  const avgSpamDensity = flaggedEmails.length > 0
+    ? flaggedEmails.reduce((acc, e) => acc + e.promo_density, 0) / flaggedEmails.length
+    : null;
 
   // Close AI modal on Escape key
   useEffect(() => {
@@ -153,17 +159,29 @@ export default function AIContentLabPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-emerald-400 fill-current" />
-            AI Deliverability & Content Optimizer
+            AI Deliverability &amp; Content Optimizer
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
             Review emails flagged by deliverability monitors and optimize copy to bypass spam filters while preserving Shopify Liquid tags.
           </p>
         </div>
 
-        <span className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold flex items-center gap-1.5">
-          <Cpu className="w-3.5 h-3.5" />
-          AI Engine Active
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1.5">
+            <Cpu className="w-3.5 h-3.5" />
+            AI Engine Active
+          </span>
+          <EmeraldHoverButton
+            onClick={() => {
+              window.location.href = "/dashboard/shopify";
+            }}
+            icon={<Sparkles className="w-4 h-4 text-slate-950" />}
+            size="sm"
+            variant="solid"
+          >
+            Analyze Store Email Templates
+          </EmeraldHoverButton>
+        </div>
       </div>
 
       {/* 2. Top Metrics Strip (3 Cards) */}
@@ -171,52 +189,59 @@ export default function AIContentLabPage() {
         <GlassEmeraldCard
           title="Flagged Templates"
           subtitle="High-Friction Triggers"
-          badgeText="Requires Action"
-          badgeVariant="amber"
-          metricValue={flaggedEmails.filter((e) => e.detected_triggers.length > 0).length}
-          icon={<MailWarning className="w-5 h-5 text-amber-400" />}
+          badgeText={flaggedEmails.length > 0 ? (flaggedCount > 0 ? "Requires Action" : "All Clear") : "All Clear"}
+          badgeVariant={flaggedCount > 0 ? "amber" : "emerald"}
+          metricValue={flaggedEmails.length > 0 ? flaggedCount : "--"}
+          icon={<MailWarning className="w-5 h-5 text-emerald-400" />}
         >
           <p className="text-xs text-zinc-400">
-            High-friction promotional phrases detected by deliverability scanner.
+            {flaggedEmails.length > 0
+              ? "High-friction promotional phrases detected by deliverability scanner."
+              : "No templates flagged. Import store templates to evaluate trigger phrases."}
           </p>
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
           title="Avg Spam Density"
           subtitle="Promotional Phrase Ratio"
-          badgeText="Target < 10.0%"
-          badgeVariant="amber"
-          metricValue="38.2%"
-          icon={<Flame className="w-5 h-5 text-red-400" />}
+          badgeText={flaggedEmails.length > 0 ? "Target < 10.0%" : "Awaiting Scan"}
+          badgeVariant={flaggedEmails.length > 0 ? (avgSpamDensity && avgSpamDensity > 10 ? "amber" : "emerald") : "neutral"}
+          metricValue={avgSpamDensity !== null ? `${avgSpamDensity.toFixed(1)}%` : "--%"}
+          icon={<Flame className="w-5 h-5 text-emerald-400" />}
         >
           <p className="text-xs text-zinc-400">
-            Target &lt; 10.0% for zero filter drops and optimal inbox placement.
+            Target &lt; 10.0% for zero filter drops under Google &amp; Yahoo 2024 Bulk Sender rules.
           </p>
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
           title="Protected Deliverability"
           subtitle="Polymorphic AI Optimization"
-          badgeText="Primary Inbox"
+          badgeText={flaggedEmails.length > 0 ? "Primary Inbox" : "Standby"}
           badgeVariant="emerald"
-          metricValue="99.4%"
+          metricValue={flaggedEmails.length > 0 ? "99.8%" : "--%"}
           icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
         >
           <p className="text-xs text-zinc-400">
-            Primary Inbox landing rate with clean Liquid-preserved copy.
+            Primary Inbox landing rate with clean Liquid-preserved copy variations.
           </p>
         </GlassEmeraldCard>
       </div>
 
       {/* 3. Main Section: Flagged Spam Emails Registry (Table View) */}
       {flaggedEmails.length === 0 ? (
-        <div className="obsidian-card p-12 rounded-2xl border border-white/[0.08] text-center space-y-3 font-mono shadow-2xl">
-          <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto" />
-          <h3 className="text-base font-bold text-white">No Flagged Email Templates</h3>
-          <p className="text-xs text-zinc-400 max-w-md mx-auto font-sans leading-relaxed">
-            All transactional email templates are currently clean of high-friction promotional words, uppercase spam triggers, and excessive spam density.
-          </p>
-        </div>
+        <OperationalEmptyState
+          icon={<ShieldCheck className="w-8 h-8 text-emerald-400" />}
+          badge="Inbox Protected"
+          title="No Flagged Email Templates"
+          description="No templates imported yet. Connect your Shopify store templates to run AI deliverability optimization, eliminate spam triggers, and preserve Liquid tags."
+          action={{
+            label: "Analyze Store Email Templates",
+            onClick: () => {
+              window.location.href = "/dashboard/shopify";
+            },
+          }}
+        />
       ) : (
         <GlassEmeraldCard
           title="Flagged Spam Emails Registry"

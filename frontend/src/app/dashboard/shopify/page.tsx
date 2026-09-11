@@ -10,18 +10,11 @@ import {
   ShoppingBag,
   ShieldCheck,
   CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
   Zap,
   Check,
-  Mail,
   Activity,
   XCircle,
   Radio,
-  Copy,
-  Key,
-  X,
-  ExternalLink,
   Shield,
   Sparkles
 } from "lucide-react";
@@ -71,12 +64,6 @@ export default function ShopifyHubPage() {
   const [alignmentResult, setAlignmentResult] = useState<any>(null);
   const [alignmentError, setAlignmentError] = useState<string | null>(null);
 
-  // Webhook / HMAC Modal States
-  const [showHmacModal, setShowHmacModal] = useState(false);
-  const [copiedWebhook, setCopiedWebhook] = useState(false);
-  const [hmacSecretInput, setHmacSecretInput] = useState("");
-  const [hmacVerified, setHmacVerified] = useState(false);
-  const [isVerifyingHmac, setIsVerifyingHmac] = useState(false);
   const [showWizardModal, setShowWizardModal] = useState(false);
 
   // 1. Data-State Contract for Connected Shopify Stores
@@ -117,26 +104,15 @@ export default function ShopifyHubPage() {
     }
   }, [storesResource]);
 
-  // Close HMAC modal on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showHmacModal) {
-        setShowHmacModal(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showHmacModal]);
-
   // Enhanced Test Order Simulator calling backend API
   const handleSimulateOrder = async () => {
     setIsSimulating(true);
     setSimulationResult(null);
     setSimulationError(null);
 
-    const targetShop = storeDomain.trim() || "test-store.myshopify.com";
-    const targetCustomer = "witness-tester@gmail.com";
-    const targetSender = senderEmail.trim() || `orders@${customDomain || "brandshop.com"}`;
+    const targetShop = storeDomain.trim() || (storesResource.data?.[0]?.shop_domain || "test-store.myshopify.com");
+    const targetCustomer = "test-customer@example.com";
+    const targetSender = senderEmail.trim() || (customDomain ? `orders@${customDomain}` : "orders@mystore.com");
 
     try {
       setSimulationStep(1);
@@ -196,23 +172,6 @@ export default function ShopifyHubPage() {
       setAlignmentError(err?.message || "Failed to evaluate sender alignment.");
     } finally {
       setIsCheckingAlignment(false);
-    }
-  };
-
-  const copyWebhookEndpoint = () => {
-    navigator.clipboard.writeText("https://api.inboundcheck.com/api/v1/shopify/webhooks/orders");
-    setCopiedWebhook(true);
-    setTimeout(() => setCopiedWebhook(false), 2000);
-  };
-
-  const handleVerifyHmacSecret = async () => {
-    setIsVerifyingHmac(true);
-    try {
-      await new Promise((r) => setTimeout(r, 600));
-      setHmacVerified(true);
-    } finally {
-      setIsVerifyingHmac(false);
-      setShowHmacModal(false);
     }
   };
 
@@ -291,7 +250,7 @@ export default function ShopifyHubPage() {
           icon={<ShoppingBag className="w-8 h-8 text-emerald-400" />}
           badge="Awaiting Shopify OAuth Connection"
           title="No Shopify Stores Connected Yet"
-          description="Connect your Shopify Plus or DTC store using OAuth to enable automatic transactional email alignment monitoring, order webhooks, and omnichannel failover."
+          description="Connect your Shopify Plus or DTC store using OAuth to enable automatic transactional email alignment monitoring, real-time order delivery tracking, and incident alerts."
           action={{
             label: "Connect Shopify Store",
             onClick: () => {
@@ -325,8 +284,8 @@ export default function ShopifyHubPage() {
       {/* 2-Column Section: Configuration Form + Alignment Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <GlassEmeraldCard
-          title="Store Sender Identity"
-          subtitle="Define sending identities for deliverability audits"
+          title="Store Sender Profile"
+          subtitle="Verify your store sending domain and email"
           badgeText="Active Profile"
           badgeVariant="emerald"
           icon={<ShoppingBag className="w-5 h-5 text-emerald-400" />}
@@ -339,7 +298,7 @@ export default function ShopifyHubPage() {
                 type="text"
                 value={storeDomain}
                 onChange={(e) => setStoreDomain(e.target.value)}
-                placeholder="store-dtc.myshopify.com"
+                placeholder="store.myshopify.com"
                 className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -350,7 +309,7 @@ export default function ShopifyHubPage() {
                 type="text"
                 value={customDomain}
                 onChange={(e) => setCustomDomain(e.target.value)}
-                placeholder="brandshop.com"
+                placeholder="store.com"
                 className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -361,7 +320,7 @@ export default function ShopifyHubPage() {
                 type="email"
                 value={senderEmail}
                 onChange={(e) => setSenderEmail(e.target.value)}
-                placeholder="orders@brandshop.com"
+                placeholder="orders@store.com"
                 className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-emerald-400 font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -371,13 +330,13 @@ export default function ShopifyHubPage() {
             <EmeraldHoverButton
               onClick={handleAuditAlignment}
               isLoading={isCheckingAlignment}
-              loadingText="Verifying Records..."
+              loadingText="Auditing Store Deliverability..."
               icon={<ShieldCheck className="w-3.5 h-3.5" />}
               size="sm"
               variant="primary"
               className="w-full py-2.5"
             >
-              Verify Domain Records
+              Audit Store Deliverability
             </EmeraldHoverButton>
           </div>
 
@@ -480,7 +439,7 @@ export default function ShopifyHubPage() {
             icon={<Activity className="w-8 h-8 text-emerald-400" />}
             badge="Incident Radar Clear"
             title="No Telegram delivery incidents recorded"
-            description="No delivery-failure webhook has produced a Telegram incident alert for this store. New verified incidents will appear here."
+            description="No order delivery failures recorded. When order receipts or tracking emails encounter delivery issues, instant Telegram alerts will appear here."
           />
         )}
 
@@ -555,69 +514,6 @@ export default function ShopifyHubPage() {
           </div>
         )}
       </GlassEmeraldCard>
-
-      {/* Verify HMAC Secret Modal */}
-      {showHmacModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="shopify-hmac-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowHmacModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-        >
-          <div className="bg-[#0E0E12] border border-zinc-800 rounded-xl max-w-md w-full p-6 space-y-4 animate-fadeIn font-mono shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 id="shopify-hmac-modal-title" className="text-sm font-bold text-white flex items-center gap-2">
-                <Key className="w-4 h-4 text-emerald-400" />
-                Shopify Webhook Security Key
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowHmacModal(false)}
-                aria-label="Close dialog"
-                className="text-zinc-500 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-              Enter your Shopify App Webhook Signature Key to securely verify incoming store order notifications.
-            </p>
-
-            <div>
-              <label className="text-[11px] text-zinc-400 block mb-1">Webhook Signature Key</label>
-              <input
-                type="password"
-                value={hmacSecretInput}
-                onChange={(e) => setHmacSecretInput(e.target.value)}
-                placeholder="shpss_••••••••••••••••"
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowHmacModal(false)}
-                className="px-4 py-2 rounded-lg text-xs text-zinc-400 hover:text-white cursor-pointer"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={handleVerifyHmacSecret}
-                disabled={isVerifyingHmac || !hmacSecretInput.trim()}
-                className="px-4 py-2 bg-emerald-500 text-black font-bold rounded-lg text-xs hover:bg-emerald-400 transition cursor-pointer disabled:opacity-50"
-              >
-                {isVerifyingHmac ? "Validating..." : "Save Secret"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Zero-Spam Multi-Step Readiness Wizard */}
       <ZeroSpamWizardModal

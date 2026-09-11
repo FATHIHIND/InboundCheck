@@ -278,7 +278,7 @@ export default function LandingPage() {
                     type="text"
                     value={domainInput}
                     onChange={(e) => setDomainInput(e.target.value)}
-                    placeholder="enter your store sending domain (e.g. brandshop.com)"
+                    placeholder="enter your store sending domain (e.g. store.com)"
                     className="w-full pl-10 pr-4 py-2.5 bg-[#08080A] border border-white/[0.08] rounded-xl text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
 import { apiFetch } from "@/lib/api";
 import { ApiError, normalizeApiError } from "@/lib/apiResource";
 
@@ -84,7 +85,7 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
   } else if (response.status === 404) {
     detail = "The requested domain was not found. Please ensure the domain name is spelled correctly and has active DNS records.";
   } else if (response.status === 422 || response.status === 400) {
-    detail = "Invalid domain input. Please enter a valid sending domain (e.g. brandshop.com) and try again.";
+    detail = "Invalid domain input. Please enter a valid sending domain (e.g. store.com) and try again.";
   } else if (response.status >= 500) {
     detail = "The reputation scanning service is currently busy querying global databases. Please retry in a few moments.";
   }
@@ -100,7 +101,7 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
 }
 
 export default function BlacklistRadarPage() {
-  const [target, setTarget] = useState("brandshop.com");
+  const [target, setTarget] = useState("");
   const [scan, setScan] = useState<RblScanResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
@@ -180,8 +181,31 @@ export default function BlacklistRadarPage() {
   };
 
   useEffect(() => {
-    loadLatest("brandshop.com");
-  }, []);
+    async function initRadar() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramDom = urlParams.get("domain");
+        if (paramDom) {
+          setTarget(paramDom);
+          loadLatest(paramDom);
+          return;
+        }
+
+        const res = await apiFetch("/api/v1/domains");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.domains) && data.domains.length > 0) {
+            const firstDom = data.domains[0].domain_name;
+            setTarget(firstDom);
+            loadLatest(firstDom);
+            return;
+          }
+        }
+      } catch {}
+      setIsLoading(false);
+    }
+    initRadar();
+  }, [loadLatest]);
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => ({
@@ -306,7 +330,7 @@ export default function BlacklistRadarPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") runScan();
             }}
-            placeholder="Enter domain, e.g. brandshop.com"
+            placeholder="Enter domain, e.g. store.com"
             className="w-full pl-9 pr-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500/50 transition-colors"
           />
         </div>
@@ -435,7 +459,7 @@ export default function BlacklistRadarPage() {
 
         <GlassEmeraldCard
           title="RBL Hosts Queried"
-          subtitle="Spam Databases Checked"
+          subtitle="Spam Databases Monitored"
           badgeText={
             !scan
               ? "Unchecked"
@@ -489,7 +513,7 @@ export default function BlacklistRadarPage() {
 
         <GlassEmeraldCard
           title="Avg Lookup Latency"
-          subtitle="Query Response Speed"
+          subtitle="Check Response Speed"
           badgeText={scan ? `${scan.execution_time_ms.toFixed(0)}ms scan` : "Real-time"}
           badgeVariant="cyan"
           metricValue={avgLatency}
@@ -524,29 +548,20 @@ export default function BlacklistRadarPage() {
 
       {/* 8. True Empty State (404 / No prior scan recorded) */}
       {!isLoading && !scan && !error && (
-        <div className="bg-[#0E0E12]/80 backdrop-blur-md p-10 rounded-xl border border-zinc-800/80 text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
-            <Radio className="w-6 h-6 text-zinc-500" />
-          </div>
-          <div className="max-w-md mx-auto">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wide font-mono">
-              No Reputation Scan Recorded
-            </h3>
-            <p className="text-xs text-zinc-400 mt-1">
-              No reputation check has been run yet for <strong className="text-emerald-400">{target}</strong>.
-              Scan global reputation databases to verify sending domain deliverability.
-            </p>
-          </div>
-          <EmeraldHoverButton
-            onClick={() => runScan()}
-            isLoading={isScanning}
-            icon={<RefreshCw className="w-3.5 h-3.5" />}
-            size="md"
-            variant="primary"
-          >
-            Scan Reputation Lists
-          </EmeraldHoverButton>
-        </div>
+        <OperationalEmptyState
+          icon={<Radio className="w-8 h-8 text-emerald-400" />}
+          badge="Awaiting Reputation Scan"
+          title="No Blacklist Audits Recorded"
+          description={
+            target
+              ? `No reputation check has been run yet for ${target}. Scan global reputation databases to verify sending domain deliverability.`
+              : "No spam blacklist scan has been run yet. Enter your sending domain above to check your store's reputation across 10 authoritative databases."
+          }
+          action={{
+            label: "Scan Reputation Lists",
+            onClick: () => runScan(),
+          }}
+        />
       )}
 
       {/* 9. Measured Authoritative RBL Monitoring Matrix Table */}

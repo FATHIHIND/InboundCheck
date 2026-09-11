@@ -104,10 +104,10 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
           </div>
           <div>
             <h4 className="text-sm font-bold text-white uppercase tracking-wider">
-              Brand Asset & BIMI Security Validator
+              Store Logo Inbox Verification (BIMI)
             </h4>
             <span className="text-[11px] text-zinc-400 font-sans">
-              Cryptographically verified brand logo & certificate inspection with enterprise transport security.
+              Ensure your official store logo appears next to order emails in customer inboxes.
             </span>
           </div>
         </div>
@@ -199,7 +199,7 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
               <div>
                 <span className="text-xs font-bold text-white block">
                   {result.fetch_status === "verified"
-                    ? "Asset Cryptographically Verified"
+                    ? "Store Logo Verified for Customer Inboxes"
                     : result.fetch_status === "rejected"
                     ? "Rejected by Security Policy"
                     : "Remote Asset Fetch Failed"}

@@ -40,12 +40,12 @@ function SettingsContent() {
   const [activeTab, setActiveTab] = useState<"general" | "alerts" | "providers">(initialTab);
 
   // Tab 1: Profile & Store Meta
-  const [fullName, setFullName] = useState("Alex Morgan");
-  const [email, setEmail] = useState("alex@brandshop.com");
-  const [shopifyStore, setShopifyStore] = useState("brandshop-dtc.myshopify.com");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [shopifyStore, setShopifyStore] = useState("");
 
   // Tab 1: REST API Key
-  const [apiKey, setApiKey] = useState("ic_live_9f83a27c1b5042898d9e2a1b");
+  const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -57,22 +57,52 @@ function SettingsContent() {
   const [scoreThreshold, setScoreThreshold] = useState(75);
   const [alertDmarcChange, setAlertDmarcChange] = useState(true);
   const [alertRblDetection, setAlertRblDetection] = useState(true);
-  const [telegramBotToken, setTelegramBotToken] = useState("7198234891:AAH8Fj90qWz1x9_example");
-  const [telegramChatId, setTelegramChatId] = useState("@inboundcheck_alerts");
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [isSendingTelegramPing, setIsSendingTelegramPing] = useState(false);
   const [telegramPingResult, setTelegramPingResult] = useState<"success" | "error" | null>(null);
   const [telegramErrorMessage, setTelegramErrorMessage] = useState<string | null>(null);
 
   // Tab 3: DNS Provider Credentials
-  const [cloudflareToken, setCloudflareToken] = useState("••••••••••••••••••••••••••••••••");
+  const [cloudflareToken, setCloudflareToken] = useState("");
   const [godaddyKey, setGodaddyKey] = useState("");
   const [isVerifyingProvider, setIsVerifyingProvider] = useState(false);
-  const [providerVerified, setProviderVerified] = useState(true);
+  const [providerVerified, setProviderVerified] = useState(false);
 
   // Global Save state
   const [isSaved, setIsSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch real profile and alert configuration on mount
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const profileRes = await apiFetch("/api/v1/settings/profile");
+        if (profileRes.ok) {
+          const data = await profileRes.json();
+          if (data?.profile) {
+            if (data.profile.full_name) setFullName(data.profile.full_name);
+            if (data.profile.email) setEmail(data.profile.email);
+            if (data.profile.company_name) setShopifyStore(data.profile.company_name);
+            if (data.profile.api_key) setApiKey(data.profile.api_key);
+          }
+        }
+
+        const alertsRes = await apiFetch("/api/v1/settings/alerts");
+        if (alertsRes.ok) {
+          const alertData = await alertsRes.json();
+          if (alertData?.telegram_bot_token) setTelegramBotToken(alertData.telegram_bot_token);
+          if (alertData?.telegram_chat_id) setTelegramChatId(alertData.telegram_chat_id);
+          if (typeof alertData?.alert_score_drop === "boolean") setAlertScoreDrop(alertData.alert_score_drop);
+          if (typeof alertData?.score_threshold === "number") setScoreThreshold(alertData.score_threshold);
+          if (typeof alertData?.alert_dmarc_change === "boolean") setAlertDmarcChange(alertData.alert_dmarc_change);
+          if (typeof alertData?.alert_rbl_detection === "boolean") setAlertRblDetection(alertData.alert_rbl_detection);
+        }
+      } catch {}
+    }
+    loadSettings();
+  }, []);
 
   useEffect(() => {
     const tabParam = searchParams?.get("tab");
@@ -126,7 +156,7 @@ function SettingsContent() {
         body: JSON.stringify({
           bot_token: telegramBotToken,
           chat_id: telegramChatId,
-          store_name: shopifyStore || "BrandShop DTC",
+          store_name: shopifyStore || "Shopify Store",
         }),
       });
       const data = await res.json().catch(() => null);
@@ -281,6 +311,7 @@ function SettingsContent() {
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Store Admin"
                     className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>
@@ -291,6 +322,7 @@ function SettingsContent() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. merchant@store.com"
                     className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>
@@ -301,6 +333,7 @@ function SettingsContent() {
                     type="text"
                     value={shopifyStore}
                     onChange={(e) => setShopifyStore(e.target.value)}
+                    placeholder="e.g. store.myshopify.com"
                     className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-emerald-400 text-xs font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>

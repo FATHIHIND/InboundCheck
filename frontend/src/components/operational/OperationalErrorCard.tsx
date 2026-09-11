@@ -23,7 +23,7 @@ function getMerchantAdvice(error?: ApiError | null): string {
     return "The requested domain or record was not found. Please verify the domain spelling and ensure DNS records are published.";
   }
   if (status === 422 || status === 400) {
-    return "Invalid domain input. Please enter a valid sending domain name (e.g., brandshop.com) and try again.";
+    return "Invalid domain input. Please enter a valid sending domain name (e.g., store.com) and try again.";
   }
   if (status && status >= 500) {
     return "DNS resolver servers temporarily timed out. This is usually transient—please retry in a few moments.";

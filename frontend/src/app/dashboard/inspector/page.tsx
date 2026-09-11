@@ -307,10 +307,10 @@ function DNSInspectorContent() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
             <Terminal className="w-6 h-6 text-emerald-400" />
-            DNS Diagnostic & Verification Inspector
+            Domain Health &amp; Deliverability Inspector
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Closed-loop record generation, live propagation verification, and automated Telegram incident alerting.
+            Google &amp; Yahoo 2024 Bulk Sender Compliance (US &amp; EU) — Closed-loop record generation, live propagation verification, and automated Telegram incident alerting.
           </p>
         </div>
 
@@ -364,7 +364,7 @@ function DNSInspectorContent() {
               type="text"
               value={domainInput}
               onChange={(e) => setDomainInput(e.target.value)}
-              placeholder="e.g. brandshop.com"
+              placeholder="e.g. store.com"
               className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs"
             />
           </div>
@@ -705,9 +705,9 @@ function DNSInspectorContent() {
             </div>
 
             <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase block">SPF Recursion</span>
+              <span className="text-[10px] text-zinc-500 uppercase block">DNS Lookup Health</span>
               <span className="text-lg font-extrabold text-white block">
-                {auditData.summary.spf.dns_lookup_count} / 10 Lookups
+                {auditData.summary.spf.dns_lookup_count} of 10 Used (Safe)
               </span>
               <span className="text-[10px] text-emerald-400 block">Sender Policy Aligned</span>
             </div>
@@ -721,7 +721,7 @@ function DNSInspectorContent() {
             </div>
 
             <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase block">DMARC Enforcement</span>
+              <span className="text-[10px] text-zinc-500 uppercase block">Email Impersonation Shield</span>
               <span className="text-lg font-extrabold text-emerald-400 block">
                 p={auditData.summary.dmarc.policy || "none"}
               </span>
@@ -733,19 +733,19 @@ function DNSInspectorContent() {
           <div className="bg-[#0E0E12]/80 backdrop-blur-md p-6 rounded-xl border border-zinc-800/80 space-y-4 font-mono text-xs">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              Live Resolved Zone Records
+              Live Domain Records
             </h3>
 
             <div className="space-y-3">
               <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">Configured SPF Sender Record</span>
+                <span className="text-[10px] text-zinc-500 uppercase block">Sender Authorization (SPF)</span>
                 <code className="text-emerald-400/90 block text-xs break-all">
                   {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
                 </code>
               </div>
 
               <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">DMARC Enforcement (p=reject)</span>
+                <span className="text-[10px] text-zinc-500 uppercase block">Email Impersonation Shield (DMARC)</span>
                 <code className="text-emerald-400/90 block text-xs break-all">
                   {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100; rua=mailto:dmarc-reports@shopify.com;"}
                 </code>

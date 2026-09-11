@@ -150,7 +150,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              SPF Conflict Resolution & Smart Record Merger
+              Smart SPF Conflict Resolver
               {plan && plan.source_records.length > 1 && (
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30">
                   Multiple Records ({plan.source_records.length})
@@ -290,17 +290,25 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
               </div>
             </div>
 
-            {/* KPI: Deduplication Results */}
+            {/* KPI: Sender Rule Cleanup */}
             <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-1">
-              <span className="text-xs uppercase text-zinc-400 font-mono block">Deduplication</span>
+              <span className="text-xs uppercase text-zinc-400 font-mono block">Sender Rule Cleanup</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold font-mono text-emerald-400">
-                  {plan.removed_duplicates.length}
-                </span>
-                <span className="text-xs text-zinc-400">redundant mechanisms pruned</span>
+                {plan.removed_duplicates.length === 0 ? (
+                  <span className="text-xs font-medium text-emerald-400">
+                    Clean Record: No duplicate sender rules detected
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-xl font-bold font-mono text-emerald-400">
+                      {plan.removed_duplicates.length}
+                    </span>
+                    <span className="text-xs text-zinc-400">duplicate sender rules cleaned</span>
+                  </>
+                )}
               </div>
               <p className="text-[10px] text-zinc-500 font-mono">
-                {plan.mechanisms.length} total mechanisms consolidated
+                {plan.mechanisms.length} total sender rules consolidated
               </p>
             </div>
 
