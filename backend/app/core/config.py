@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     SES_WEBHOOK_SECRET: str = ""
     KLAVIYO_WEBHOOK_SECRET: str = ""
 
+    # Milestone C - Deep Hardening for Remote Asset Fetching
+    ASSET_FETCH_HTTPS_ONLY: bool = True
+    ASSET_FETCH_PORT: int = 443
+    ASSET_FETCH_TIMEOUT_SECONDS: float = 4.0
+    ASSET_FETCH_MAX_BYTES: int = 500 * 1024  # 500 KB cutoff
+    ASSET_FETCH_MAX_REDIRECTS: int = 3
+    ASSET_FETCH_TRUST_ENV: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

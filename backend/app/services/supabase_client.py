@@ -33,6 +33,7 @@ class SupabaseService:
         self._in_memory_transactional_messages: Dict[str, Dict[str, Any]] = {}
         self._in_memory_delivery_failure_events: Dict[str, Dict[str, Any]] = {}
         self._in_memory_spf_merge_plans: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_asset_audits: Dict[str, Dict[str, Any]] = {}
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -1064,6 +1065,29 @@ class SupabaseService:
                 return None
             return plan
         return None
+
+    def save_remote_asset_audit(self, audit_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Persist remote asset fetch audit record into public.remote_asset_fetch_audits.
+        """
+        audit_id = audit_data.get("id") or str(uuid.uuid4())
+        record = {
+            **audit_data,
+            "id": audit_id,
+            "created_at": audit_data.get("created_at") or (datetime.now(timezone.utc).isoformat()),
+        }
+
+        if self._client:
+            try:
+                res = self._client.table("remote_asset_fetch_audits").insert(record).execute()
+                if res.data and len(res.data) > 0:
+                    self._in_memory_asset_audits[audit_id] = res.data[0]
+                    return res.data[0]
+            except Exception as e:
+                logger.warning(f"Could not insert remote_asset_fetch_audits: {e}. Storing in memory.")
+
+        self._in_memory_asset_audits[audit_id] = record
+        return record
 
 
 supabase_service = SupabaseService()

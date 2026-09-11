@@ -260,3 +260,31 @@ class SpfMergePlanResponse(BaseModel):
     safe_to_apply: bool = Field(..., description="Whether plan can safely be injected automatically")
     requires_manual_review: bool = Field(..., description="Whether administrative review is required before application")
     expires_at: str = Field(..., description="ISO 8601 expiration timestamp of the plan snapshot")
+
+
+# ============================================================================
+# Milestone C: Deep Hardening for Remote Asset Fetching Schemas
+# ============================================================================
+
+class VerifyRemoteAssetRequest(BaseModel):
+    domain: str = Field(..., min_length=3, description="Apex domain under inspection")
+    asset_type: str = Field(default="bimi_logo", pattern="^(bimi_logo|bimi_vmc)$", description="Type of asset ('bimi_logo' | 'bimi_vmc')")
+    url: Optional[str] = Field(None, description="Explicit asset URL to verify. If omitted, discovered from DNS BIMI record.")
+
+
+class VerifyRemoteAssetResponse(BaseModel):
+    audit_id: str = Field(..., description="UUID of persisted security audit snapshot")
+    domain: str = Field(..., description="Normalized target domain")
+    asset_type: str = Field(..., description="'bimi_logo' | 'bimi_vmc'")
+    requested_url: str = Field(..., description="Target URL evaluated")
+    final_url: Optional[str] = Field(None, description="Final resolved URL after any valid redirects")
+    pinned_ip: Optional[str] = Field(None, description="Cryptographically pinned public socket IP")
+    fetch_status: str = Field(..., description="'verified' | 'rejected' | 'failed'")
+    http_status: Optional[int] = Field(None, description="HTTP status code received")
+    content_type: Optional[str] = Field(None, description="Content-Type header")
+    content_length_bytes: int = Field(default=0, description="Payload size in bytes (capped at 500 KB)")
+    content_sha256: Optional[str] = Field(None, description="SHA-256 cryptographic digest of asset content")
+    redirect_count: int = Field(default=0, description="Number of manual redirect hops taken")
+    failure_code: Optional[str] = Field(None, description="Machine-readable security failure code if rejected")
+    error_message: Optional[str] = Field(None, description="Human-readable diagnosis")
+    created_at: str = Field(..., description="ISO 8601 audit timestamp")

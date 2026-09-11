@@ -27,6 +27,7 @@ import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
 import { ApiError } from "@/lib/apiResource";
 import { SpfMergePreview } from "./spf-merge-preview";
+import { AssetVerificationResult } from "./asset-verification-result";
 
 interface AuditResult {
   domain: string;
@@ -762,6 +763,12 @@ function DNSInspectorContent() {
               </div>
             </div>
           </div>
+
+          {/* BIMI Remote Asset Security Verification */}
+          <AssetVerificationResult
+            domain={domainInput}
+            initialUrl={auditData.summary.bimi?.svg_url || ""}
+          />
         </div>
       )}
 
