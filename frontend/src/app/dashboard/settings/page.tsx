@@ -510,10 +510,10 @@ function SettingsContent() {
               </div>
             </GlassEmeraldCard>
 
-            {/* Surveillance Trigger Rules */}
+            {/* Store Alert Automations */}
             <GlassEmeraldCard
-              title="Surveillance Trigger Rules"
-              subtitle="Continuous 24/7 rule evaluation engine"
+              title="Store Alert Automations"
+              subtitle="Automated incident triggers for order delivery"
               badgeText="24/7 Active"
               badgeVariant="emerald"
               icon={<Bell className="w-5 h-5 text-emerald-400" />}
@@ -525,7 +525,7 @@ function SettingsContent() {
                   <div>
                     <span className="text-xs font-bold text-white block">Health Score Drop Trigger</span>
                     <span className="text-[11px] text-zinc-400">
-                      Trigger immediate emergency dispatch if sending domain score drops below threshold
+                      Alert me immediately if delivery health drops
                     </span>
                   </div>
                   <div className="flex items-center gap-3 font-mono">
@@ -550,9 +550,9 @@ function SettingsContent() {
                 {/* Toggle 2: DMARC Policy Modification */}
                 <div className="flex items-center justify-between p-3.5 bg-[#08080A] rounded-lg border border-zinc-800">
                   <div>
-                    <span className="text-xs font-bold text-white block">DMARC Policy Modification Alert</span>
+                    <span className="text-xs font-bold text-white block">Email Spoofing Protection Alert</span>
                     <span className="text-[11px] text-zinc-400">
-                      Notify when DMARC record changes or policy is relaxed from `p=reject/quarantine` to `p=none`
+                      Alert if email spoofing protection is disabled
                     </span>
                   </div>
                   <input

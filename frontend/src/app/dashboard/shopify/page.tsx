@@ -325,7 +325,7 @@ export default function ShopifyHubPage() {
       {/* 2-Column Section: Configuration Form + Alignment Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <GlassEmeraldCard
-          title="Store Connection Settings"
+          title="Store Sender Identity"
           subtitle="Define sending identities for deliverability audits"
           badgeText="Active Profile"
           badgeVariant="emerald"
@@ -371,36 +371,14 @@ export default function ShopifyHubPage() {
             <EmeraldHoverButton
               onClick={handleAuditAlignment}
               isLoading={isCheckingAlignment}
-              loadingText="Auditing Alignment..."
+              loadingText="Verifying Records..."
               icon={<ShieldCheck className="w-3.5 h-3.5" />}
               size="sm"
               variant="primary"
               className="w-full py-2.5"
             >
-              Audit Sender Alignment
+              Verify Domain Records
             </EmeraldHoverButton>
-
-            <div className="flex items-center gap-2">
-              <EmeraldHoverButton
-                onClick={copyWebhookEndpoint}
-                icon={copiedWebhook ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
-                size="xs"
-                variant="ghost"
-                className="flex-1 font-mono py-2"
-              >
-                {copiedWebhook ? "Copied Endpoint!" : "Copy Webhook URL"}
-              </EmeraldHoverButton>
-
-              <EmeraldHoverButton
-                onClick={() => setShowHmacModal(true)}
-                icon={<Key className="w-3 h-3" />}
-                size="xs"
-                variant="ghost"
-                className="px-3 py-2 font-mono"
-              >
-                Webhook Key
-              </EmeraldHoverButton>
-            </div>
           </div>
 
           {alignmentError && (
@@ -413,7 +391,7 @@ export default function ShopifyHubPage() {
         {/* Transactional Sender Alignment Status */}
         <GlassEmeraldCard
           title="Transactional Sender Alignment Status"
-          subtitle="Google & Yahoo 2024 Compliance Verification"
+          subtitle="Google & Yahoo 2024 Bulk Sender Requirements (US & EU) — Protect Order Receipts & Prevent Disputes"
           badgeText="Verified"
           badgeVariant="emerald"
           icon={<Shield className="w-5 h-5 text-emerald-400" />}
@@ -555,8 +533,8 @@ export default function ShopifyHubPage() {
                             Delivered
                           </span>
                         ) : isNotified ? (
-                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 inline-flex items-center gap-1 font-mono">
-                            <Check className="w-3 h-3 text-teal-400" />
+                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 font-mono">
+                            <Check className="w-3 h-3 text-emerald-400" />
                             Notified
                           </span>
                         ) : (

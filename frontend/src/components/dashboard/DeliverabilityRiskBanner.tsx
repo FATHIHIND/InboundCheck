@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ShieldCheck,
@@ -65,10 +66,16 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
   const [error, setError] = useState<string | null>(null);
 
   const fetchRisk = useCallback(async () => {
+    if (!domain || !domain.trim()) {
+      setData(null);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const queryParam = domain ? `?domain=${encodeURIComponent(domain)}` : "";
+      const queryParam = `?domain=${encodeURIComponent(domain.trim())}`;
       const res = await apiFetch(`/api/v1/analytics/revenue-at-risk${queryParam}`);
       if (!res.ok) {
         throw new Error(`Failed to load revenue risk (HTTP ${res.status})`);
@@ -90,7 +97,7 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
   if (isLoading) {
     return (
       <div
-        className={`relative overflow-hidden rounded-2xl border border-white/10 bg-[#0E0E12]/80 backdrop-blur-xl p-5 shadow-2xl animate-pulse ${className}`}
+        className={`relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-[#0a0d12]/80 backdrop-blur-xl p-5 shadow-2xl animate-pulse ${className}`}
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -106,8 +113,51 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
     );
   }
 
-  if (error || !data) {
-    return null; // Gracefully degrade if no data or initial calculation not present
+  const hasRealStore = Boolean(
+    domain &&
+    domain.trim() !== "" &&
+    data &&
+    data.domain &&
+    data.domain !== "yourstore.com" &&
+    data.monthly_gmv_cents > 0
+  );
+
+  // When no verified store/domain is connected or no order data exists, render clean onboarding prompt
+  if (!hasRealStore || !data) {
+    return (
+      <div
+        className={`relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-[#0a0d12] via-[#0f141c] to-[#0a0d12] p-5 backdrop-blur-xl shadow-xl ${className}`}
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+              <DollarSign className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white tracking-tight">
+                  Connect your store to calculate revenue at risk
+                </h3>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
+                  Setup Required
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Protect order confirmations and recover lost checkout revenue under Google &amp; Yahoo 2024 Bulk Sender Requirements (US &amp; EU).
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href="/dashboard/shopify"
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+          >
+            Connect Shopify Store
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   const isHighRisk = data.expected_risk_cents > 100000; // > $1,000 at risk
@@ -124,10 +174,10 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
     <div
       className={`relative overflow-hidden rounded-2xl border transition-all duration-300 ${
         isZeroRisk
-          ? "border-emerald-500/30 bg-gradient-to-r from-[#0E1512] via-[#0E0E12] to-[#0A0F0D]"
+          ? "border-emerald-500/30 bg-gradient-to-r from-[#0a0d12] via-[#0f141c] to-[#0a0d12]"
           : isHighRisk
-          ? "border-rose-500/30 bg-gradient-to-r from-[#170E10] via-[#0E0E12] to-[#140D0E]"
-          : "border-amber-500/30 bg-gradient-to-r from-[#17140E] via-[#0E0E12] to-[#120F0A]"
+          ? "border-rose-500/30 bg-gradient-to-r from-[#170E10] via-[#0a0d12] to-[#140D0E]"
+          : "border-amber-500/30 bg-gradient-to-r from-[#17140E] via-[#0a0d12] to-[#120F0A]"
       } p-5 backdrop-blur-xl shadow-2xl ${className}`}
     >
       {/* Background Accent Ambient Glow */}
@@ -183,7 +233,7 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
             </div>
 
             <p className="text-xs text-zinc-400 line-clamp-1">
-              {data.recommendation}
+              {data.recommendation || "Google & Yahoo 2024 Bulk Sender Requirements: Prevent Customer Support Disputes & Recover Lost Checkout Revenue."}
             </p>
           </div>
         </div>
@@ -239,7 +289,7 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
                 size="sm"
                 variant="primary"
                 onClick={onOpenWizard}
-                icon={<Sparkles className="w-4 h-4 text-emerald-400" />}
+                icon={<Sparkles className="w-4 h-4 text-slate-950" />}
               >
                 {isZeroRisk ? "Review DNS Records" : "Protect Store Revenue"}
               </EmeraldHoverButton>

@@ -52,7 +52,7 @@ class RevenueRiskService:
                 if res.data and len(res.data) > 0:
                     matched_domain_record = res.data[0]
                     if not clean_domain:
-                        clean_domain = matched_domain_record.get("domain_name", "yourstore.com")
+                        clean_domain = matched_domain_record.get("domain_name", "")
             except Exception as e:
                 logger.warning(f"Failed to query domain for revenue risk: {e}")
 
@@ -62,11 +62,46 @@ class RevenueRiskService:
                 if not clean_domain or d.get("domain_name") == clean_domain:
                     matched_domain_record = d
                     if not clean_domain:
-                        clean_domain = d.get("domain_name", "yourstore.com")
+                        clean_domain = d.get("domain_name", "")
                     break
 
-        if not clean_domain:
-            clean_domain = "yourstore.com"
+        # If neither a domain was requested nor any domain exists for user, return zero-state without fake metrics
+        if not clean_domain and not matched_domain_record:
+            return RevenueRiskResponse(
+                domain="",
+                expected_risk_cents=0,
+                expected_risk_formatted="$0.00",
+                monthly_gmv_cents=0,
+                monthly_gmv_formatted="$0.00",
+                impairment_probability=0.0,
+                customer_impact_factor=1.0,
+                confidence_band="low",
+                band_details=ConfidenceBandDetails(
+                    band="low",
+                    margin_error_pct=0.0,
+                    lower_bound_cents=0,
+                    upper_bound_cents=0,
+                    lower_bound_formatted="$0.00",
+                    upper_bound_formatted="$0.00",
+                    explanation="No store domain connected. Connect your Shopify sending domain to calculate revenue risk."
+                ),
+                breakdown=RevenueRiskBreakdown(
+                    order_count=0,
+                    average_order_value_cents=0,
+                    monthly_gmv_cents=0,
+                    impairment_probability=0.0,
+                    customer_impact_factor=1.0,
+                    deliverability_score=100,
+                    dmarc_penalty=0.0,
+                    spf_penalty=0.0,
+                    dkim_penalty=0.0,
+                    rbl_penalty=0.0
+                ),
+                calculated_at=datetime.now(timezone.utc).isoformat(),
+                recommendation="Connect your store to calculate revenue at risk."
+            )
+
+        clean_domain = clean_domain or (matched_domain_record.get("domain_name") if matched_domain_record else "")
 
         # 2. Derive Order Volume and AOV
         resolved_orders = order_count if order_count is not None else 1250

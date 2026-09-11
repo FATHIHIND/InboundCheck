@@ -238,10 +238,10 @@ export default function DashboardOverviewPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            Deliverability & Blacklist Surveillance
+            Shopify Store Deliverability & Revenue Shield
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Automated DNS governance, inbox placement surveillance, and real-time blacklist protection.
+            Ensure order confirmations and marketing flows land in the primary inbox (Google &amp; Yahoo 2024 Compliant). Prevent Customer Support Disputes, Protect Order Receipts, and Recover Lost Checkout Revenue.
           </p>
         </div>
 
@@ -326,19 +326,30 @@ export default function DashboardOverviewPage() {
             {stores.length > 0 ? (
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
             ) : (
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
                 Setup Required
               </span>
             )}
           </div>
-          <ScoreGauge3DCanvas score={stores.length > 0 ? avgUnifiedScore : null} className="h-28 w-full relative z-10" />
+          {stores.length > 0 ? (
+            <ScoreGauge3DCanvas score={avgUnifiedScore} className="h-28 w-full relative z-10" />
+          ) : (
+            <div className="h-28 w-full flex flex-col items-center justify-center text-center relative z-10">
+              <span className="text-4xl font-extrabold text-white font-mono tracking-tight drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]">
+                --
+              </span>
+              <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase mt-1">
+                / 100 HEALTH
+              </span>
+            </div>
+          )}
           <div className="text-[11px] text-zinc-400 text-center relative z-10 font-mono">
-            {avgUnifiedScore !== null ? (
+            {stores.length > 0 && avgUnifiedScore !== null ? (
               <>
                 <span className="text-emerald-400 font-semibold">• {avgUnifiedScore >= 80 ? "Optimal" : "Degraded"}</span> ({stores.length} domains monitored)
               </>
             ) : (
-              <span className="text-zinc-500">No domains registered</span>
+              <span className="text-zinc-400 font-medium">Awaiting First Store Scan</span>
             )}
           </div>
         </div>
@@ -405,8 +416,8 @@ export default function DashboardOverviewPage() {
       {/* 2b. Feature Highlights */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <GlassEmeraldCard
-          title="1-Click DNS Auto-Fix"
-          subtitle="Cloudflare & GoDaddy REST APIs"
+          title="1-Click DNS Sync"
+          subtitle="Works with Cloudflare, GoDaddy & Namecheap"
           badgeText="Auto-Fix Ready"
           badgeVariant="emerald"
           metricValue="99.8%"
@@ -416,7 +427,7 @@ export default function DashboardOverviewPage() {
           onActionClick={() => window.location.href = "/dashboard/inspector"}
         >
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Automated CNAME selector discovery, SPF syntax validation, and DMARC enforcement with 1-click zone injection.
+            Automated CNAME selector discovery, SPF syntax validation, and DMARC enforcement aligned with Google &amp; Yahoo 2024 Bulk Sender Requirements (US &amp; EU).
           </p>
         </GlassEmeraldCard>
 
@@ -438,7 +449,7 @@ export default function DashboardOverviewPage() {
 
         <GlassEmeraldCard
           title="Protected GMV & ROI Multiplier"
-          subtitle="Predictive Dispute Analytics"
+          subtitle="Recover Lost Checkout Revenue"
           badgeText="37.3x ROI"
           badgeVariant="emerald"
           metricValue="$142,850"
@@ -448,7 +459,7 @@ export default function DashboardOverviewPage() {
           onActionClick={() => window.location.href = "/dashboard/shopify"}
         >
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Real-time correlation linking inbox deliverability health to Shopify weekly revenue protection and dispute avoidance.
+            Real-time correlation linking inbox deliverability health to Shopify weekly revenue protection and customer dispute prevention.
           </p>
         </GlassEmeraldCard>
       </div>
