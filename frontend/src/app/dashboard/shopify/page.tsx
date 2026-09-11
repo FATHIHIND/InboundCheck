@@ -159,19 +159,15 @@ export default function ShopifyHubPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Simulation failed on backend");
+        throw new Error(body.detail || "Unable to simulate order delivery. Please verify that your store connection is active.");
       }
-
-      const data = await res.json();
-      const sim = data.simulation;
-
-      setSimulationResult(sim);
+      setSimulationResult(await res.json());
+      reloadStores();
       reloadFailoverLogs();
     } catch (err: any) {
       setSimulationError(err?.message || "Failed to execute order delivery simulation.");
     } finally {
       setIsSimulating(false);
-      setSimulationStep(null);
     }
   };
 
@@ -190,11 +186,12 @@ export default function ShopifyHubPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Alignment audit request rejected");
+        throw new Error(body.detail || "Unable to verify sender address alignment. Please check your store configuration.");
       }
 
       const data = await res.json();
       setAlignmentResult(data.alignment);
+      reloadStores();
     } catch (err: any) {
       setAlignmentError(err?.message || "Failed to evaluate sender alignment.");
     } finally {
@@ -215,20 +212,21 @@ export default function ShopifyHubPage() {
       setHmacVerified(true);
     } finally {
       setIsVerifyingHmac(false);
+      setShowHmacModal(false);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-[1360px] mx-auto animate-fadeIn pb-12">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-emerald-400" />
-            Shopify Store Sync & Webhook Intelligence
+            Shopify Store Sync & Inbox Protection
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            HMAC-verified order ingestion, transactional sender address alignment, and real-time Telegram incident bridging.
+            Automated order delivery monitoring, transactional sender domain alignment, and real-time incident alerting.
           </p>
         </div>
 
@@ -239,13 +237,13 @@ export default function ShopifyHubPage() {
             variant="solid"
             icon={<Sparkles className="w-3.5 h-3.5" />}
           >
-            Zero-Spam Wizard
+            Protect Store Revenue
           </EmeraldHoverButton>
 
           <EmeraldHoverButton
             onClick={handleSimulateOrder}
             isLoading={isSimulating}
-            loadingText="Simulating Pipeline..."
+            loadingText="Simulating Order Delivery..."
             icon={<Zap className="w-3.5 h-3.5 fill-current" />}
             size="sm"
             variant="primary"
@@ -400,7 +398,7 @@ export default function ShopifyHubPage() {
                 variant="ghost"
                 className="px-3 py-2 font-mono"
               >
-                HMAC Secret
+                Webhook Key
               </EmeraldHoverButton>
             </div>
           </div>
@@ -595,7 +593,7 @@ export default function ShopifyHubPage() {
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <h3 id="shopify-hmac-modal-title" className="text-sm font-bold text-white flex items-center gap-2">
                 <Key className="w-4 h-4 text-emerald-400" />
-                Shopify Webhook HMAC Secret
+                Shopify Webhook Security Key
               </h3>
               <button
                 type="button"
@@ -608,11 +606,11 @@ export default function ShopifyHubPage() {
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-              Enter your Shopify App Webhook Signature Secret to cryptographically verify HMAC-SHA256 headers.
+              Enter your Shopify App Webhook Signature Key to securely verify incoming store order notifications.
             </p>
 
             <div>
-              <label className="text-[11px] text-zinc-400 block mb-1">HMAC Shared Secret Key</label>
+              <label className="text-[11px] text-zinc-400 block mb-1">Webhook Signature Key</label>
               <input
                 type="password"
                 value={hmacSecretInput}

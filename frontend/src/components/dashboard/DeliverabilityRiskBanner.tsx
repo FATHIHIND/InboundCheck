@@ -241,7 +241,7 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
                 onClick={onOpenWizard}
                 icon={<Sparkles className="w-4 h-4 text-emerald-400" />}
               >
-                Zero-Spam Wizard
+                {isZeroRisk ? "Review DNS Records" : "Protect Store Revenue"}
               </EmeraldHoverButton>
             )}
           </div>

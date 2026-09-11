@@ -154,7 +154,7 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
 
       {/* Summary Footer with Live Glowing Pulse */}
       <div className="pt-2 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-400">
-        <span>IMAP Witness Worker:</span>
+        <span>Inbox Placement Surveillance:</span>
         <span className="text-emerald-400 font-bold flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>

@@ -156,7 +156,7 @@ export default function AIContentLabPage() {
             AI Deliverability & Content Optimizer
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Review emails flagged by IMAP telemetry and auto-rewrite them to bypass spam filters while preserving Shopify Liquid variables.
+            Review emails flagged by deliverability monitors and optimize copy to bypass spam filters while preserving Shopify Liquid tags.
           </p>
         </div>
 
@@ -177,7 +177,7 @@ export default function AIContentLabPage() {
           icon={<MailWarning className="w-5 h-5 text-amber-400" />}
         >
           <p className="text-xs text-zinc-400">
-            High-friction promotional phrases detected by IMAP scanner.
+            High-friction promotional phrases detected by deliverability scanner.
           </p>
         </GlassEmeraldCard>
 
@@ -220,7 +220,7 @@ export default function AIContentLabPage() {
       ) : (
         <GlassEmeraldCard
           title="Flagged Spam Emails Registry"
-          subtitle="Live emails flagged by IMAP inbox simulation for promotional word density and spam triggers"
+          subtitle="Customer emails analyzed for promotional word density and deliverability spam triggers"
           badgeText={`${flaggedEmails.length} Monitored Templates`}
           badgeVariant="emerald"
           icon={<AlertTriangle className="w-5 h-5 text-amber-400" />}
@@ -244,7 +244,7 @@ export default function AIContentLabPage() {
                       {email.template_name}
                     </div>
                     <div className="text-[11px] text-zinc-400 font-sans line-clamp-1 italic">
-                      "{email.subject}"
+                      &ldquo;{email.subject}&rdquo;
                     </div>
                     <span className="text-[10px] text-zinc-500 font-mono mt-1 block">
                       Shopify Key: {email.shopify_template_key}

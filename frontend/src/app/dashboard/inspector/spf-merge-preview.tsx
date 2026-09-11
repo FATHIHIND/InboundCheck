@@ -150,7 +150,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              RFC 7208 SPF Conflict Resolution & Merge Engine
+              SPF Conflict Resolution & Smart Record Merger
               {plan && plan.source_records.length > 1 && (
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30">
                   Multiple Records ({plan.source_records.length})
@@ -158,7 +158,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
               )}
             </h3>
             <p className="text-xs text-zinc-400">
-              Autonomous mechanism deduplication, recursive lookup budget evaluation, and safe consolidation.
+              Automated duplicate cleanup, DNS lookup budget protection, and safe sender consolidation.
             </p>
           </div>
         </div>
@@ -232,7 +232,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
               </span>
               {plan.source_records.length > 1 ? (
                 <span className="text-rose-400 font-mono font-semibold flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" /> RFC 7208 Violation (PermError)
+                  <AlertTriangle className="w-3.5 h-3.5" /> Multiple SPF Records Detected (Delivery Failure)
                 </span>
               ) : (
                 <span className="text-emerald-400 font-mono flex items-center gap-1">
@@ -263,7 +263,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
             {/* KPI: DNS Lookups Gauge */}
             <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs uppercase text-zinc-400 font-mono">RFC 7208 Lookups</span>
+                <span className="text-xs uppercase text-zinc-400 font-mono">DNS Lookup Budget</span>
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${
                     isOverLimit
@@ -322,13 +322,13 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
               </div>
               <p className="text-[10px] text-zinc-500">
                 {plan.safe_to_apply
-                  ? "Meets RFC 7208 lookup cap & has zero syntax conflicts"
+                  ? "Within standard 10-lookup limit & has zero syntax conflicts"
                   : "Contains warnings, lookup overflow, or modifiers"}
               </p>
             </div>
           </div>
 
-          {/* 4. Warnings and RFC Compliance Notices */}
+          {/* 4. Warnings and Deliverability Compliance Notices */}
           {plan.warnings.length > 0 && (
             <div className="space-y-2">
               <span className="text-xs text-zinc-400 uppercase font-mono font-semibold">
@@ -338,24 +338,18 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                 {plan.warnings.map((w, idx) => (
                   <div
                     key={idx}
-                    className={`p-2.5 rounded-lg border text-xs flex items-start gap-2.5 font-mono ${
-                      w.severity === "critical"
-                        ? "bg-rose-500/10 border-rose-500/30 text-rose-300"
-                        : w.severity === "warning"
-                        ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
-                        : "bg-blue-500/10 border-blue-500/30 text-blue-300"
-                    }`}
+                    className="p-3 rounded-lg bg-black/50 border border-white/5 flex items-start gap-2.5 text-xs"
                   >
                     {w.severity === "critical" ? (
                       <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     ) : w.severity === "warning" ? (
                       <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     ) : (
-                      <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                      <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                     )}
                     <div>
-                      <span className="font-bold mr-1.5">[{w.code}]</span>
-                      <span>{w.message}</span>
+                      <span className="font-mono text-zinc-300 font-semibold block">{w.code}</span>
+                      <span className="text-zinc-400 text-[11px] font-sans">{w.message}</span>
                     </div>
                   </div>
                 ))}
@@ -363,7 +357,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
             </div>
           )}
 
-          {/* 5. Proposed Consolidate SPF Record with 1-Click Copy */}
+          {/* 5. Proposed Consolidated Record */}
           {plan.proposed_record && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -413,8 +407,8 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                 icon={<Zap className="w-3.5 h-3.5" />}
               >
                 {plan.safe_to_apply && !plan.requires_manual_review
-                  ? "Apply Consolidated Plan"
-                  : "Manual Review Required (Locked)"}
+                  ? "Fix Domain Configuration"
+                  : "Review DNS Records (Manual Action Required)"}
               </EmeraldHoverButton>
             )}
           </div>

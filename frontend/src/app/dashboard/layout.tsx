@@ -260,8 +260,19 @@ export default function DashboardLayout({
           </div>
         </div>
 
-        {/* Bottom User Profile & Sign Out */}
-        <div className="pt-4 border-t border-white/[0.08] space-y-3 font-sans text-xs">
+        {/* Bottom User Profile, Operational Status & Sign Out */}
+        <div className="pt-3 border-t border-white/[0.08] space-y-2 font-sans text-xs">
+          <div className="flex items-center justify-between px-1">
+            <BackendStatusBadge />
+            <Link
+              href="/dashboard/settings"
+              title="Store Settings & Alerts"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition flex items-center gap-1 text-[11px]"
+            >
+              <Sliders size={14} />
+            </Link>
+          </div>
+
           <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0 font-mono">
@@ -276,17 +287,14 @@ export default function DashboardLayout({
                 </span>
               </div>
             </div>
-            <div className="shrink-0 pl-1">
-              <BackendStatusBadge />
-            </div>
           </div>
 
           <button
             type="button"
             onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-3 py-2 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-white/[0.02] transition-colors duration-150 cursor-pointer text-xs font-sans"
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-white/[0.02] transition-colors duration-150 cursor-pointer text-xs font-sans"
           >
-            <LogOut strokeWidth={1.75} size={16} />
+            <LogOut strokeWidth={1.75} size={15} />
             <span>Logout</span>
           </button>
         </div>

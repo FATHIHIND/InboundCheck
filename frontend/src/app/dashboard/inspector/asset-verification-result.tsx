@@ -104,10 +104,10 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
           </div>
           <div>
             <h4 className="text-sm font-bold text-white uppercase tracking-wider">
-              Hardened Remote Asset Validator (Anti-SSRF)
+              Brand Asset & BIMI Security Validator
             </h4>
             <span className="text-[11px] text-zinc-400 font-sans">
-              Socket-level IP pinning, streaming 500 KB limit, and Anti-downgrade redirect defense.
+              Cryptographically verified brand logo & certificate inspection with enterprise transport security.
             </span>
           </div>
         </div>
@@ -154,7 +154,7 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
             variant="primary"
             onClick={handleVerify}
             isLoading={isLoading}
-            loadingText="Pinning Socket..."
+            loadingText="Verifying Asset..."
             icon={<Zap className="w-3.5 h-3.5 fill-current" />}
           >
             Verify Asset Securely
@@ -205,7 +205,7 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
                     : "Remote Asset Fetch Failed"}
                 </span>
                 <span className="text-[10px] text-zinc-400 block font-sans">
-                  {result.error_message || "All SSRF, TLS SNI, and MIME integrity checks passed."}
+                  {result.error_message || "All security, transport encryption, and format integrity checks passed."}
                 </span>
               </div>
             </div>
@@ -228,7 +228,7 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
           {/* Detailed Verification Diagnostic Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-[#0E0E14] rounded-lg border border-white/5 space-y-0.5">
-              <span className="text-[10px] text-zinc-500 uppercase block">Pinned Socket IP</span>
+              <span className="text-[10px] text-zinc-500 uppercase block">Verified Host IP</span>
               <span className="text-xs text-emerald-400 font-bold block truncate">
                 {result.pinned_ip || "Not Connected"}
               </span>

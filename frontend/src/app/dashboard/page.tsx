@@ -74,7 +74,9 @@ export default function DashboardOverviewPage() {
     endpoint: "/api/v1/domains",
     parse: async (res) => {
       const json = await res.json().catch(() => []);
-      console.log("[Dashboard Domains Raw Response]", json);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Dashboard Domains Raw Response]", json);
+      }
 
       let data: any[] = [];
       if (Array.isArray(json)) {
@@ -145,10 +147,10 @@ export default function DashboardOverviewPage() {
       setPipelineStep("1/3 Querying Multi-Resolver DNS Records (SPF, DKIM, DMARC)...");
       await new Promise((r) => setTimeout(r, 600));
 
-      setPipelineStep("2/3 Simulating Order Receipt & Querying IMAP Inbox Witness...");
+      setPipelineStep("2/3 Simulating Order Receipt & Verifying Customer Inbox Delivery...");
       await new Promise((r) => setTimeout(r, 700));
 
-      setPipelineStep("3/3 Probing 10 Authoritative RBL Blacklists (Spamhaus, Barracuda)...");
+      setPipelineStep("3/3 Scanning 10 Global Blacklist & Reputation Databases...");
       await new Promise((r) => setTimeout(r, 600));
 
       // Re-fetch genuine domain states from backend
@@ -239,7 +241,7 @@ export default function DashboardOverviewPage() {
             Deliverability & Blacklist Surveillance
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Automated DNS verification, IMAP inboxing surveillance, and real-time RBL risk forecasting.
+            Automated DNS governance, inbox placement surveillance, and real-time blacklist protection.
           </p>
         </div>
 
@@ -493,7 +495,7 @@ export default function DashboardOverviewPage() {
                 Monitored Stores & Verified Sending Domains
               </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Live DNS records, IMAP folder verification status, and on-demand inspector access.
+                Live DNS records, customer inbox placement status, and on-demand diagnostic inspector.
               </p>
             </div>
             <span className="text-xs font-mono text-zinc-400 px-2.5 py-1 rounded-lg bg-[#08080A] border border-white/[0.06]">
@@ -507,7 +509,7 @@ export default function DashboardOverviewPage() {
                 <tr>
                   <th className="py-3.5 px-4 font-semibold">Domain Name</th>
                   <th className="py-3.5 px-4 font-semibold">Shopify Store</th>
-                  <th className="py-3.5 px-4 font-semibold">IMAP Folder</th>
+                  <th className="py-3.5 px-4 font-semibold">Inbox Placement</th>
                   <th className="py-3.5 px-4 font-semibold">SPF</th>
                   <th className="py-3.5 px-4 font-semibold">DKIM</th>
                   <th className="py-3.5 px-4 font-semibold">DMARC</th>

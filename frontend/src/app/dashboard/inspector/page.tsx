@@ -211,7 +211,7 @@ function DNSInspectorContent() {
           value: f.value || "",
           explanation: f.explanation || "",
           ttl: "300s (5 min)",
-          compliance_spec: f.category === "SPF" ? "RFC 7208 Aligned SPF Mechanism" : f.category === "DMARC" ? `RFC 7489 DMARC Enforcement (p=${dmarcPolicy})` : "2048-bit RSA Cryptographic DKIM Selector",
+          compliance_spec: f.category === "SPF" ? "Aligned SPF Sender Record" : f.category === "DMARC" ? `DMARC Protection Policy (p=${dmarcPolicy})` : "Cryptographically Signed DKIM Key",
           authoritative_target: f.value.slice(0, 45) + "...",
         }));
         setGeneratedRecords(mapped);
@@ -417,7 +417,7 @@ function DNSInspectorContent() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 <span>
                   Records copied. Paste them into your DNS provider (Cloudflare, GoDaddy, Namecheap), then click{" "}
-                  <strong className="text-emerald-400">"Verify Records Live"</strong>.
+                  <strong className="text-emerald-400">&ldquo;Verify Records Live&rdquo;</strong>.
                 </span>
               </div>
               <EmeraldHoverButton
@@ -507,7 +507,7 @@ function DNSInspectorContent() {
                   {[
                     { id: "reject", label: "Reject (Strict)", desc: "Completely block unauthorized emails (Google/Yahoo 2024)" },
                     { id: "quarantine", label: "Quarantine", desc: "Route unauthorized emails to Spam folder" },
-                    { id: "none", label: "None (Monitoring)", desc: "Observe telemetry without blocking" },
+                    { id: "none", label: "None (Monitoring)", desc: "Observe delivery reports without blocking traffic" },
                   ].map((pol) => (
                     <label
                       key={pol.id}
@@ -709,7 +709,7 @@ function DNSInspectorContent() {
               <span className="text-lg font-extrabold text-white block">
                 {auditData.summary.spf.dns_lookup_count} / 10 Lookups
               </span>
-              <span className="text-[10px] text-emerald-400 block">RFC 7208 Compliant</span>
+              <span className="text-[10px] text-emerald-400 block">Sender Policy Aligned</span>
             </div>
 
             <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 space-y-1">
@@ -725,7 +725,7 @@ function DNSInspectorContent() {
               <span className="text-lg font-extrabold text-emerald-400 block">
                 p={auditData.summary.dmarc.policy || "none"}
               </span>
-              <span className="text-[10px] text-zinc-400 block">RFC 7489 Compliant</span>
+              <span className="text-[10px] text-zinc-400 block">DMARC Policy Enforced</span>
             </div>
           </div>
 
@@ -738,7 +738,7 @@ function DNSInspectorContent() {
 
             <div className="space-y-3">
               <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">Aligned SPF Mechanism (RFC 7208)</span>
+                <span className="text-[10px] text-zinc-500 uppercase block">Configured SPF Sender Record</span>
                 <code className="text-emerald-400/90 block text-xs break-all">
                   {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
                 </code>

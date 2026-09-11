@@ -250,7 +250,7 @@ export default function LandingPage() {
           >
             Your Order Confirmations Are Landing in Spam.{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">
-              You Just Don't Know It Yet.
+              You Just Don&apos;t Know It Yet.
             </span>
           </motion.h1>
 
@@ -377,7 +377,7 @@ export default function LandingPage() {
             The $4,200 Monthly Silent Leak in Your Store
           </h2>
           <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
-            Mailbox providers don't notify you when they shadow-ban your sending domain. Here is what actually happens behind the scenes:
+            Mailbox providers don&apos;t notify you when they shadow-ban your sending domain. Here is what actually happens behind the scenes:
           </p>
         </div>
 
@@ -409,7 +409,7 @@ export default function LandingPage() {
               </div>
             </div>
             <p className="text-xs text-zinc-500 font-sans italic">
-              "Everything looks green. You assume your customers are receiving their tracking codes and receipts."
+              &ldquo;Everything looks green. You assume your customers are receiving their tracking codes and receipts.&rdquo;
             </p>
           </div>
 
@@ -431,7 +431,7 @@ export default function LandingPage() {
                 <span className="text-red-400 font-bold">240 Receipts (24%)</span>
               </div>
               <div className="p-3 bg-[#08080A] rounded-xl border border-red-500/10 flex items-center justify-between">
-                <span className="text-zinc-400">Support Tickets ("Where is my order?")</span>
+                <span className="text-zinc-400">Support Tickets (&ldquo;Where is my order?&rdquo;)</span>
                 <span className="text-amber-400 font-bold">42 Angry Customers</span>
               </div>
               <div className="p-3 bg-[#08080A] rounded-xl border border-red-500/10 flex items-center justify-between">

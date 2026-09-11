@@ -79,6 +79,16 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
     }
   } catch {}
 
+  if (response.status === 429) {
+    detail = "Scan rate limit reached. The system automatically protects multi-resolver throughput. Please wait a moment before requesting another scan.";
+  } else if (response.status === 404) {
+    detail = "The requested domain was not found. Please ensure the domain name is spelled correctly and has active DNS records.";
+  } else if (response.status === 422 || response.status === 400) {
+    detail = "Invalid domain input. Please enter a valid sending domain (e.g. brandshop.com) and try again.";
+  } else if (response.status >= 500) {
+    detail = "The reputation scanning service is currently busy querying global databases. Please retry in a few moments.";
+  }
+
   return {
     message: detail,
     status: response.status,
@@ -206,7 +216,7 @@ export default function BlacklistRadarPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
             <Radio className="w-6 h-6 text-emerald-400 animate-pulse" />
-            Blacklist Radar & RBL Intelligence
+            Blacklist Radar & Reputation Intelligence
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
             Real-time blacklist monitoring across 10 major anti-spam databases with automated delisting guidance.
@@ -230,14 +240,14 @@ export default function BlacklistRadarPage() {
             onClick={() => runScan()}
             isLoading={isScanning}
             disabled={rateLimitCountdown !== null}
-            loadingText="Probing RBL Networks..."
+            loadingText="Scanning Reputation Lists..."
             icon={<RefreshCw className="w-3.5 h-3.5" />}
             size="sm"
             variant="primary"
           >
             {rateLimitCountdown !== null
               ? `Cooldown (${rateLimitCountdown}s)`
-              : "Run Real-Time RBL Audit"}
+              : "Scan Reputation Lists"}
           </EmeraldHoverButton>
         </div>
       </div>
@@ -261,9 +271,11 @@ export default function BlacklistRadarPage() {
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div>
-              <div className="font-bold text-rose-200">Reputation Scan Request Failed</div>
-              <div className="text-rose-300/90 mt-0.5">{error.message}</div>
-              {error.code && <span className="inline-block mt-1 text-[10px] text-rose-400/70 font-mono">Code: {error.code}</span>}
+              <div className="font-bold text-rose-200">Reputation Scan Notice</div>
+              <div className="text-rose-300/90 mt-0.5 font-sans text-xs">{error.message}</div>
+              {process.env.NODE_ENV === "development" && error.code && (
+                <span className="inline-block mt-1 text-[10px] text-rose-400/70 font-mono">Debug: {error.code}</span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -338,8 +350,8 @@ export default function BlacklistRadarPage() {
                   SEVERITY: {scan.highest_severity.toUpperCase()}
                 </span>
               </div>
-              <p className="text-xs text-rose-300/90 mt-1">
-                One or more authoritative DNSBL operators are actively rejecting or flagging traffic from this domain/IP. Outbound transactional and marketing receipts face severe delivery degradation.
+              <p className="text-xs text-rose-300/90 mt-1 font-sans">
+                One or more global reputation databases are flagging email traffic from this sending domain. Customer order confirmations and transactional emails risk landing in spam.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {scan.results
@@ -368,9 +380,9 @@ export default function BlacklistRadarPage() {
         <div className="p-4 bg-amber-950/30 border border-amber-500/40 rounded-xl text-amber-300 text-xs font-mono flex items-start gap-3 animate-fadeIn">
           <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div>
-            <div className="font-bold text-amber-200">Incomplete DNSBL Measurement (Partial Status)</div>
-            <p className="text-amber-300/90 mt-0.5">
-              {scan.rbl_unknown_count} of {scan.rbl_total_count} DNSBL providers did not respond within the 1.5s multi-resolver timeout window or returned inconclusive responses. Clean status cannot be guaranteed until all authoritative providers respond with definitive negative records.
+            <div className="font-bold text-amber-200">Reputation Check In Progress (Partial Response)</div>
+            <p className="text-amber-300/90 mt-0.5 font-sans">
+              {scan.rbl_unknown_count} of {scan.rbl_total_count} reputation providers timed out or returned pending results. We will continue polling to verify your domain reputation status.
             </p>
           </div>
         </div>
@@ -381,7 +393,7 @@ export default function BlacklistRadarPage() {
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 text-xs">
           <span className="font-mono text-emerald-400 font-bold flex items-center gap-2">
             <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
-            3D REAL-TIME RBL NODE TOPOLOGY & PROBING MATRIX
+            GLOBAL REPUTATION RADAR & SURVEILLANCE MATRIX
           </span>
           <span className="text-[10px] font-mono text-zinc-400">
             {scan ? `${scan.rbl_total_count} AUTHORITATIVE LISTS` : "AWAITING SCAN"}
@@ -505,7 +517,7 @@ export default function BlacklistRadarPage() {
             ))}
           </div>
           <p className="text-xs text-zinc-500 font-mono text-center pt-2">
-            Probing authoritative DNSBL providers via dedicated recursive nameservers...
+            Scanning global reputation databases via dedicated recursive nameservers...
           </p>
         </div>
       )}
@@ -518,11 +530,11 @@ export default function BlacklistRadarPage() {
           </div>
           <div className="max-w-md mx-auto">
             <h3 className="text-sm font-bold text-white uppercase tracking-wide font-mono">
-              No RBL Scan Recorded
+              No Reputation Scan Recorded
             </h3>
             <p className="text-xs text-zinc-400 mt-1">
               No reputation check has been run yet for <strong className="text-emerald-400">{target}</strong>.
-              Execute an authoritative multi-resolver probing scan to establish reputation evidence.
+              Scan global reputation databases to verify sending domain deliverability.
             </p>
           </div>
           <EmeraldHoverButton
@@ -532,7 +544,7 @@ export default function BlacklistRadarPage() {
             size="md"
             variant="primary"
           >
-            Run First Real-Time RBL Audit
+            Scan Reputation Lists
           </EmeraldHoverButton>
         </div>
       )}
@@ -540,7 +552,7 @@ export default function BlacklistRadarPage() {
       {/* 9. Measured Authoritative RBL Monitoring Matrix Table */}
       {scan && (
         <GlassEmeraldCard
-          title="Authoritative RBL Monitoring Matrix"
+          title="Global Blacklist Monitoring Matrix"
           subtitle="Real-time reputation monitoring and delisting gateway access"
           badgeText={`${scan.rbl_total_count} Lists Monitored`}
           badgeVariant="emerald"
@@ -550,8 +562,8 @@ export default function BlacklistRadarPage() {
             <table className="w-full text-left text-xs font-mono border-collapse">
               <thead className="sticky top-0 bg-[#0E0E12] z-10 backdrop-blur-md border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-400">
                 <tr>
-                  <th className="py-3 px-4 font-semibold">RBL Provider</th>
-                  <th className="py-3 px-4 font-semibold">DNSBL Zone</th>
+                  <th className="py-3 px-4 font-semibold">Reputation Provider</th>
+                  <th className="py-3 px-4 font-semibold">Reputation Network</th>
                   <th className="py-3 px-4 font-semibold">Target Type</th>
                   <th className="py-3 px-4 font-semibold">Measured Status</th>
                   <th className="py-3 px-4 font-semibold">Latency</th>
@@ -649,11 +661,11 @@ export default function BlacklistRadarPage() {
                             <div className="space-y-3 font-mono text-xs">
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Response Codes</span>
-                                  <span className="text-xs text-cyan-400 font-bold block mt-0.5">
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Response Classification</span>
+                                  <span className="text-xs text-emerald-400 font-bold block mt-0.5">
                                     {rbl.response_codes.length > 0
                                       ? rbl.response_codes.join(", ")
-                                      : "NXDOMAIN (Definitive Negative)"}
+                                      : "Clean (No Blacklist Entry)"}
                                   </span>
                                   <span className="text-[10px] text-zinc-400 block mt-0.5">
                                     Severity: {rbl.severity.toUpperCase()}
@@ -676,9 +688,9 @@ export default function BlacklistRadarPage() {
                                 </div>
 
                                 <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Diagnostics Message</span>
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Monitoring Status</span>
                                   <span className="text-[11px] text-zinc-300 block mt-0.5">
-                                    {rbl.message || "Definitive DNS lookup response received."}
+                                    {rbl.message || "Reputation verified clean across database."}
                                   </span>
                                   <span className="text-[10px] text-zinc-400 block mt-0.5">
                                     Latency: {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "timeout"}
