@@ -157,10 +157,10 @@ export default function DashboardLayout({
 
           {/* Governance Navigation Groups */}
           <div className="space-y-6 text-xs">
-            {/* Group 1: Core Governance */}
+            {/* Group 1: Store Protection */}
             <div className="space-y-1">
               <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400/70 uppercase font-semibold pl-2 mb-2 select-none block">
-                CORE GOVERNANCE
+                STORE PROTECTION
               </span>
               <Link
                 href="/dashboard"

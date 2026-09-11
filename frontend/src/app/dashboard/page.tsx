@@ -267,12 +267,12 @@ export default function DashboardOverviewPage() {
           <EmeraldHoverButton
             onClick={handleRunPipeline}
             isLoading={isRunningPipeline}
-            loadingText="Running Pipeline..."
+            loadingText="Scanning Deliverability..."
             icon={<Zap className="w-3.5 h-3.5 fill-current" />}
             size="sm"
             variant="primary"
           >
-            Run Live Diagnostic Pipeline
+            Scan Store Deliverability
           </EmeraldHoverButton>
 
           <button
@@ -299,7 +299,7 @@ export default function DashboardOverviewPage() {
       {pipelineError && (
         <OperationalErrorCard
           compact
-          title="Diagnostic pipeline interrupted"
+          title="Diagnostic scan interrupted"
           error={{ message: pipelineError, retryable: true, endpoint: "/api/v1/domains/audit" }}
           onRetry={handleRunPipeline}
         />
@@ -323,9 +323,15 @@ export default function DashboardOverviewPage() {
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
               Unified Health Score
             </span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            {stores.length > 0 ? (
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
+                Setup Required
+              </span>
+            )}
           </div>
-          <ScoreGauge3DCanvas score={avgUnifiedScore ?? 0} className="h-28 w-full relative z-10" />
+          <ScoreGauge3DCanvas score={stores.length > 0 ? avgUnifiedScore : null} className="h-28 w-full relative z-10" />
           <div className="text-[11px] text-zinc-400 text-center relative z-10 font-mono">
             {avgUnifiedScore !== null ? (
               <>
@@ -399,7 +405,7 @@ export default function DashboardOverviewPage() {
       {/* 2b. Feature Highlights */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <GlassEmeraldCard
-          title="1-Click DNS Governance"
+          title="1-Click DNS Auto-Fix"
           subtitle="Cloudflare & GoDaddy REST APIs"
           badgeText="Auto-Fix Ready"
           badgeVariant="emerald"
@@ -415,8 +421,8 @@ export default function DashboardOverviewPage() {
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
-          title="Omnichannel Fallback Engine"
-          subtitle="WhatsApp & SMS Failover Dispatch"
+          title="Telegram Incident Guard"
+          subtitle="Instant Alert Dispatch"
           badgeText="Active Failover"
           badgeVariant="cyan"
           metricValue="0 Missed"
@@ -426,7 +432,7 @@ export default function DashboardOverviewPage() {
           onActionClick={() => window.location.href = "/dashboard/shopify"}
         >
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Automatic failover to WhatsApp Business API or SMS via Twilio whenever transactional receipt delivery is blocked.
+            Live alerts sent to your Telegram whenever customer order receipts or tracking emails bounce.
           </p>
         </GlassEmeraldCard>
 

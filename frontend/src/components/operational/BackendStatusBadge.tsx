@@ -13,7 +13,7 @@ export function BackendStatusBadge() {
     <button
       type="button"
       onClick={() => refreshHealth()}
-      title={isOperational ? "All Systems Operational • Click to refresh" : isDegraded ? "System Degraded • Click to refresh" : "Connecting to Services"}
+      title={isOperational ? "Monitoring Active • Click to refresh" : isDegraded ? "System Degraded • Click to refresh" : "Connecting to Services"}
       className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-colors cursor-pointer group"
     >
       <span className="relative flex h-2 w-2 shrink-0">
@@ -37,7 +37,7 @@ export function BackendStatusBadge() {
         />
       </span>
       <span className="text-[10px] text-zinc-400 group-hover:text-zinc-300 font-sans select-none whitespace-nowrap">
-        {isOperational ? "All Systems Operational" : isDegraded ? "System Degraded" : "Connecting..."}
+        {isOperational ? "Monitoring Active" : isDegraded ? "System Degraded" : "Connecting..."}
       </span>
     </button>
   );

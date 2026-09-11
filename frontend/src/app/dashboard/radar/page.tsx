@@ -435,7 +435,7 @@ export default function BlacklistRadarPage() {
 
         <GlassEmeraldCard
           title="RBL Hosts Queried"
-          subtitle="Authoritative Probe Net"
+          subtitle="Spam Databases Checked"
           badgeText={
             !scan
               ? "Unchecked"
@@ -489,7 +489,7 @@ export default function BlacklistRadarPage() {
 
         <GlassEmeraldCard
           title="Avg Lookup Latency"
-          subtitle="Multi-Resolver UDP Window"
+          subtitle="Query Response Speed"
           badgeText={scan ? `${scan.execution_time_ms.toFixed(0)}ms scan` : "Real-time"}
           badgeVariant="cyan"
           metricValue={avgLatency}
@@ -498,7 +498,7 @@ export default function BlacklistRadarPage() {
           <p className="text-xs text-zinc-400 font-mono">
             {scan
               ? `Bounded 1.5s per-zone multi-resolver execution.`
-              : "Multi-resolver UDP query response window."}
+              : "Real-time query response speed."}
           </p>
         </GlassEmeraldCard>
       </div>

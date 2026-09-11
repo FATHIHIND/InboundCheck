@@ -475,7 +475,7 @@ export default function ShopifyHubPage() {
       {/* Webhook & Order Activity Log */}
       <GlassEmeraldCard
         title="Real-Time Telegram Incident & Failover Audit"
-        subtitle="Live delivery degradation events and Telegram dispatches logged to public.failover_logs"
+        subtitle="Live alerts sent to your Telegram whenever customer order receipts or tracking emails bounce."
         badgeText={`${failoverLogsResource.state === "ready" ? failoverLogsResource.data.length : 0} Incidents`}
         badgeVariant="emerald"
         icon={<Activity className="w-5 h-5 text-emerald-400" />}
@@ -483,7 +483,7 @@ export default function ShopifyHubPage() {
         {failoverLogsResource.state === "loading" && (
           <OperationalLoadingState
             label="Loading Telegram failover & incident logs..."
-            subtext="Querying public.failover_logs records"
+            subtext="Retrieving incident history"
             rows={4}
           />
         )}

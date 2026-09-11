@@ -7,7 +7,7 @@ export default function ScoreGauge3DCanvas({
   score = 94,
   className = "",
 }: {
-  score?: number;
+  score?: number | null;
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -95,7 +95,8 @@ export default function ScoreGauge3DCanvas({
       ctx.stroke();
 
       // 3. Illuminated Emerald Arc based on Score
-      const targetPercent = Math.min(100, Math.max(0, score)) / 100;
+      const hasValidScore = score !== null && score !== undefined;
+      const targetPercent = hasValidScore ? Math.min(100, Math.max(0, score)) / 100 : 0;
       const startAngle = Math.PI * 0.75;
       const endAngle = startAngle + targetPercent * (Math.PI * 1.5);
 
@@ -151,7 +152,7 @@ export default function ScoreGauge3DCanvas({
       <canvas ref={canvasRef} className="w-full h-full block pointer-events-none" />
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
         <span className="text-3xl font-extrabold text-white font-mono tracking-tight drop-shadow-[0_0_12px_rgba(16,185,129,0.6)]">
-          {score}
+          {score !== null && score !== undefined ? score : "--"}
         </span>
         <span className="text-[10px] font-mono font-bold tracking-widest text-emerald-400 uppercase">
           / 100 HEALTH
