@@ -19,12 +19,14 @@ import {
   Server,
   ShieldCheck,
   Lock,
-  Globe
+  Globe,
+  Layers
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
 import { ApiError } from "@/lib/apiResource";
+import { SpfMergePreview } from "./spf-merge-preview";
 
 interface AuditResult {
   domain: string;
@@ -90,7 +92,7 @@ function DNSInspectorContent() {
     queryDomain ? queryDomain.trim().toLowerCase() : "shopify.com"
   );
   const [customSelectors, setCustomSelectors] = useState("shopify, google, k1");
-  const [activeTab, setActiveTab] = useState<"generator" | "inspector">("generator");
+  const [activeTab, setActiveTab] = useState<"generator" | "inspector" | "spf-merge">("generator");
   const [isLoading, setIsLoading] = useState(false);
   const [auditData, setAuditData] = useState<AuditResult | null>(null);
   const [auditError, setAuditError] = useState<ApiError | null>(null);
@@ -336,6 +338,18 @@ function DNSInspectorContent() {
           >
             <Code2 className="w-3.5 h-3.5" />
             Detailed Audit
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("spf-merge")}
+            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "spf-merge"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            SPF Merge Engine
           </button>
         </div>
       </div>
@@ -795,6 +809,16 @@ function DNSInspectorContent() {
             </div>
           )}
         </div>
+      )}
+
+      {/* SPF CONFLICT RESOLUTION & MERGE ENGINE VIEW */}
+      {activeTab === "spf-merge" && (
+        <SpfMergePreview
+          domain={domainInput}
+          onApplied={() => {
+            handleRunAudit();
+          }}
+        />
       )}
     </div>
   );

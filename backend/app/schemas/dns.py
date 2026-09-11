@@ -214,3 +214,49 @@ class RBLScanResponse(BaseModel):
     scan_time_ms: float
     results: List[RBLZoneResult]
     timestamp: datetime
+
+
+# ============================================================================
+# Milestone B: SPF Conflict Resolution & Merge Engine Schemas
+# ============================================================================
+
+class SpfMergePlanRequest(BaseModel):
+    domain: str = Field(..., min_length=3, description="Apex domain with multiple/conflicting SPF records")
+    preferred_qualifier: str = Field(default="~all", pattern="^(~all|-all)$", description="Terminal qualifier (~all or -all)")
+    provider_hints: List[str] = Field(default_factory=list, description="Known provider templates to consider")
+
+
+class SpfMechanism(BaseModel):
+    raw: str = Field(..., description="Original raw representation of mechanism")
+    kind: str = Field(..., description="include | ip4 | ip6 | a | mx | exists | ptr | redirect | all | unknown")
+    qualifier: str = Field(default="+", description="Mechanism qualifier: +, -, ~, ?")
+    normalized_value: str = Field(..., description="Canonicalized term for deduplication")
+    source_record_indexes: List[int] = Field(default_factory=list, description="Indexes of source TXT records containing this mechanism")
+
+
+class SpfLookupBudget(BaseModel):
+    static_terms: int = Field(..., ge=0, description="Count of lookups incurred directly in apex record (include, a, mx, ptr, exists, redirect)")
+    recursively_resolved_terms: int = Field(..., ge=0, description="Total lookups incurred across recursive include/redirect chain")
+    maximum_allowed: int = Field(default=10, description="RFC 7208 maximum allowable DNS lookups (10)")
+    status: str = Field(..., description="'within_limit' | 'over_limit' | 'unknown'")
+    resolution_failures: List[str] = Field(default_factory=list, description="DNS resolution errors encountered during lookups")
+
+
+class SpfMergeWarning(BaseModel):
+    code: str = Field(..., description="Machine-readable error/warning code")
+    severity: str = Field(..., description="'info' | 'warning' | 'critical'")
+    message: str = Field(..., description="Actionable human explanation")
+
+
+class SpfMergePlanResponse(BaseModel):
+    plan_id: str = Field(..., description="UUID or unique identifier for the generated merge plan")
+    domain: str = Field(..., description="Normalized target domain")
+    source_records: List[str] = Field(..., description="All discovered v=spf1 TXT records on target domain")
+    proposed_record: Optional[str] = Field(None, description="Consolidated single proposed SPF record string")
+    mechanisms: List[SpfMechanism] = Field(default_factory=list, description="Resolved and retained mechanisms")
+    removed_duplicates: List[str] = Field(default_factory=list, description="Redundant mechanisms eliminated during merge")
+    warnings: List[SpfMergeWarning] = Field(default_factory=list, description="Safety and RFC compliance notices")
+    lookup_budget: SpfLookupBudget = Field(..., description="Lookup usage analysis against RFC 7208 10-lookup limit")
+    safe_to_apply: bool = Field(..., description="Whether plan can safely be injected automatically")
+    requires_manual_review: bool = Field(..., description="Whether administrative review is required before application")
+    expires_at: str = Field(..., description="ISO 8601 expiration timestamp of the plan snapshot")

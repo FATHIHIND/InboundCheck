@@ -16,6 +16,7 @@ from app.services.shopify.shopify_service import shopify_service
 from app.services.supabase_client import supabase_service
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.dns.scorer import DeliverabilityScorer
+from app.schemas.shopify_readiness import ShopifyReadinessRequest, ShopifyReadinessResponse
 
 logger = logging.getLogger("ShopifyRoutes")
 
@@ -290,4 +291,42 @@ async def get_shopify_webhook_logs(user_id: str = Depends(get_current_user_id)):
     except Exception as e:
         logger.error(f"Failed to fetch webhook logs for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve Shopify webhook logs")
+
+
+@router.post("/deliverability-readiness", response_model=ShopifyReadinessResponse)
+async def evaluate_deliverability_readiness(
+    request: ShopifyReadinessRequest,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Evaluate 6 core deliverability readiness checks for Shopify Zero-Spam delivery:
+    1. custom_sending_domain
+    2. shopify_dkim
+    3. spf_alignment
+    4. dmarc_policy
+    5. spf_conflict
+    6. shared_pool_exposure
+    """
+    try:
+        from app.schemas.shopify_readiness import ShopifyReadinessResponse
+        from app.services.shopify.deliverability_readiness_service import deliverability_readiness_service
+        
+        target_domain = request.domain
+        if not target_domain:
+            domains = supabase_service.get_user_domains(user_id)
+            if domains and len(domains) > 0:
+                target_domain = domains[0].get("domain_name")
+
+        if not target_domain:
+            target_domain = "shopify.com"
+
+        return await deliverability_readiness_service.evaluate_readiness(
+            domain=target_domain,
+            user_id=user_id,
+            store_id=request.store_id
+        )
+    except Exception as e:
+        logger.error(f"Failed to evaluate deliverability readiness: {e}")
+        raise HTTPException(status_code=500, detail="Failed to evaluate deliverability readiness")
+
 

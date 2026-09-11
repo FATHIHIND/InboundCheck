@@ -30,6 +30,8 @@ import ReputationTrendChart, { ReputationPoint } from "./components/ReputationTr
 import CheckHistoryChart, { IMAPCheckLog } from "./components/CheckHistoryChart";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityRiskBanner";
+import { ZeroSpamWizardModal } from "./shopify/zero-spam-wizard";
 
 const ScoreGauge3DCanvas = dynamic(() => import("./components/ScoreGauge3DCanvas"), { ssr: false });
 const InboxWitnessCanvas = dynamic(() => import("./components/InboxWitnessCanvas"), { ssr: false });
@@ -61,6 +63,7 @@ export default function DashboardOverviewPage() {
   const [newDomainInput, setNewDomainInput] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [showWizardModal, setShowWizardModal] = useState(false);
 
   // Reputation trajectory data
   const [reputationPoints, setReputationPoints] = useState<ReputationPoint[]>([]);
@@ -299,6 +302,16 @@ export default function DashboardOverviewPage() {
           onRetry={handleRunPipeline}
         />
       )}
+
+      {/* Deliverability Revenue-at-Risk Diagnostic Banner */}
+      <DeliverabilityRiskBanner
+        domain={
+          selectedStore !== "all"
+            ? stores.find((s) => s.shopify_store === selectedStore)?.domain_name
+            : stores[0]?.domain_name
+        }
+        onOpenWizard={() => setShowWizardModal(true)}
+      />
 
       {/* 2. Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -643,6 +656,20 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
       )}
+
+      {/* Zero-Spam Multi-Step Readiness Wizard */}
+      <ZeroSpamWizardModal
+        isOpen={showWizardModal}
+        onClose={() => setShowWizardModal(false)}
+        domain={
+          selectedStore !== "all"
+            ? stores.find((s) => s.shopify_store === selectedStore)?.domain_name
+            : stores[0]?.domain_name
+        }
+        onSuccess={() => {
+          reloadDomains();
+        }}
+      />
     </div>
   );
 }

@@ -18,11 +18,14 @@ from app.schemas.dns import (
     DNSRecordFix,
     RBLScanRequest,
     RBLScanResponse,
+    SpfMergePlanRequest,
+    SpfMergePlanResponse,
 )
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine, DEFAULT_DKIM_SELECTORS
 from app.services.dns.scorer import DeliverabilityScorer
 from app.services.dns.record_generator import DNSRecordGenerator
 from app.services.dns.rbl_scanner import rbl_scanner
+from app.services.dns.spf_merge_engine import spf_merge_engine
 from app.services.alert_dispatcher import alert_dispatcher
 
 logger = logging.getLogger("DNSRoutes")
@@ -188,3 +191,44 @@ async def get_latest_rbl_status(
         raise HTTPException(status_code=404, detail="No RBL scan recorded for this domain.")
 
     return scan
+
+
+@router.post("/spf-merge-plan", response_model=SpfMergePlanResponse)
+async def create_spf_merge_plan(
+    request: SpfMergePlanRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Generate an RFC 7208 SPF conflict resolution and consolidation plan.
+    Deduplicates mechanisms, validates recursive lookup budget against the 10-lookup cap,
+    and safeguards against race conditions with deterministic plan hashing.
+    """
+    clean_domain = request.domain.strip().lower()
+    if not clean_domain or len(clean_domain) < 3:
+        raise HTTPException(status_code=400, detail="A valid domain name is required.")
+
+    if DNSDiagnosticEngine.is_ssrf_restricted(clean_domain):
+        raise HTTPException(status_code=400, detail="Restricted IP or domain target is not permitted.")
+
+    # Match against monitored domain if registered
+    domains = supabase_service.get_user_domains(user_id, limit=100)
+    domain_match = next((d for d in domains if d.get("domain_name", "").lower() == clean_domain), None)
+    domain_id = domain_match.get("id") if domain_match else None
+
+    try:
+        plan = await spf_merge_engine.create_plan(
+            domain=clean_domain,
+            user_id=user_id,
+            preferred_qualifier=request.preferred_qualifier,
+            provider_hints=request.provider_hints,
+            domain_id=domain_id,
+        )
+        return plan
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create SPF merge plan for {clean_domain}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate SPF merge plan: {str(e)}",
+        )

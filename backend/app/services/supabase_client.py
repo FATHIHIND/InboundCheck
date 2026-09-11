@@ -32,6 +32,7 @@ class SupabaseService:
         self._in_memory_reputation: Dict[str, List[Dict[str, Any]]] = {}
         self._in_memory_transactional_messages: Dict[str, Dict[str, Any]] = {}
         self._in_memory_delivery_failure_events: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_spf_merge_plans: Dict[str, Dict[str, Any]] = {}
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -109,6 +110,8 @@ class SupabaseService:
         # Fallback in-memory
         all_domains = self._in_memory_domains.get(user_id, [])
         return all_domains[offset:offset + limit]
+
+    get_monitored_domains = get_user_domains
 
     def create_or_update_domain(
         self,
@@ -1016,6 +1019,51 @@ class SupabaseService:
                 evt.update(payload)
                 return True
         return False
+
+    def save_spf_merge_plan(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Persist generated SPF merge plan into public.spf_merge_plans.
+        """
+        plan_id = plan_data.get("id") or str(uuid.uuid4())
+        record = {
+            **plan_data,
+            "id": plan_id,
+            "created_at": plan_data.get("created_at") or (datetime.now(timezone.utc).isoformat()),
+        }
+
+        if self._client:
+            try:
+                res = self._client.table("spf_merge_plans").insert(record).execute()
+                if res.data and len(res.data) > 0:
+                    self._in_memory_spf_merge_plans[plan_id] = res.data[0]
+                    return res.data[0]
+            except Exception as e:
+                logger.warning(f"Could not insert into spf_merge_plans table: {e}. Storing in memory.")
+
+        self._in_memory_spf_merge_plans[plan_id] = record
+        return record
+
+    def get_spf_merge_plan(self, plan_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve SPF merge plan by ID with tenant isolation.
+        """
+        if self._client:
+            try:
+                query = self._client.table("spf_merge_plans").select("*").eq("id", plan_id)
+                if user_id:
+                    query = query.eq("user_id", user_id)
+                res = query.execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+            except Exception as e:
+                logger.warning(f"Could not query spf_merge_plans: {e}")
+
+        plan = self._in_memory_spf_merge_plans.get(plan_id)
+        if plan:
+            if user_id and plan.get("user_id") != user_id:
+                return None
+            return plan
+        return None
 
 
 supabase_service = SupabaseService()

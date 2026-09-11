@@ -22,10 +22,13 @@ import {
   Key,
   X,
   ExternalLink,
-  Shield
+  Shield,
+  Sparkles
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityRiskBanner";
+import { ZeroSpamWizardModal } from "./zero-spam-wizard";
 
 interface TelegramIncidentLog {
   id: string;
@@ -74,6 +77,7 @@ export default function ShopifyHubPage() {
   const [hmacSecretInput, setHmacSecretInput] = useState("");
   const [hmacVerified, setHmacVerified] = useState(false);
   const [isVerifyingHmac, setIsVerifyingHmac] = useState(false);
+  const [showWizardModal, setShowWizardModal] = useState(false);
 
   // 1. Data-State Contract for Connected Shopify Stores
   const {
@@ -228,17 +232,34 @@ export default function ShopifyHubPage() {
           </p>
         </div>
 
-        <EmeraldHoverButton
-          onClick={handleSimulateOrder}
-          isLoading={isSimulating}
-          loadingText="Simulating Pipeline..."
-          icon={<Zap className="w-3.5 h-3.5 fill-current" />}
-          size="sm"
-          variant="primary"
-        >
-          Simulate Test Order
-        </EmeraldHoverButton>
+        <div className="flex items-center gap-3">
+          <EmeraldHoverButton
+            onClick={() => setShowWizardModal(true)}
+            size="sm"
+            variant="solid"
+            icon={<Sparkles className="w-3.5 h-3.5" />}
+          >
+            Zero-Spam Wizard
+          </EmeraldHoverButton>
+
+          <EmeraldHoverButton
+            onClick={handleSimulateOrder}
+            isLoading={isSimulating}
+            loadingText="Simulating Pipeline..."
+            icon={<Zap className="w-3.5 h-3.5 fill-current" />}
+            size="sm"
+            variant="primary"
+          >
+            Simulate Test Order
+          </EmeraldHoverButton>
+        </div>
       </div>
+
+      {/* Deliverability Revenue-at-Risk Diagnostic Banner */}
+      <DeliverabilityRiskBanner
+        domain={customDomain || storeDomain || undefined}
+        onOpenWizard={() => setShowWizardModal(true)}
+      />
 
       {simulationError && (
         <OperationalErrorCard
@@ -621,6 +642,16 @@ export default function ShopifyHubPage() {
           </div>
         </div>
       )}
+
+      {/* Zero-Spam Multi-Step Readiness Wizard */}
+      <ZeroSpamWizardModal
+        isOpen={showWizardModal}
+        onClose={() => setShowWizardModal(false)}
+        domain={customDomain || storeDomain || undefined}
+        onSuccess={() => {
+          reloadStores();
+        }}
+      />
     </div>
   );
 }

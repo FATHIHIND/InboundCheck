@@ -114,3 +114,45 @@ async def get_reputation_trend(
 
     # Never manufacture fake reputation trend points. Return empty list if no historical checks exist.
     return {"success": True, "points": points}
+
+
+@router.get("/revenue-at-risk")
+async def get_revenue_at_risk(
+    domain: Optional[str] = Query(None, description="Optional domain to evaluate"),
+    order_count: Optional[int] = Query(None, ge=0, description="Monthly order volume"),
+    aov_cents: Optional[int] = Query(None, ge=0, description="Average order value in cents"),
+    impact_factor: float = Query(1.0, ge=0.1, le=5.0, description="Customer impact multiplier"),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Calculate Expected Revenue-at-Risk based on store email deliverability posture:
+    Expected Risk = (Order Count * AOV) * Impairment Probability * Customer Impact Factor
+    """
+    from app.services.analytics.revenue_risk_service import revenue_risk_service
+    return revenue_risk_service.calculate_and_record_risk(
+        user_id=user_id,
+        domain=domain,
+        order_count=order_count,
+        average_order_value_cents=aov_cents,
+        customer_impact_factor=impact_factor
+    )
+
+
+@router.post("/revenue-at-risk")
+async def post_revenue_at_risk(
+    payload: Optional[Dict[str, Any]] = None,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Recalculate Expected Revenue-at-Risk with custom parameters.
+    """
+    from app.services.analytics.revenue_risk_service import revenue_risk_service
+    p = payload or {}
+    return revenue_risk_service.calculate_and_record_risk(
+        user_id=user_id,
+        domain=p.get("domain"),
+        order_count=p.get("order_count"),
+        average_order_value_cents=p.get("average_order_value_cents"),
+        customer_impact_factor=p.get("customer_impact_factor", 1.0)
+    )
+
