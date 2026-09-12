@@ -458,7 +458,7 @@ function DNSInspectorContent() {
                 <div className="text-xs text-zinc-300 flex items-center gap-2 pt-1 border-t border-emerald-500/20">
                   <Send className="w-3.5 h-3.5 text-emerald-400" />
                   <span>
-                    Dispatched Telegram confirmation alert to <strong className="text-white">@inboundcheck_alerts</strong>: Domain <code className="text-emerald-300">{domainInput}</code> DNS active.
+                    Alert delivery sent to Telegram for <strong className="text-white">@inboundcheck_alerts</strong>: Domain <code className="text-emerald-300">{domainInput}</code> DNS active.
                   </span>
                 </div>
               )}
@@ -574,7 +574,7 @@ function DNSInspectorContent() {
                     className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-lg text-xs px-3 py-1.5 transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)] font-mono"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    .zone File
+                    Official Domain DNS Records (.zone)
                   </button>
                 </div>
               </div>
@@ -782,7 +782,7 @@ function DNSInspectorContent() {
           >
             <div className="flex items-center gap-2.5">
               <Code2 className="w-4 h-4 text-emerald-400" />
-              <span className="font-bold text-white">Raw Diagnostic JSON Payload</span>
+              <span className="font-bold text-white">Raw Diagnostic JSON Report</span>
               <span className="text-xs px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
                 {auditData ? `${auditData.execution_time_ms}ms execution` : "237.92ms execution"}
               </span>
@@ -807,7 +807,7 @@ function DNSInspectorContent() {
                   className="border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs font-mono px-3 py-1 transition flex items-center gap-1.5 cursor-pointer"
                 >
                   {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copiedJson ? "Payload Copied" : "Copy JSON"}
+                  {copiedJson ? "JSON Copied" : "Copy JSON"}
                 </button>
               </div>
               <pre className="text-emerald-400/90 font-mono text-xs overflow-x-auto max-h-80 p-4 bg-[#08080A] rounded-lg border border-zinc-800/80 selection:bg-emerald-500/30">

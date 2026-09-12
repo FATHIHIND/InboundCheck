@@ -165,7 +165,7 @@ function SettingsContent() {
         setTelegramErrorMessage(null);
       } else {
         setTelegramPingResult("error");
-        setTelegramErrorMessage(data?.error || data?.detail || "Telegram dispatch failed. Check Bot Token and Chat ID.");
+        setTelegramErrorMessage(data?.error || data?.detail || "Telegram alert delivery failed. Check Bot Token and Chat ID.");
       }
     } catch (err: any) {
       setTelegramPingResult("error");
@@ -463,7 +463,7 @@ function SettingsContent() {
             {/* Telegram Bot Real-Time Incident Alert Engine */}
             <GlassEmeraldCard
               title="Telegram Real-Time Incident Alert Engine"
-              subtitle="Dispatches instant rich Markdown alerts when emails land in spam, bounce, or trigger RBL blacklists"
+              subtitle="Delivers instant rich alerts when customer emails land in spam, bounce, or trigger blacklists"
               badgeText="BOT ACTIVE"
               badgeVariant="emerald"
               icon={<Radio className="w-5 h-5 text-emerald-400" />}
@@ -498,7 +498,7 @@ function SettingsContent() {
               <div className="pt-2 flex flex-col gap-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#08080A] p-3.5 rounded-lg border border-zinc-800">
                   <span className="text-[11px] text-zinc-400 font-sans">
-                    Test your Telegram Bot connection with a live rich incident simulation payload.
+                    Test your Telegram Bot connection with a live test incident alert.
                   </span>
                   <button
                     type="button"
@@ -522,9 +522,9 @@ function SettingsContent() {
                       <Zap className="w-3.5 h-3.5 text-emerald-400 fill-current" />
                     )}
                     {telegramPingResult === "success"
-                      ? "Alert Dispatched to Telegram!"
+                      ? "Alert Delivered to Telegram!"
                       : telegramPingResult === "error"
-                      ? "Dispatch Failed!"
+                      ? "Alert Delivery Failed!"
                       : "⚡ Send Test Telegram Alert"}
                   </button>
                 </div>
@@ -533,7 +533,7 @@ function SettingsContent() {
                   <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-start gap-2.5 animate-fadeIn">
                     <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-rose-400 block">Telegram Dispatch Failed:</span>
+                      <span className="font-bold text-rose-400 block">Telegram Alert Delivery Failed:</span>
                       <span className="text-[11px] text-rose-300/90 leading-relaxed block mt-0.5">
                         {telegramErrorMessage}
                       </span>

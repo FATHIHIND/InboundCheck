@@ -417,7 +417,7 @@ export default function BlacklistRadarPage() {
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 text-xs">
           <span className="font-mono text-emerald-400 font-bold flex items-center gap-2">
             <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
-            GLOBAL REPUTATION RADAR & SURVEILLANCE MATRIX
+            GLOBAL SPAM BLACKLIST NETWORK
           </span>
           <span className="text-[10px] font-mono text-zinc-400">
             {scan ? `${scan.rbl_total_count} AUTHORITATIVE LISTS` : "AWAITING SCAN"}
@@ -512,7 +512,7 @@ export default function BlacklistRadarPage() {
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
-          title="Avg Lookup Latency"
+          title="Verification Speed"
           subtitle="Check Response Speed"
           badgeText={scan ? `${scan.execution_time_ms.toFixed(0)}ms scan` : "Real-time"}
           badgeVariant="cyan"
@@ -567,7 +567,7 @@ export default function BlacklistRadarPage() {
       {/* 9. Measured Authoritative RBL Monitoring Matrix Table */}
       {scan && (
         <GlassEmeraldCard
-          title="Global Blacklist Monitoring Matrix"
+          title="Global Spam Blacklist Network"
           subtitle="Real-time reputation monitoring and delisting gateway access"
           badgeText={`${scan.rbl_total_count} Lists Monitored`}
           badgeVariant="emerald"
@@ -581,7 +581,7 @@ export default function BlacklistRadarPage() {
                   <th className="py-3 px-4 font-semibold">Reputation Network</th>
                   <th className="py-3 px-4 font-semibold">Target Type</th>
                   <th className="py-3 px-4 font-semibold">Measured Status</th>
-                  <th className="py-3 px-4 font-semibold">Latency</th>
+                  <th className="py-3 px-4 font-semibold">Verification Speed</th>
                   <th className="py-3 px-4 font-semibold text-right">Delisting Portal</th>
                 </tr>
               </thead>
@@ -708,7 +708,7 @@ export default function BlacklistRadarPage() {
                                     {rbl.message || "Reputation verified clean across database."}
                                   </span>
                                   <span className="text-[10px] text-zinc-400 block mt-0.5">
-                                    Latency: {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "timeout"}
+                                    Verification Speed: {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "timeout"}
                                   </span>
                                 </div>
                               </div>

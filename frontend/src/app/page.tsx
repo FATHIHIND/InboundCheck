@@ -150,7 +150,7 @@ export default function LandingPage() {
     },
     {
       q: "Will this fix my Google & Yahoo 2024 compliance warnings?",
-      a: "Yes, 100%. InboundCheck generates verified RFC-compliant SPF records with automated recursion flattening (keeping lookup counts under 10), configures 2048-bit DKIM keys, and establishes continuous DMARC aggregate monitoring to permanently clear compliance warnings.",
+      a: "Yes, 100%. InboundCheck generates verified Google & Yahoo 2024 compliant SPF records with automated recursion flattening (keeping lookup counts under 10), configures 2048-bit DKIM keys, and establishes continuous DMARC aggregate monitoring to permanently clear compliance warnings.",
     },
     {
       q: "How long does the 1-Click Cloudflare & GoDaddy DNS auto-fix take?",
@@ -303,7 +303,7 @@ export default function LandingPage() {
                       <Terminal size={12} className="text-emerald-400" />
                       LIVE DIAGNOSTIC PROBE: {domainInput}
                     </span>
-                    <span className="text-emerald-400">RFC 1035 VALIDATOR</span>
+                    <span className="text-emerald-400">GOOGLE &amp; YAHOO 2024 VALIDATOR</span>
                   </div>
 
                   <div className="space-y-1.5 text-[11px]">
@@ -338,7 +338,7 @@ export default function LandingPage() {
                             Deliverability Vulnerabilities Detected
                           </div>
                           <p className="text-[11px] text-zinc-300 font-sans leading-relaxed">
-                            Your domain shows <strong className="text-red-400">2 critical deliverability anomalies</strong>: SPF lookup count exceeds RFC limits and DMARC policy is currently set to <code className="text-amber-300">p=none</code>.
+                            Your domain shows <strong className="text-red-400">2 critical deliverability anomalies</strong>: SPF lookup count exceeds Google &amp; Yahoo 2024 limits and DMARC policy is currently set to <code className="text-amber-300">p=none</code>.
                           </p>
                         </div>
                       </div>
@@ -833,7 +833,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="relative z-10 py-8 px-4 border-t border-white/[0.06] text-center text-xs text-zinc-500 font-mono space-y-2">
         <div>InboundCheck Enterprise — High-Precision Shopify Email Deliverability Platform</div>
-        <div className="text-[10px] text-zinc-600">RFC 1035 • RFC 7489 • Google & Yahoo 2024 Mailbox Compliant</div>
+        <div className="text-[10px] text-zinc-600">Google &amp; Yahoo 2024 Sender Compliant • DMARC Protection • Primary Inbox Delivery</div>
       </footer>
     </div>
   );

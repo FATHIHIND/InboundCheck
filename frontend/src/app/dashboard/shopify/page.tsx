@@ -16,12 +16,15 @@ import {
   XCircle,
   Radio,
   Shield,
-  Sparkles
+  Sparkles,
+  Sliders,
+  Edit3
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityRiskBanner";
 import { ZeroSpamWizardModal } from "./zero-spam-wizard";
+import { StoreSettingsDrawer } from "./StoreSettingsDrawer";
 
 interface TelegramIncidentLog {
   id: string;
@@ -46,12 +49,21 @@ interface ShopifyStoreItem {
   sender_email?: string;
   is_active: boolean;
   connected_at?: string;
+  metadata?: {
+    name?: string;
+    email?: string;
+    esp_provider?: string;
+  };
 }
 
 export default function ShopifyHubPage() {
+  const [storeName, setStoreName] = useState("");
   const [storeDomain, setStoreDomain] = useState("");
   const [customDomain, setCustomDomain] = useState("");
   const [senderEmail, setSenderEmail] = useState("");
+
+  // In-Context Store Management Modal Drawer State
+  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
 
   // Simulation State
   const [isSimulating, setIsSimulating] = useState(false);
@@ -101,10 +113,13 @@ export default function ShopifyHubPage() {
       setStoreDomain(first.shop_domain || "");
       setCustomDomain(first.custom_domain || first.shop_domain.replace(".myshopify.com", ".com"));
       setSenderEmail(first.sender_email || `orders@${first.shop_domain.replace(".myshopify.com", ".com")}`);
+      if (first.metadata?.name) {
+        setStoreName(first.metadata.name);
+      }
     }
   }, [storesResource]);
 
-  // Enhanced Test Order Simulator calling backend API
+  // Enhanced Test Order Simulator calling backend API (development mode)
   const handleSimulateOrder = async () => {
     setIsSimulating(true);
     setSimulationResult(null);
@@ -182,7 +197,7 @@ export default function ShopifyHubPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-emerald-400" />
-            Shopify Store Sync & Inbox Protection
+            Shopify Store Sync &amp; Inbox Protection
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
             Automated order delivery monitoring, transactional sender domain alignment, and real-time incident alerting.
@@ -191,24 +206,35 @@ export default function ShopifyHubPage() {
 
         <div className="flex items-center gap-3">
           <EmeraldHoverButton
-            onClick={() => setShowWizardModal(true)}
+            onClick={() => setShowSettingsDrawer(true)}
             size="sm"
             variant="solid"
+            icon={<Sliders className="w-3.5 h-3.5" />}
+          >
+            Configure Store
+          </EmeraldHoverButton>
+
+          <EmeraldHoverButton
+            onClick={() => setShowWizardModal(true)}
+            size="sm"
+            variant="outline"
             icon={<Sparkles className="w-3.5 h-3.5" />}
           >
             Protect Store Revenue
           </EmeraldHoverButton>
 
-          <EmeraldHoverButton
-            onClick={handleSimulateOrder}
-            isLoading={isSimulating}
-            loadingText="Simulating Order Delivery..."
-            icon={<Zap className="w-3.5 h-3.5 fill-current" />}
-            size="sm"
-            variant="primary"
-          >
-            Simulate Test Order
-          </EmeraldHoverButton>
+          {process.env.NODE_ENV === "development" && (
+            <EmeraldHoverButton
+              onClick={handleSimulateOrder}
+              isLoading={isSimulating}
+              loadingText="Simulating Order Delivery..."
+              icon={<Zap className="w-3.5 h-3.5 fill-current" />}
+              size="sm"
+              variant="secondary"
+            >
+              Simulate Test Order
+            </EmeraldHoverButton>
+          )}
         </div>
       </div>
 
@@ -231,7 +257,7 @@ export default function ShopifyHubPage() {
       {storesResource.state === "loading" && (
         <OperationalLoadingState
           label="Checking Shopify store synchronization..."
-          subtext="Querying merchant store OAuth connection records"
+          subtext="Querying merchant store connection records"
           rows={2}
         />
       )}
@@ -248,17 +274,12 @@ export default function ShopifyHubPage() {
       {storesResource.state === "empty" && (
         <OperationalEmptyState
           icon={<ShoppingBag className="w-8 h-8 text-emerald-400" />}
-          badge="Awaiting Shopify OAuth Connection"
-          title="No Shopify Stores Connected Yet"
-          description="Connect your Shopify Plus or DTC store using OAuth to enable automatic transactional email alignment monitoring, real-time order delivery tracking, and incident alerts."
+          badge="Awaiting Store Configuration"
+          title="No Shopify Stores Configured Yet"
+          description="Configure your Shopify Plus or DTC store sending domain to enable automatic Google & Yahoo 2024 Sender Compliance monitoring, protect Order Confirmation Receipts, and avoid customer chargebacks."
           action={{
-            label: "Connect Shopify Store",
-            onClick: () => {
-              const shop = prompt("Enter your myshopify domain (e.g. your-store.myshopify.com):");
-              if (shop) {
-                window.location.href = `/api/v1/shopify/oauth/authorize?shop=${encodeURIComponent(shop)}`;
-              }
-            },
+            label: "Configure Store",
+            onClick: () => setShowSettingsDrawer(true),
           }}
         />
       )}
@@ -285,10 +306,12 @@ export default function ShopifyHubPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <GlassEmeraldCard
           title="Store Sender Profile"
-          subtitle="Verify your store sending domain and email"
+          subtitle="Verify your store sending domain, sender email, and integrated ESP"
           badgeText="Active Profile"
           badgeVariant="emerald"
           icon={<ShoppingBag className="w-5 h-5 text-emerald-400" />}
+          actionLabel="Configure Store"
+          onActionClick={() => setShowSettingsDrawer(true)}
           className="space-y-4"
         >
           <div className="space-y-3 font-mono text-xs">
@@ -326,7 +349,7 @@ export default function ShopifyHubPage() {
             </div>
           </div>
 
-          <div className="pt-2 flex flex-col gap-2">
+          <div className="pt-2 flex flex-col sm:flex-row gap-2">
             <EmeraldHoverButton
               onClick={handleAuditAlignment}
               isLoading={isCheckingAlignment}
@@ -334,10 +357,19 @@ export default function ShopifyHubPage() {
               icon={<ShieldCheck className="w-3.5 h-3.5" />}
               size="sm"
               variant="primary"
-              className="w-full py-2.5"
+              className="flex-1 py-2.5"
             >
               Audit Store Deliverability
             </EmeraldHoverButton>
+
+            <button
+              type="button"
+              onClick={() => setShowSettingsDrawer(true)}
+              className="bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 font-medium px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+              Edit Store
+            </button>
           </div>
 
           {alignmentError && (
@@ -522,6 +554,31 @@ export default function ShopifyHubPage() {
         domain={customDomain || storeDomain || undefined}
         onSuccess={() => {
           reloadStores();
+        }}
+      />
+
+      {/* In-Context Store Management Obsidian Drawer */}
+      <StoreSettingsDrawer
+        isOpen={showSettingsDrawer}
+        onClose={() => setShowSettingsDrawer(false)}
+        initialStoreName={storeName}
+        initialShopDomain={storeDomain}
+        initialCustomDomain={customDomain}
+        initialSenderEmail={senderEmail}
+        onSuccess={(updated) => {
+          reloadStores();
+          if (updated?.store?.custom_domain) {
+            setCustomDomain(updated.store.custom_domain);
+          }
+          if (updated?.store?.sender_email) {
+            setSenderEmail(updated.store.sender_email);
+          }
+          if (updated?.store?.shop_domain) {
+            setStoreDomain(updated.store.shop_domain);
+          }
+          if (updated?.store?.metadata?.name) {
+            setStoreName(updated.store.metadata.name);
+          }
         }}
       />
     </div>

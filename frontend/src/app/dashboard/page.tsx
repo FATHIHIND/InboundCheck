@@ -241,7 +241,7 @@ export default function DashboardOverviewPage() {
             Shopify Store Deliverability & Revenue Shield
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Ensure order confirmations and marketing flows land in the primary inbox (Google &amp; Yahoo 2024 Compliant). Prevent Customer Support Disputes, Protect Order Receipts, and Recover Lost Checkout Revenue.
+            Protect Store GMV, prevent silent spam drops, and avoid customer disputes (chargebacks) by ensuring Order Confirmation Receipts, Tracking Numbers, and Abandoned Cart Recovery emails land in the primary inbox.
           </p>
         </div>
 
@@ -433,7 +433,7 @@ export default function DashboardOverviewPage() {
 
         <GlassEmeraldCard
           title="Telegram Incident Guard"
-          subtitle="Instant Alert Dispatch"
+          subtitle="Instant Alert Delivery"
           badgeText="Active Failover"
           badgeVariant="cyan"
           metricValue="0 Missed"

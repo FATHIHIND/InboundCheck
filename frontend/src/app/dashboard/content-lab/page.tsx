@@ -184,57 +184,57 @@ export default function AIContentLabPage() {
         </div>
       </div>
 
-      {/* 2. Top Metrics Strip (3 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <GlassEmeraldCard
-          title="Flagged Templates"
-          subtitle="High-Friction Triggers"
-          badgeText={flaggedEmails.length > 0 ? (flaggedCount > 0 ? "Requires Action" : "All Clear") : "All Clear"}
-          badgeVariant={flaggedCount > 0 ? "amber" : "emerald"}
-          metricValue={flaggedEmails.length > 0 ? flaggedCount : "--"}
-          icon={<MailWarning className="w-5 h-5 text-emerald-400" />}
-        >
-          <p className="text-xs text-zinc-400">
-            {flaggedEmails.length > 0
-              ? "High-friction promotional phrases detected by deliverability scanner."
-              : "No templates flagged. Import store templates to evaluate trigger phrases."}
-          </p>
-        </GlassEmeraldCard>
+      {/* 2. Top Metrics Strip (Rendered only when templates exist) */}
+      {flaggedEmails.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <GlassEmeraldCard
+            title="Flagged Templates"
+            subtitle="High-Friction Triggers"
+            badgeText={flaggedCount > 0 ? "Requires Action" : "All Clear"}
+            badgeVariant={flaggedCount > 0 ? "amber" : "emerald"}
+            metricValue={flaggedCount}
+            icon={<MailWarning className="w-5 h-5 text-emerald-400" />}
+          >
+            <p className="text-xs text-zinc-400">
+              High-friction promotional phrases detected by deliverability scanner.
+            </p>
+          </GlassEmeraldCard>
 
-        <GlassEmeraldCard
-          title="Avg Spam Density"
-          subtitle="Promotional Phrase Ratio"
-          badgeText={flaggedEmails.length > 0 ? "Target < 10.0%" : "Awaiting Scan"}
-          badgeVariant={flaggedEmails.length > 0 ? (avgSpamDensity && avgSpamDensity > 10 ? "amber" : "emerald") : "neutral"}
-          metricValue={avgSpamDensity !== null ? `${avgSpamDensity.toFixed(1)}%` : "--%"}
-          icon={<Flame className="w-5 h-5 text-emerald-400" />}
-        >
-          <p className="text-xs text-zinc-400">
-            Target &lt; 10.0% for zero filter drops under Google &amp; Yahoo 2024 Bulk Sender rules.
-          </p>
-        </GlassEmeraldCard>
+          <GlassEmeraldCard
+            title="Avg Spam Density"
+            subtitle="Promotional Phrase Ratio"
+            badgeText="Target < 10.0%"
+            badgeVariant={avgSpamDensity && avgSpamDensity > 10 ? "amber" : "emerald"}
+            metricValue={avgSpamDensity !== null ? `${avgSpamDensity.toFixed(1)}%` : "--%"}
+            icon={<Flame className="w-5 h-5 text-emerald-400" />}
+          >
+            <p className="text-xs text-zinc-400">
+              Target &lt; 10.0% for zero filter drops under Google &amp; Yahoo 2024 Bulk Sender rules.
+            </p>
+          </GlassEmeraldCard>
 
-        <GlassEmeraldCard
-          title="Protected Deliverability"
-          subtitle="Polymorphic AI Optimization"
-          badgeText={flaggedEmails.length > 0 ? "Primary Inbox" : "Standby"}
-          badgeVariant="emerald"
-          metricValue={flaggedEmails.length > 0 ? "99.8%" : "--%"}
-          icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
-        >
-          <p className="text-xs text-zinc-400">
-            Primary Inbox landing rate with clean Liquid-preserved copy variations.
-          </p>
-        </GlassEmeraldCard>
-      </div>
+          <GlassEmeraldCard
+            title="Protected Deliverability"
+            subtitle="Polymorphic AI Optimization"
+            badgeText="Primary Inbox"
+            badgeVariant="emerald"
+            metricValue="99.8%"
+            icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
+          >
+            <p className="text-xs text-zinc-400">
+              Primary Inbox landing rate with clean Liquid-preserved copy variations.
+            </p>
+          </GlassEmeraldCard>
+        </div>
+      )}
 
-      {/* 3. Main Section: Flagged Spam Emails Registry (Table View) */}
+      {/* 3. Main Section: Flagged Spam Emails Registry (Table View or Neutral Zero State) */}
       {flaggedEmails.length === 0 ? (
         <OperationalEmptyState
           icon={<ShieldCheck className="w-8 h-8 text-emerald-400" />}
           badge="Inbox Protected"
-          title="No Flagged Email Templates"
-          description="No templates imported yet. Connect your Shopify store templates to run AI deliverability optimization, eliminate spam triggers, and preserve Liquid tags."
+          title="No Templates Imported Yet"
+          description="No templates imported yet. Connect your store templates to scan for spam-trigger words."
           action={{
             label: "Analyze Store Email Templates",
             onClick: () => {

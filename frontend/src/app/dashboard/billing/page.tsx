@@ -465,7 +465,7 @@ export default function BillingPortalPage() {
       {/* 3. Reconciled Receipts & Invoicing Info */}
       <GlassEmeraldCard
         title="Automated Stripe Webhook Reconciliation"
-        subtitle="Cryptographically verified via timestamped HMAC-SHA256 signatures with 24h idempotency deduplication"
+        subtitle="Cryptographically verified via timestamped HMAC-SHA256 signatures with 24h cleaned record rules"
         badgeText="Webhook Active"
         badgeVariant="emerald"
         icon={<Clock className="w-5 h-5 text-emerald-400" />}

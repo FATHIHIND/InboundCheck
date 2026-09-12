@@ -41,6 +41,15 @@ class SimulateOrderRequest(BaseModel):
     sender_email: str = Field(default="orders@luxurystore.com")
 
 
+class UpdateStoreSettingsRequest(BaseModel):
+    store_id: Optional[str] = None
+    store_name: Optional[str] = None
+    shop_domain: Optional[str] = None
+    custom_domain: Optional[str] = None
+    sender_email: Optional[str] = None
+    esp_provider: Optional[str] = "shopify"
+
+
 @router.post("/oauth/authorize")
 async def get_shopify_auth_url(
     request: ConnectStoreRequest,
@@ -278,6 +287,78 @@ async def get_shopify_stores(user_id: str = Depends(get_current_user_id)):
     except Exception as e:
         logger.error(f"Failed to fetch Shopify stores for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve connected Shopify stores")
+
+
+@router.post("/store-settings")
+async def update_store_settings(
+    payload: UpdateStoreSettingsRequest,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Update merchant store configuration in-context: store name, custom domain, sender email, and ESP provider.
+    """
+    try:
+        from app.services.supabase_client import supabase_service
+
+        # 1. Update user profile company_name with store_name if supplied
+        if payload.store_name:
+            if supabase_service.is_connected:
+                try:
+                    supabase_service._client.table("profiles").update({"company_name": payload.store_name}).eq("id", user_id).execute()
+                except Exception as e:
+                    logger.warning(f"Could not update profile company_name: {e}")
+            from app.api.v1.settings import _mock_profiles
+            if user_id in _mock_profiles:
+                _mock_profiles[user_id]["company_name"] = payload.store_name
+
+        # 2. Register/update custom sending domain in monitored_domains
+        if payload.custom_domain:
+            clean_dom = payload.custom_domain.strip().lower()
+            supabase_service.create_or_update_domain(
+                user_id=user_id,
+                domain_name=clean_dom,
+                audit_result=None
+            )
+
+        # 3. Retrieve or create store entry
+        existing_stores = supabase_service.get_user_stores(user_id)
+        existing_store = existing_stores[0] if existing_stores else None
+
+        shop_dom = payload.shop_domain or (existing_store.get("shop_domain") if existing_store else None)
+        if not shop_dom:
+            slug = (payload.store_name or "brand-store").lower().replace(" ", "-")
+            shop_dom = f"{slug}.myshopify.com"
+
+        updated_meta = {
+            "name": payload.store_name or (existing_store.get("metadata", {}).get("name") if existing_store else "Store"),
+            "email": payload.sender_email,
+            "custom_domain": payload.custom_domain,
+            "esp_provider": payload.esp_provider or "shopify",
+            "primary_domain": payload.custom_domain or shop_dom,
+            "myshopify_domain": shop_dom,
+        }
+
+        saved = supabase_service.save_monitored_store(
+            user_id=user_id,
+            shop_domain=shop_dom,
+            access_token_encrypted=existing_store.get("access_token_encrypted", "mock_token") if existing_store else "mock_token",
+            scope="read_orders,write_orders",
+            sender_email=payload.sender_email,
+            store_metadata=updated_meta,
+            sender_alignment_status="aligned"
+        )
+        if payload.custom_domain:
+            saved["custom_domain"] = payload.custom_domain
+        if payload.esp_provider:
+            saved["esp_provider"] = payload.esp_provider
+
+        return {
+            "success": True,
+            "store": saved
+        }
+    except Exception as e:
+        logger.error(f"Failed to update store settings for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update store settings")
 
 
 @router.get("/webhook-logs")

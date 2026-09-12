@@ -92,7 +92,7 @@ export const EmeraldHoverButton = forwardRef<
       );
     } else if (variant === "solid") {
       variantClasses =
-        "border border-emerald-500 bg-emerald-500 text-[#08080A] shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] active:bg-emerald-600";
+        "border border-emerald-500 bg-emerald-500 text-slate-950 font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 hover:border-emerald-400 active:scale-95 transition-all";
       fillElement = (
         <span
           aria-hidden="true"
@@ -108,7 +108,16 @@ export const EmeraldHoverButton = forwardRef<
           className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-emerald-500/20 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none group-active:bg-emerald-500/30 -z-10"
         />
       );
-    } else if (variant === "outline" || variant === "secondary") {
+    } else if (variant === "secondary") {
+      variantClasses =
+        "border border-slate-700/60 bg-slate-900/80 text-slate-200 hover:bg-slate-800 font-medium hover:border-slate-600 transition-all";
+      fillElement = (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-slate-700/30 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none -z-10"
+        />
+      );
+    } else if (variant === "outline") {
       variantClasses =
         "border border-white/[0.12] bg-[#0E0E12]/80 backdrop-blur-md text-zinc-200 hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]";
       fillElement = (
