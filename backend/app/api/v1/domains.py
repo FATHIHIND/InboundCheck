@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 import logging
 
 from app.core.security import get_current_user_id
+from app.core.tier_guards import verify_active_subscription_or_trial, TIER_DOMAIN_LIMITS
 from app.services.supabase_client import supabase_service
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.dns.scorer import DeliverabilityScorer
@@ -22,15 +23,8 @@ router = APIRouter(prefix="/domains", tags=["Monitored Domains"])
 diagnostic_engine = DNSDiagnosticEngine()
 
 
-TIER_DOMAIN_LIMITS = {
-    "starter": 1,
-    "growth": 5,
-    "enterprise": 999
-}
-
-
 class CreateDomainRequest(BaseModel):
-    domain: str = Field(..., description="Apex or subdomain to monitor, e.g. brandshop.com", min_length=3)
+    domain: str = Field(..., description="Apex or subdomain to monitor, e.g. store.com", min_length=3)
     custom_selectors: Optional[List[str]] = None
 
 
@@ -55,21 +49,21 @@ async def list_user_domains(
 @router.post("", response_model=Dict[str, Any])
 async def add_monitored_domain(
     request: CreateDomainRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_profile: dict = Depends(verify_active_subscription_or_trial)
 ):
     """
     Add a new sending domain to continuous monitoring.
     Immediately executes initial DNS diagnostic audit and stores record in Supabase.
-    Enforces subscription tier domain quotas (Starter=1, Growth=5, Enterprise=Unlimited).
+    Enforces subscription tier domain quotas (Starter=1, Growth=3, Enterprise=Unlimited).
     """
+    user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
         clean_domain = request.domain.strip().lower()
         if not clean_domain or len(clean_domain) < 3:
             raise HTTPException(status_code=400, detail="Valid domain name is required.")
 
         # Enforce tier-based domain quota limits
-        profile = supabase_service.get_user_profile(user_id) if supabase_service.is_connected else None
-        tier = (profile.get("tier") or "starter").lower() if profile else "starter"
+        tier = (user_profile.get("subscription_tier") or user_profile.get("tier") or "starter").lower()
         quota_limit = TIER_DOMAIN_LIMITS.get(tier, 1)
 
         # Allow updating existing domain without consuming additional quota

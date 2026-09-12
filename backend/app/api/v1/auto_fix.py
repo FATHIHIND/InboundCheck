@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any, List
 import logging
 
 from app.core.security import get_current_user_id
+from app.core.tier_guards import require_growth_or_enterprise_tier
 from app.services.dns.auto_fixer import dns_auto_fixer_service
 
 logger = logging.getLogger("AutoFixRoutes")
@@ -79,11 +80,12 @@ async def save_provider_credentials(
 @router.post("/apply")
 async def apply_auto_fix(
     payload: ApplyAutoFixRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_profile: dict = Depends(require_growth_or_enterprise_tier)
 ):
     """
     Execute 1-click automatic insertion of SPF, DKIM CNAME, or DMARC records via provider API.
     """
+    user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
         result = await dns_auto_fixer_service.apply_dns_fix(
             user_id=user_id,
@@ -103,11 +105,12 @@ async def apply_auto_fix(
 @router.post("/rollback")
 async def rollback_auto_fix(
     payload: RollbackFixRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_profile: dict = Depends(require_growth_or_enterprise_tier)
 ):
     """
     Roll back an applied DNS record change to its prior snapshot.
     """
+    user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
         result = dns_auto_fixer_service.rollback_dns_fix(
             user_id=user_id,

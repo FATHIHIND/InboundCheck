@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional, Union
 import logging
 import uuid
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from supabase import create_client, Client
 
 from app.core.config import settings
@@ -69,10 +69,49 @@ class SupabaseService:
             try:
                 res = self._client.table("profiles").select("*").eq("id", user_id).execute()
                 if res.data and len(res.data) > 0:
-                    return res.data[0]
+                    profile = res.data[0]
+                    # Ensure subscription_tier is present
+                    if not profile.get("subscription_tier"):
+                        profile["subscription_tier"] = profile.get("tier", "starter")
+                    return profile
             except Exception as e:
                 logger.error(f"Failed to query user profile {user_id}: {e}")
-        return None
+
+        # Local development / testing default profile with active 3-day trial
+        default_profile = {
+            "id": user_id,
+            "email": f"{user_id}@store.com",
+            "tier": "starter",
+            "subscription_tier": "starter",
+            "subscription_status": "trialing",
+            "trial_ends_at": (datetime.now(timezone.utc) + timedelta(days=3)).isoformat(),
+            "current_period_end": None,
+            "stripe_customer_id": None,
+            "stripe_subscription_id": None,
+        }
+        self._in_memory_profiles[user_id] = default_profile
+        return default_profile
+
+    def update_user_profile(self, user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update public.profiles record for user with fallback persistence."""
+        profile = self.get_user_profile(user_id) or {"id": user_id}
+        profile.update(updates)
+
+        # Synchronize tier and subscription_tier
+        if "subscription_tier" in updates and "tier" not in updates:
+            profile["tier"] = updates["subscription_tier"]
+        elif "tier" in updates and "subscription_tier" not in updates:
+            profile["subscription_tier"] = updates["tier"]
+
+        self._in_memory_profiles[user_id] = profile
+
+        if self._client:
+            try:
+                self._client.table("profiles").update(updates).eq("id", user_id).execute()
+            except Exception as e:
+                logger.error(f"Failed to update user profile {user_id} in Supabase: {e}")
+
+        return profile
 
     def get_user_domain_count(self, user_id: str) -> int:
         """Get count of active monitored domains for user."""

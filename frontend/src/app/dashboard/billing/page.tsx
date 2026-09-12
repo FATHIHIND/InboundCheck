@@ -51,13 +51,13 @@ const PLAN_TIERS: PlanTier[] = [
     price: "$29",
     period: "/ month",
     tagline: "Essential deliverability surveillance for single-store DTC brands.",
-    domainLimitText: "1 Monitored Apex Domain",
+    domainLimitText: "1 Monitored Apex Domain Cap",
     features: [
-      "1 Monitored Apex Domain",
-      "Real-Time SPF / DKIM / DMARC Scorer",
-      "Daily Multi-Resolver Health Probes",
-      "1-Click DNS Fix Snippets",
-      "Weekly Email Deliverability Digest",
+      "1 Monitored Apex Domain Cap",
+      "Manual DNS Record Snippets",
+      "Basic Telegram Bot Alerts",
+      "Daily Multi-Resolver Diagnostics",
+      "Weekly Health Digest",
     ],
   },
   {
@@ -67,15 +67,14 @@ const PLAN_TIERS: PlanTier[] = [
     period: "/ month",
     badge: "Most Popular",
     isPopular: true,
-    tagline: "High-precision governance for expanding DTC merchants & multi-brand setups.",
-    domainLimitText: "5 Monitored Apex Domains",
+    tagline: "High-precision governance for expanding DTC brands & multi-brand setups.",
+    domainLimitText: "3 Monitored Apex Domains Cap",
     features: [
-      "Up to 5 Monitored Apex Domains",
-      "Hourly Multi-Resolver Diagnostic Audits",
-      "10 Authoritative RBL Blacklist Probes",
-      "Real-Time Telegram Bot Alert Engine",
-      "1-Click Cloudflare & GoDaddy DNS Fixer",
-      "Omnichannel Fallback Failover Routing",
+      "3 Monitored Apex Domains Cap",
+      "RFC 7208 SPF Merge Engine (10-Lookup Cap)",
+      "1-Click DNS Auto-Fix (Cloudflare / GoDaddy)",
+      "48-72h Predictive Risk Forecast & Blacklist Radar",
+      "Real-Time Multi-channel Alerts",
     ],
   },
   {
@@ -88,11 +87,10 @@ const PLAN_TIERS: PlanTier[] = [
     domainLimitText: "Unlimited Monitored Domains",
     features: [
       "Unlimited Monitored Apex Domains",
-      "15-Minute Critical Deliverability Sweeps",
+      "Developer API Keys & Custom Webhooks",
+      "Real-Time Worker Priority & 15m Sweeps",
       "AI Content Lab & Cryptographic Optimizer",
-      "Dedicated Deliverability Architect Review",
-      "Custom Webhooks & REST API Access",
-      "99.9% Transactional Delivery SLA",
+      "Dedicated Deliverability Architect SLA",
     ],
   },
 ];
@@ -267,7 +265,7 @@ export default function BillingPortalPage() {
           ) : (
             <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
           )}
-          {isLoadingPortal ? "Opening Portal..." : "Manage Billing & Tax Invoices"}
+          {isLoadingPortal ? "Opening Portal..." : "Manage Subscription"}
         </button>
       </div>
 

@@ -158,6 +158,12 @@ async def test_telegram_alert_failure_and_integrity():
 
 def test_bloc_c_auto_dns_fixer():
     """Test Bloc C: Cloudflare / GoDaddy API Credentials, Auto-Fix, & Rollback."""
+    from app.services.supabase_client import supabase_service
+    supabase_service.update_user_profile("test-user-1", {
+        "subscription_tier": "growth",
+        "subscription_status": "active",
+    })
+
     # 1. Save Provider Credentials
     cred_res = client.post(
         "/api/v1/dns/auto-fix/credentials",

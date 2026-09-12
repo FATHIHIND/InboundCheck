@@ -17,6 +17,16 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BackendStatusBadge } from "@/components/operational/BackendStatusBadge";
+import { apiFetch } from "@/lib/api";
+import { TrialCountdownBanner } from "@/components/billing/TrialCountdownBanner";
+import { ObsidianPaywallModal } from "@/components/billing/ObsidianPaywallModal";
+
+interface SubscriptionState {
+  tier: string;
+  subscription_status: string;
+  trial_days_remaining: number;
+  trial_ends_at: string | null;
+}
 
 export default function DashboardLayout({
   children,
@@ -27,22 +37,34 @@ export default function DashboardLayout({
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
 
-  // Load authenticated user profile details
+  // Load authenticated user profile details and subscription status
   useEffect(() => {
-    async function loadUser() {
+    async function loadUserAndSubscription() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.email) {
           setUserEmail(user.email);
         }
+
+        const subRes = await apiFetch("/api/v1/billing/subscription");
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          setSubscription({
+            tier: subData.subscription_tier || subData.tier || "starter",
+            subscription_status: subData.subscription_status || "trialing",
+            trial_days_remaining: subData.trial_days_remaining ?? 3,
+            trial_ends_at: subData.trial_ends_at || null,
+          });
+        }
       } catch {
-        // Fallback gracefully
+        // Fallback gracefully in offline / dev mode
       }
     }
-    loadUser();
-  }, []);
+    loadUserAndSubscription();
+  }, [pathname]);
 
   // Automatically close mobile menu on route change
   useEffect(() => {
@@ -301,11 +323,26 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main App Canvas */}
-      <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {children}
-        </div>
-      </main>
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {/* Sticky Trial Countdown Banner */}
+        {subscription?.subscription_status === "trialing" && (
+          <TrialCountdownBanner
+            daysRemaining={subscription.trial_days_remaining}
+            trialEndsAt={subscription.trial_ends_at}
+          />
+        )}
+
+        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {children}
+          </div>
+        </main>
+
+        {/* Full-Screen Non-Dismissible Obsidian Paywall Modal on Expiration */}
+        {subscription?.subscription_status === "expired" && (
+          <ObsidianPaywallModal />
+        )}
+      </div>
     </div>
   );
 }
