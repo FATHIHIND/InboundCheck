@@ -109,10 +109,18 @@ async def create_checkout_session(
     """
     try:
         resolved_price_or_tier = payload.price_id or payload.plan_tier or "growth"
+        
+        # Resolve user's actual email from Supabase profile or auth if payload.email is default
+        user_email = payload.email
+        if not user_email or user_email == "merchant@store.com":
+            profile = supabase_service.get_user_profile(user_id)
+            if profile and profile.get("email"):
+                user_email = profile["email"]
+
         session_data = await stripe_service.create_checkout_session(
             user_id=user_id,
             price_id=resolved_price_or_tier,
-            email=payload.email or "merchant@store.com",
+            email=user_email,
             return_url=payload.return_url,
             success_url=payload.success_url,
             cancel_url=payload.cancel_url,

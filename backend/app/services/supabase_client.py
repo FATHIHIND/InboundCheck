@@ -93,7 +93,7 @@ class SupabaseService:
         return default_profile
 
     def update_user_profile(self, user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
-        """Update public.profiles record for user with fallback persistence."""
+        """Update public.profiles record for user with fallback persistence and self-healing upsert."""
         profile = self.get_user_profile(user_id) or {"id": user_id}
         profile.update(updates)
 
@@ -107,7 +107,20 @@ class SupabaseService:
 
         if self._client:
             try:
-                self._client.table("profiles").update(updates).eq("id", user_id).execute()
+                # Attempt primary update
+                res = self._client.table("profiles").update(updates).eq("id", user_id).execute()
+                # If no row was updated (profile didn't exist yet), self-heal via upsert
+                if not res.data:
+                    logger.info(f"No existing profile found for {user_id} during update. Upserting full record...")
+                    upsert_payload = {
+                        "id": user_id,
+                        "email": profile.get("email") or f"{user_id}@store.com",
+                        "tier": profile.get("tier", "starter"),
+                        "subscription_tier": profile.get("subscription_tier", "starter"),
+                        "subscription_status": profile.get("subscription_status", "active"),
+                        **updates,
+                    }
+                    self._client.table("profiles").upsert(upsert_payload).execute()
             except Exception as e:
                 logger.error(f"Failed to update user profile {user_id} in Supabase: {e}")
 

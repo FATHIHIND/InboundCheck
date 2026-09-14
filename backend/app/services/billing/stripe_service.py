@@ -416,7 +416,7 @@ class StripeService:
                     return True
                 return False
 
-            if (settings.ENVIRONMENT in ("development", "test") or not self.webhook_secret) and v1.startswith("mock_"):
+            if settings.ENVIRONMENT in ("development", "test") and (v1.startswith("mock_") or v1.startswith("dummy_")):
                 return True
 
             signed_payload = f"{t}.".encode("utf-8") + payload
@@ -454,6 +454,49 @@ class StripeService:
             customer_id = data_object.get("customer")
             subscription_id = data_object.get("subscription")
 
+            # Fallback 1: Resolve user_id by customer details email or customer_email if not in metadata/client_reference_id
+            if not user_id:
+                cust_email = (
+                    data_object.get("customer_details", {}).get("email")
+                    or data_object.get("customer_email")
+                )
+                if cust_email and supabase_service.is_connected and supabase_service._client:
+                    try:
+                        res = (
+                            supabase_service._client.table("profiles")
+                            .select("id")
+                            .ilike("email", cust_email.strip())
+                            .execute()
+                        )
+                        if res.data and len(res.data) > 0:
+                            user_id = res.data[0]["id"]
+                            logger.info(f"Resolved user_id '{user_id}' from customer email '{cust_email}'")
+                    except Exception as e:
+                        logger.error(f"Failed to lookup user by customer email {cust_email}: {e}")
+
+            # Fallback 2: Resolve user_id by existing stripe_customer_id
+            if not user_id and customer_id:
+                if supabase_service.is_connected and supabase_service._client:
+                    try:
+                        res = (
+                            supabase_service._client.table("profiles")
+                            .select("id")
+                            .eq("stripe_customer_id", customer_id)
+                            .execute()
+                        )
+                        if res.data and len(res.data) > 0:
+                            user_id = res.data[0]["id"]
+                            logger.info(f"Resolved user_id '{user_id}' from stripe_customer_id '{customer_id}'")
+                    except Exception as e:
+                        logger.error(f"Failed to lookup user by customer_id {customer_id}: {e}")
+
+            # Fallback 3: In-memory store check
+            if not user_id and customer_id:
+                for uid, prof in supabase_service._in_memory_profiles.items():
+                    if prof.get("stripe_customer_id") == customer_id:
+                        user_id = uid
+                        break
+
             if user_id:
                 update_payload: Dict[str, Any] = {
                     "subscription_tier": plan_tier,
@@ -471,6 +514,7 @@ class StripeService:
                 if event_id:
                     self.mark_event_processed(event_id, event_type=event_type)
 
+                logger.info(f"Successfully activated '{plan_tier}' subscription for user '{user_id}'")
                 return {
                     "status": "success",
                     "action": "subscription_activated",
@@ -479,6 +523,12 @@ class StripeService:
                     "tier": plan_tier,
                     "customer_id": customer_id,
                 }
+            else:
+                logger.warning(
+                    f"checkout.session.completed received but could not resolve user_id. "
+                    f"client_reference_id: {data_object.get('client_reference_id')}, "
+                    f"customer: {customer_id}, customer_details: {data_object.get('customer_details')}"
+                )
 
         elif event_type in ["customer.subscription.deleted", "customer.subscription.updated"]:
             sub_status = data_object.get("status")
