@@ -62,9 +62,15 @@ body::before {
 .uiverse-card {
   position: relative;
   background: #0E1217;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.25rem;
   z-index: 1;
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.uiverse-card:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 35px -5px rgba(16, 185, 129, 0.25);
 }
 
 .uiverse-card::before {
@@ -72,7 +78,7 @@ body::before {
   position: absolute;
   inset: -1.5px;
   border-radius: inherit;
-  background: linear-gradient(-45deg, #008060 0%, #10b981 50%, #004c3f 100%);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.4) 0%, rgba(0, 128, 96, 0.2) 50%, transparent 100%);
   z-index: -1;
   opacity: 0.35;
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
@@ -83,7 +89,7 @@ body::before {
   position: absolute;
   inset: -2px;
   border-radius: inherit;
-  background: linear-gradient(-45deg, #008060 0%, #10b981 50%, #004c3f 100%);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.4) 0%, rgba(0, 128, 96, 0.2) 50%, transparent 100%);
   z-index: -2;
   filter: blur(20px);
   opacity: 0.25;
@@ -91,13 +97,13 @@ body::before {
 }
 
 .uiverse-card:hover::before {
-  opacity: 1;
+  opacity: 0.85;
   transform: rotate(-90deg) scaleX(1.34) scaleY(0.77);
 }
 
 .uiverse-card:hover::after {
   filter: blur(32px);
-  opacity: 0.75;
+  opacity: 0.6;
 }
 
 .uiverse-card-inner {
