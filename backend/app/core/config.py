@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Stripe Billing Configuration
     STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PRICE_STARTER: str = "price_starter_monthly"
     STRIPE_PRICE_GROWTH: str = "price_growth_monthly"

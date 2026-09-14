@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import json
 import logging
 
+from app.core.config import settings
 from app.core.security import get_current_user_id
 from app.services.billing.stripe_service import stripe_service, PLAN_PRICING, TIER_LIMITS
 from app.services.supabase_client import supabase_service
@@ -79,8 +80,18 @@ async def get_subscription_plans(user_id: str = Depends(get_current_user_id)):
     """
     List active SaaS subscription tiers, features, and price points.
     """
+    price_map = {
+        "starter": settings.STRIPE_PRICE_STARTER,
+        "growth": settings.STRIPE_PRICE_GROWTH,
+        "enterprise": settings.STRIPE_PRICE_ENTERPRISE,
+    }
+    enriched = []
+    for plan in PLAN_PRICING.values():
+        p = dict(plan)
+        p["price_id"] = price_map.get(p["id"], "")
+        enriched.append(p)
     return {
-        "plans": list(PLAN_PRICING.values())
+        "plans": enriched
     }
 
 
