@@ -269,8 +269,7 @@ export default function LandingPage() {
       <section className="relative pt-24 pb-20 px-4 sm:px-6 lg:px-8 w-full overflow-hidden text-center min-h-[660px] flex flex-col justify-center items-center">
         {/* Full-Width Edge-to-Edge Background Glow & 3D WebGL Constellation */}
         <div className="absolute inset-0 w-full left-0 right-0 inset-x-0 h-full pointer-events-none overflow-hidden select-none z-0">
-          <div className="absolute top-0 inset-x-0 w-full left-0 right-0 h-[720px] bg-[radial-gradient(ellipse_100%_75%_at_50%_-10%,rgba(0,128,96,0.38),rgba(0,76,63,0.22)_40%,rgba(16,185,129,0.08)_70%,transparent_90%)] blur-[100px] pointer-events-none" />
-          <div className="absolute top-1/4 -inset-x-24 h-56 bg-gradient-to-r from-transparent via-[#008060]/15 to-transparent blur-3xl pointer-events-none" />
+          <div className="absolute inset-0 w-full h-full bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(0,128,96,0.18),rgba(11,15,18,0))] pointer-events-none" />
           <Hero3DCanvas className="absolute inset-0 w-full h-full" />
           <ThreeUIHero className="w-full h-full" />
         </div>
@@ -340,12 +339,6 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="my-8 sm:my-10 max-w-xl mx-auto space-y-3"
           >
-            <div className="flex items-center justify-center gap-2 text-[11px] font-mono text-zinc-400">
-              <span className="w-8 h-px bg-white/[0.08]" />
-              <span className="uppercase tracking-wider text-zinc-400">Or probe your apex domain instantly</span>
-              <span className="w-8 h-px bg-white/[0.08]" />
-            </div>
-
             <div className="obsidian-card p-2 rounded-2xl border border-white/[0.1] shadow-2xl bg-[#0E0E12]/90 backdrop-blur-xl">
               <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="relative flex-1">
@@ -521,7 +514,7 @@ export default function LandingPage() {
                 <span className="text-emerald-400 font-semibold">✓ All Systems Normal</span>
               </div>
             </div>
-            <p className="text-xs text-zinc-500 font-sans italic">
+            <p className="text-xs text-slate-300 font-sans italic">
               &ldquo;Everything looks green. You assume your customers are receiving their tracking codes and receipts.&rdquo;
             </p>
           </div>
@@ -552,7 +545,7 @@ export default function LandingPage() {
                 <span className="text-rose-400 font-semibold">-$4,200.00 / mo</span>
               </div>
             </div>
-            <p className="text-xs text-zinc-400 font-sans">
+            <p className="text-xs text-slate-300 font-sans">
               <strong className="text-white font-medium">InboundCheck eliminates this blindspot.</strong> We act as your 24/7 radar to guarantee transactional deliverability.
             </p>
           </div>
@@ -568,7 +561,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
             Real-Time Surveillance & Automated DNS Governance
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-xl mx-auto">
+          <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
             Explore interactive live widgets from our enterprise engine.
           </p>
         </div>
@@ -582,7 +575,7 @@ export default function LandingPage() {
                 <Server size={18} />
               </div>
               <h3 className="text-lg font-semibold text-white tracking-tight">1-Click DNS Inspector</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-slate-300 leading-relaxed">
                 Interactive 3D wireframe plane auditing SPF syntax, DKIM 2048-bit selectors, and DMARC alignment rules in real-time.
               </p>
             </div>
@@ -619,7 +612,7 @@ export default function LandingPage() {
                 <Radio size={18} />
               </div>
               <h3 className="text-lg font-semibold text-white tracking-tight">Real-Time Blacklist Radar</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-slate-300 leading-relaxed">
                 Concentric WebGL radar waves scanning 10 global threat matrices every hour before your sending domain gets burned.
               </p>
             </div>
@@ -657,7 +650,7 @@ export default function LandingPage() {
                 <Send size={18} />
               </div>
               <h3 className="text-lg font-semibold text-white tracking-tight">Telegram Incident Bot</h3>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-slate-300 leading-relaxed">
                 Floating 3D glassmorphic push notification engine dispatching critical incident alerts directly to your phone.
               </p>
             </div>
@@ -693,7 +686,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
             The InboundCheck Governance Protocol
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-lg mx-auto">
+          <p className="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto">
             A closed-loop mathematical pipeline protecting transactional receipts from server to subscriber.
           </p>
         </div>
@@ -715,7 +708,7 @@ export default function LandingPage() {
               </span>
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold text-white">Multi-Resolver Cryptographic Ingestion</h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Asynchronously queries Cloudflare (1.1.1.1), Google (8.8.8.8), and Quad9 resolvers with SSRF-safe syntax parsers to confirm record propagation and DKIM 2048-bit keys globally.
                 </p>
               </div>
@@ -738,7 +731,7 @@ export default function LandingPage() {
               </span>
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold text-white">1-Click Zone Record Auto-Insertion</h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Connect Cloudflare API tokens or GoDaddy keys to auto-publish SPF, CNAMEs, and DMARC records with pre-flight conflict checks and instant snapshot rollback.
                 </p>
               </div>
@@ -761,7 +754,7 @@ export default function LandingPage() {
               </span>
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold text-white">Predictive Dispute & Protected Revenue ROI</h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Directly correlates real delivery health to store GMV, computing protected revenue metrics ($R_protected) and dispute reduction multipliers.
                 </p>
               </div>
@@ -779,16 +772,16 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
             Simple Pricing, No Surprises.
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto">
+          <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
             Choose a plan tailored to your store volume with continuous deliverability protection.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto items-stretch">
           {/* Starter Plan */}
-          <div className="uiverse-card group flex flex-col justify-between h-full">
-            <div className="uiverse-card-inner p-7 flex flex-col justify-between h-full space-y-6">
-              <div className="space-y-4">
+          <div className="uiverse-card group h-full flex flex-col justify-between">
+            <div className="uiverse-card-inner p-7 h-full flex flex-col justify-between">
+              <div className="space-y-4 flex-1 flex flex-col">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono uppercase px-2.5 py-1 rounded-full bg-white/[0.05] text-slate-300 border border-white/[0.1]">
                     Single DTC Brand
@@ -800,7 +793,7 @@ export default function LandingPage() {
                     $29 <span className="text-xs font-normal text-slate-400 font-sans">/ month</span>
                   </div>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed min-h-[44px]">
+                <p className="text-sm text-slate-300 leading-relaxed min-h-[44px]">
                   Essential DNS governance and on-demand audits for emerging DTC stores.
                 </p>
 
@@ -824,7 +817,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-6 mt-auto">
                 <EmeraldHoverButton
                   href="/auth/signup?tier=starter"
                   size="md"
@@ -838,9 +831,9 @@ export default function LandingPage() {
           </div>
 
           {/* Growth Plan (Most Popular) */}
-          <div className="uiverse-card group flex flex-col justify-between h-full lg:-translate-y-2 lg:scale-[1.02] border-emerald-500/50 shadow-[0_0_35px_-5px_rgba(16,185,129,0.25)] relative z-10">
-            <div className="uiverse-card-inner p-7 flex flex-col justify-between h-full space-y-6">
-              <div className="space-y-4">
+          <div className="uiverse-card group h-full flex flex-col justify-between lg:-translate-y-2 lg:scale-[1.02] border-emerald-500/50 shadow-[0_0_35px_-5px_rgba(16,185,129,0.25)] relative z-10">
+            <div className="uiverse-card-inner p-7 h-full flex flex-col justify-between">
+              <div className="space-y-4 flex-1 flex flex-col">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -853,7 +846,7 @@ export default function LandingPage() {
                     $79 <span className="text-xs font-normal text-slate-400 font-sans">/ month</span>
                   </div>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed min-h-[44px]">
+                <p className="text-sm text-slate-300 leading-relaxed min-h-[44px]">
                   Comprehensive 24/7 automated deliverability & 1-click zone auto-fixer for scaling Shopify brands.
                 </p>
 
@@ -881,7 +874,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-6 mt-auto">
                 <EmeraldHoverButton
                   href="/auth/signup?tier=growth"
                   size="md"
@@ -895,9 +888,9 @@ export default function LandingPage() {
           </div>
 
           {/* Enterprise Plan */}
-          <div className="uiverse-card group flex flex-col justify-between h-full">
-            <div className="uiverse-card-inner p-7 flex flex-col justify-between h-full space-y-6">
-              <div className="space-y-4">
+          <div className="uiverse-card group h-full flex flex-col justify-between">
+            <div className="uiverse-card-inner p-7 h-full flex flex-col justify-between">
+              <div className="space-y-4 flex-1 flex flex-col">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono font-semibold uppercase px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
                     Shopify Plus &amp; Aggregators
@@ -909,7 +902,7 @@ export default function LandingPage() {
                     $199 <span className="text-xs font-normal text-slate-400 font-sans">/ month</span>
                   </div>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed min-h-[44px]">
+                <p className="text-sm text-slate-300 leading-relaxed min-h-[44px]">
                   Maximum-scale deliverability surveillance and white-glove governance for high-volume stores.
                 </p>
 
@@ -937,7 +930,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-6 mt-auto">
                 <EmeraldHoverButton
                   href="/auth/signup?tier=enterprise"
                   size="md"
@@ -961,8 +954,8 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
             Everything You Need to Know About InboundCheck
           </h2>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto">
-            Everything you need to know about SPF/DKIM compliance, DNS governance, and inboxing rates.
+          <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
+            Key answers regarding SPF/DKIM compliance, DNS governance, and primary inbox placement.
           </p>
         </div>
 
@@ -986,7 +979,7 @@ export default function LandingPage() {
                 />
               </button>
               {expandedFaq === idx && (
-                <div className="px-4 pb-4 text-xs text-zinc-400 font-sans leading-relaxed border-t border-white/[0.04] pt-3">
+                <div className="px-4 pb-4 text-xs text-slate-300 font-sans leading-relaxed border-t border-white/[0.04] pt-3">
                   {item.a}
                 </div>
               )}
