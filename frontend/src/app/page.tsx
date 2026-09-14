@@ -92,6 +92,25 @@ function SpotlightCard({
   );
 }
 
+const FAQ_ITEMS = [
+  {
+    q: "Why do my Shopify emails land in spam if I didn't touch my store settings?",
+    a: "In early 2024, Google, Yahoo, and Apple Mail deployed strict anti-spam algorithms requiring 100% cryptographic SPF alignment, valid DKIM CNAME records, and strict DMARC policies (`p=quarantine` or `reject`). If your store sending domain has more than 10 DNS lookups or lacks custom selector rotation, your order confirmations and shipping receipts are automatically relegated to junk folders without warning.",
+  },
+  {
+    q: "How does InboundCheck differ from Klaviyo, Omnisend, or Mailchimp?",
+    a: "Klaviyo and Omnisend manage marketing newsletters. InboundCheck operates at the infrastructure & DNS root level. We continuously monitor your apex domain, query authoritative RBL blacklists (Spamhaus, Barracuda), and simulate real-time IMAP delivery receipts to guarantee your highest-value transactional receipts land in the Primary Inbox.",
+  },
+  {
+    q: "Will this fix my Google & Yahoo 2024 compliance warnings?",
+    a: "Yes, 100%. InboundCheck generates verified Google & Yahoo 2024 compliant SPF records with automated recursion flattening (keeping lookup counts under 10), configures 2048-bit DKIM keys, and establishes continuous DMARC aggregate monitoring to permanently clear compliance warnings.",
+  },
+  {
+    q: "How long does the 1-Click Cloudflare & GoDaddy DNS auto-fix take?",
+    a: "Under 5 seconds. Connect your Cloudflare API token or GoDaddy key, click 'Auto-Insert Records', and our backend engine runs pre-flight conflict checks before injecting records directly into your DNS zone—with zero manual zone file editing required.",
+  },
+];
+
 export default function LandingPage() {
   // Domain Audit State
   const [domainInput, setDomainInput] = useState("");
@@ -105,20 +124,60 @@ export default function LandingPage() {
   const [dnsToggleFixed, setDnsToggleFixed] = useState(false);
   const [activeStepHover, setActiveStepHover] = useState<number | null>(null);
 
-  // Structured Data Schema.org
-  const jsonLd = {
+  // Structured Data Schema.org for Technical SEO & Generative Engine Optimization (GEO)
+  const structuredData = {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    name: "InboundCheck",
-    operatingSystem: "Cloud, Web",
-    applicationCategory: "BusinessApplication",
-    description:
-      "Enterprise email deliverability, real-time blacklist surveillance, and 1-click DNS governance platform for Shopify DTC merchants.",
-    offers: {
-      "@type": "Offer",
-      price: "79.00",
-      priceCurrency: "USD",
-    },
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://inboundcheck.com/#webapp",
+        name: "InboundCheck",
+        url: "https://inboundcheck.com",
+        operatingSystem: "Cloud, Web",
+        applicationCategory: "BusinessApplication",
+        applicationSubCategory: "Email Deliverability & DNS Monitoring for E-Commerce",
+        description:
+          "Enterprise email deliverability, real-time blacklist surveillance, and 1-click DNS governance platform for Shopify DTC merchants.",
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Starter Merchant",
+            price: "29.00",
+            priceCurrency: "USD",
+            availability: "https://schema.org/InStock",
+            description: "Single DTC Brand - 1 Verified Apex Sending Domain",
+          },
+          {
+            "@type": "Offer",
+            name: "Growth Tier",
+            price: "79.00",
+            priceCurrency: "USD",
+            availability: "https://schema.org/InStock",
+            description: "Scaling Multi-Brand - Up to 5 Apex Sending Domains",
+          },
+          {
+            "@type": "Offer",
+            name: "Enterprise Tier",
+            price: "199.00",
+            priceCurrency: "USD",
+            availability: "https://schema.org/InStock",
+            description: "Shopify Plus & Aggregators - Unlimited Monitored Domains",
+          },
+        ],
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://inboundcheck.com/#faq",
+        mainEntity: FAQ_ITEMS.map((item) => ({
+          "@type": "Question",
+          name: item.q,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: item.a,
+          },
+        })),
+      },
+    ],
   };
 
   const handleSimulatedAudit = async (e: React.FormEvent) => {
@@ -139,31 +198,12 @@ export default function LandingPage() {
     setIsAuditing(false);
   };
 
-  const faqItems = [
-    {
-      q: "Why do my Shopify emails land in spam if I didn't touch my store settings?",
-      a: "In early 2024, Google, Yahoo, and Apple Mail deployed strict anti-spam algorithms requiring 100% cryptographic SPF alignment, valid DKIM CNAME records, and strict DMARC policies (`p=quarantine` or `reject`). If your store sending domain has more than 10 DNS lookups or lacks custom selector rotation, your order confirmations and shipping receipts are automatically relegated to junk folders without warning.",
-    },
-    {
-      q: "How does InboundCheck differ from Klaviyo, Omnisend, or Mailchimp?",
-      a: "Klaviyo and Omnisend manage marketing newsletters. InboundCheck operates at the infrastructure & DNS root level. We continuously monitor your apex domain, query authoritative RBL blacklists (Spamhaus, Barracuda), and simulate real-time IMAP delivery receipts to guarantee your highest-value transactional receipts land in the Primary Inbox.",
-    },
-    {
-      q: "Will this fix my Google & Yahoo 2024 compliance warnings?",
-      a: "Yes, 100%. InboundCheck generates verified Google & Yahoo 2024 compliant SPF records with automated recursion flattening (keeping lookup counts under 10), configures 2048-bit DKIM keys, and establishes continuous DMARC aggregate monitoring to permanently clear compliance warnings.",
-    },
-    {
-      q: "How long does the 1-Click Cloudflare & GoDaddy DNS auto-fix take?",
-      a: "Under 5 seconds. Connect your Cloudflare API token or GoDaddy key, click 'Auto-Insert Records', and our backend engine runs pre-flight conflict checks before injecting records directly into your DNS zone—with zero manual zone file editing required.",
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-[#08080A] text-white selection:bg-emerald-500/30 selection:text-emerald-300 font-sans relative overflow-hidden">
-      {/* Schema.org SEO JSON-LD */}
+      {/* Schema.org SEO & GEO JSON-LD */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
 
       {/* Spatial Background Mesh & Ambient Glow */}
@@ -268,7 +308,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.25 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1"
+            className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2"
           >
             <EmeraldHoverButton
               href="/auth/signup"
@@ -282,20 +322,26 @@ export default function LandingPage() {
             </EmeraldHoverButton>
             <Link
               href="/auth/login"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-white/[0.12] bg-[#0E0E12]/80 hover:bg-[#16161D] hover:border-emerald-500/40 text-sm font-medium text-zinc-300 hover:text-white transition-all shadow-sm group"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-white/[0.12] bg-[#0E0E12]/80 hover:bg-[#16161D] hover:border-emerald-500/40 text-sm font-medium text-zinc-300 hover:text-white transition-all shadow-sm group"
             >
               <ShoppingBag size={15} className="text-emerald-400 group-hover:scale-110 transition-transform" />
               <span>Connect Shopify Store</span>
             </Link>
           </motion.div>
 
-          {/* Interactive Live Bait (Free Domain Health Check) */}
+          {/* Interactive Live Bait (Free Domain Health Check) with Vertical Breathing Room */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="max-w-xl mx-auto"
+            className="my-8 sm:my-10 max-w-xl mx-auto space-y-3"
           >
+            <div className="flex items-center justify-center gap-2 text-[11px] font-mono text-zinc-400">
+              <span className="w-8 h-px bg-white/[0.08]" />
+              <span className="uppercase tracking-wider text-zinc-400">Or probe your apex domain instantly</span>
+              <span className="w-8 h-px bg-white/[0.08]" />
+            </div>
+
             <div className="obsidian-card p-2 rounded-2xl border border-white/[0.1] shadow-2xl bg-[#0E0E12]/90 backdrop-blur-xl">
               <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="relative flex-1">
@@ -390,6 +436,43 @@ export default function LandingPage() {
               )}
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* High-Trust Merchant Ecosystem Bar */}
+      <section className="relative z-10 py-7 px-4 sm:px-6 lg:px-8 border-y border-white/[0.06] bg-[#0A0A0E]/80 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-5 text-center lg:text-left">
+          <div className="flex items-center justify-center lg:justify-start gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 flex-shrink-0">
+              <ShieldCheck size={16} />
+            </div>
+            <p className="text-xs sm:text-sm font-medium text-zinc-300">
+              Safeguarding transactional deliverability for stores powered by:
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 font-mono text-xs text-zinc-400">
+            <span className="flex items-center gap-1.5 hover:text-white transition">
+              <ShoppingBag size={14} className="text-emerald-400" />
+              <strong className="text-zinc-200 font-semibold">Shopify Plus</strong>
+            </span>
+            <span className="flex items-center gap-1.5 hover:text-white transition">
+              <Sparkles size={14} className="text-emerald-400" />
+              <span className="text-zinc-300">Klaviyo</span>
+            </span>
+            <span className="flex items-center gap-1.5 hover:text-white transition">
+              <Server size={14} className="text-orange-400" />
+              <span className="text-zinc-300">Cloudflare</span>
+            </span>
+            <span className="flex items-center gap-1.5 hover:text-white transition">
+              <Inbox size={14} className="text-blue-400" />
+              <span className="text-zinc-300">Google Workspace</span>
+            </span>
+            <span className="flex items-center gap-1.5 hover:text-white transition">
+              <Zap size={14} className="text-amber-400" />
+              <span className="text-zinc-300">Postmark</span>
+            </span>
+          </div>
         </div>
       </section>
 
@@ -699,12 +782,12 @@ export default function LandingPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {/* Starter Plan */}
-          <div className="obsidian-card p-7 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-6">
+          <div className="obsidian-card p-7 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-6 hover:border-emerald-500/30 transition">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-white">Starter Merchant</h3>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                  Self-Service
+                <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
+                  Single DTC Brand
                 </span>
               </div>
               <div className="text-3xl font-extrabold text-white font-mono">
@@ -745,12 +828,12 @@ export default function LandingPage() {
           </div>
 
           {/* Growth Plan (Most Popular) */}
-          <div className="obsidian-card p-7 rounded-2xl border border-emerald-500/40 relative overflow-hidden flex flex-col justify-between space-y-6 shadow-[0_0_30px_rgba(16,185,129,0.12)]">
+          <div className="obsidian-card p-7 rounded-2xl border border-emerald-500/40 relative overflow-hidden flex flex-col justify-between space-y-6 shadow-[0_0_30px_rgba(16,185,129,0.12)] hover:border-emerald-500/60 transition">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-white">Growth Tier</h3>
-                <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  Most Popular
+                <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  Most Popular • Scaling Multi-Brand
                 </span>
               </div>
               <div className="text-3xl font-extrabold text-white font-mono">
@@ -799,8 +882,8 @@ export default function LandingPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-white">Enterprise Tier</h3>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-emerald-500/20">
-                  Shopify Plus
+                <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-zinc-800/80 text-emerald-400 border border-emerald-500/30">
+                  Shopify Plus &amp; Aggregators
                 </span>
               </div>
               <div className="text-3xl font-extrabold text-white font-mono">
@@ -855,13 +938,16 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Everything You Need to Know About InboundCheck
           </h2>
+          <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto">
+            Everything you need to know about SPF/DKIM compliance, DNS governance, and inboxing rates.
+          </p>
         </div>
 
         <div className="space-y-3">
-          {faqItems.map((item, idx) => (
+          {FAQ_ITEMS.map((item, idx) => (
             <div
               key={item.q}
-              className="obsidian-card rounded-xl border border-white/[0.08] overflow-hidden"
+              className="obsidian-card rounded-xl border border-white/[0.08] overflow-hidden hover:border-emerald-500/30 transition-colors"
             >
               <button
                 type="button"
