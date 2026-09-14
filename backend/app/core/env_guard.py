@@ -47,7 +47,18 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
     if not service_key or check_is_placeholder(service_key):
         issues.append("SUPABASE_SERVICE_ROLE_KEY is unconfigured or placeholder.")
 
-    # 2. Stripe Live Monetization Checks
+    # 2. Stripe Live Monetization Checks & Mode Logging
+    stripe_key = settings.STRIPE_SECRET_KEY
+    if stripe_key and not check_is_placeholder(stripe_key):
+        if stripe_key.startswith("sk_live_"):
+            logger.info("💳 [STRIPE_STARTUP] Stripe Billing Engine: LIVE_PRODUCTION_MODE (Live Keys Active)")
+        elif stripe_key.startswith("sk_test_"):
+            logger.info("💳 [STRIPE_STARTUP] Stripe Billing Engine: LIVE_TEST_MODE (Stripe Test Suite Active)")
+        else:
+            logger.warning(f"💳 [STRIPE_STARTUP] Stripe Billing Engine: UNKNOWN_KEY_PREFIX ({stripe_key[:7]}...)")
+    else:
+        logger.warning("💳 [STRIPE_STARTUP] Stripe Billing Engine: OFFLINE_FALLBACK (No Stripe Secret Key Detected - Simulation Active)")
+
     if is_prod:
         if not settings.STRIPE_SECRET_KEY or check_is_placeholder(settings.STRIPE_SECRET_KEY):
             issues.append("STRIPE_SECRET_KEY is required in production and cannot be placeholder.")
@@ -56,6 +67,14 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
 
         if not settings.STRIPE_WEBHOOK_SECRET or check_is_placeholder(settings.STRIPE_WEBHOOK_SECRET):
             issues.append("STRIPE_WEBHOOK_SECRET is required in production for cryptographic webhook verification.")
+
+        for tier_name, price_val in [
+            ("STRIPE_PRICE_STARTER", settings.STRIPE_PRICE_STARTER),
+            ("STRIPE_PRICE_GROWTH", settings.STRIPE_PRICE_GROWTH),
+            ("STRIPE_PRICE_ENTERPRISE", settings.STRIPE_PRICE_ENTERPRISE),
+        ]:
+            if not price_val or not price_val.startswith("price_") or price_val.endswith("_monthly"):
+                issues.append(f"{tier_name} is not set to a valid production Stripe price ID (e.g. price_1UFZ...). Found: '{price_val}'")
 
     is_valid = len(issues) == 0
 

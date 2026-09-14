@@ -257,6 +257,7 @@ class StripeService:
                     if res.status_code == 200:
                         data = res.json()
                         raw_url = data.get("url")
+                        logger.info(f"Stripe checkout session successfully created: {data.get('id')} -> {raw_url}")
                         return {
                             "session_id": data.get("id"),
                             "checkout_url": raw_url,
@@ -269,14 +270,22 @@ class StripeService:
                     else:
                         error_body = res.text
                         logger.error(f"Stripe checkout session error {res.status_code}: {error_body}")
-                        # If Stripe explicitly returned an error (e.g. invalid price or account restriction),
-                        # do not silently pretend offline fallback succeeded with raw unreplaced templates
+                        # In production or when keys are configured, do NOT silently fall back to mock checkout!
+                        if settings.ENVIRONMENT.lower() in ("production", "prod") or (self.secret_key and not self.secret_key.startswith("mock_")):
+                            raise RuntimeError(f"Stripe Checkout API rejected request ({res.status_code}): {error_body}")
             except Exception as e:
                 logger.error(f"Stripe API error: {e}")
+                if settings.ENVIRONMENT.lower() in ("production", "prod") or (self.secret_key and not self.secret_key.startswith("mock_")):
+                    raise
 
-        # Local simulation / offline fallback (safe replacement of Stripe template variables)
+        # Local simulation / offline fallback (ONLY permitted in test/development when secret key is missing or mock)
+        is_prod = settings.ENVIRONMENT.lower() in ("production", "prod")
+        if is_prod:
+            raise RuntimeError("STRIPE_SECRET_KEY is missing or invalid in production environment. Offline fallback disabled.")
+
         mock_id = f"cs_test_{int(time.time())}_{user_id[:8]}"
         simulated_s_url = s_url.replace("{CHECKOUT_SESSION_ID}", mock_id).replace("%7BCHECKOUT_SESSION_ID%7D", mock_id)
+        logger.warning(f"Using OFFLINE_FALLBACK simulation mode for checkout session: {mock_id}")
         return {
             "session_id": mock_id,
             "checkout_url": simulated_s_url,
