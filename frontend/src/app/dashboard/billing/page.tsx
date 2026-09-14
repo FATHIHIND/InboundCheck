@@ -122,6 +122,33 @@ export default function BillingPortalPage() {
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
   const [portalNotice, setPortalNotice] = useState<string | null>(null);
 
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutSuccessMessage, setCheckoutSuccessMessage] = useState<string | null>(null);
+
+  // Clean URL params if returning from checkout with unescaped or mock template strings
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const url = new URL(window.location.href);
+      const sessionId = url.searchParams.get("session_id");
+      const upgraded = url.searchParams.get("upgraded");
+      const checkoutStatus = url.searchParams.get("checkout");
+
+      if (sessionId || upgraded || checkoutStatus) {
+        if (sessionId && (sessionId.includes("{CHECKOUT_SESSION_ID}") || sessionId.includes("%7BCHECKOUT_SESSION_ID%7D"))) {
+          console.warn("[CHECKOUT_CLEANUP] Detected unexpanded template session_id in URL, cleaning up query string...");
+          url.searchParams.delete("session_id");
+          window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+        } else if (upgraded || checkoutStatus === "success") {
+          setCheckoutSuccessMessage(`Successfully updated subscription to ${upgraded ? upgraded.toUpperCase() : "the selected"} plan.`);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse window URL params:", e);
+    }
+  }, []);
+
   useEffect(() => {
     async function loadSubscription() {
       try {
@@ -181,6 +208,13 @@ export default function BillingPortalPage() {
   const handleCheckout = async (planTier: string) => {
     setLoadingTier(planTier);
     setPortalNotice(null);
+    setCheckoutError(null);
+    setCheckoutSuccessMessage(null);
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const successUrl = `${origin}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}&upgraded=${planTier}`;
+    const cancelUrl = `${origin}/dashboard/billing`;
+
     try {
       const res = await apiFetch("/api/v1/billing/checkout-session", {
         method: "POST",
@@ -188,33 +222,86 @@ export default function BillingPortalPage() {
         body: JSON.stringify({
           plan_tier: planTier,
           price_id: planTier,
-          success_url: `${window.location.origin}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}&upgraded=${planTier}`,
-          cancel_url: `${window.location.origin}/dashboard/billing`,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
         }),
       });
 
+      // Extract response headers for deep diagnostic logging
+      const responseHeaders: Record<string, string> = {};
+      try {
+        res.headers.forEach((val, key) => {
+          responseHeaders[key] = val;
+        });
+      } catch {
+        // Suppress headers iteration error
+      }
+
       if (res.status === 401) {
-        console.warn("User unauthorized for checkout session. Redirecting to login...");
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        console.warn("[CHECKOUT_ERROR] User unauthorized for checkout session (HTTP 401). Redirecting to login...", {
+          status: 401,
+          headers: responseHeaders,
+        });
+        setCheckoutError("Your session has expired. Please sign in to upgrade your subscription.");
+        if (typeof window !== "undefined") {
+          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        }
         return;
       }
 
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const redirectUrl = data.url || data.checkout_url;
-        if (redirectUrl) {
-          window.location.href = redirectUrl;
+      let data: any = {};
+      let rawText = "";
+      try {
+        rawText = await res.text();
+        data = JSON.parse(rawText);
+      } catch {
+        data = { rawText };
+      }
+
+      if (!res.ok) {
+        const errorObj = {
+          status: res.status,
+          statusText: res.statusText,
+          headers: responseHeaders,
+          body: data,
+        };
+        console.error("[CHECKOUT_ERROR]", errorObj);
+
+        const errorMsg = data.detail || data.message || `Checkout initiation failed (HTTP ${res.status}: ${res.statusText || "Server Error"}).`;
+        setCheckoutError(errorMsg);
+        return;
+      }
+
+      // Successful checkout response
+      const redirectUrl = data.url || data.checkout_url;
+      if (redirectUrl) {
+        // Defensive check: if redirect URL is an unexpanded template string returning to self, handle cleanly
+        if (redirectUrl.includes("{CHECKOUT_SESSION_ID}") || redirectUrl.includes("%7BCHECKOUT_SESSION_ID%7D")) {
+          console.warn("[CHECKOUT_WARNING] Backend returned unexpanded template redirect URL:", redirectUrl);
+          const sanitizedUrl = redirectUrl.replace("{CHECKOUT_SESSION_ID}", "direct").replace("%7BCHECKOUT_SESSION_ID%7D", "direct");
+          window.location.href = sanitizedUrl;
           return;
         }
-        setPortalNotice("Stripe checkout session initialized, but no redirection URL was provided.");
-      } else {
-        const errorDetail = data.detail || `Checkout initiation failed (${res.status}).`;
-        console.error("Stripe checkout error:", res.status, data);
-        setPortalNotice(errorDetail);
+
+        window.location.href = redirectUrl;
+        return;
       }
+
+      const emptyUrlError = "Stripe checkout session was created, but no checkout redirect URL was provided by the payment engine.";
+      console.error("[CHECKOUT_ERROR]", {
+        status: res.status,
+        headers: responseHeaders,
+        body: data,
+        message: emptyUrlError,
+      });
+      setCheckoutError(emptyUrlError);
     } catch (err: any) {
-      console.error("Network exception initiating checkout session:", err);
-      setPortalNotice(err?.message || "Network exception initiating checkout session.");
+      console.error("[CHECKOUT_ERROR] Unhandled exception in checkout initiation:", {
+        message: err?.message || String(err),
+        stack: err?.stack,
+        error: err,
+      });
+      setCheckoutError(err?.message ? `Checkout error: ${err.message}` : "A network error occurred while connecting to the checkout service. Please verify your connection.");
     } finally {
       setLoadingTier(null);
     }
@@ -223,6 +310,7 @@ export default function BillingPortalPage() {
   const handleOpenStripePortal = async () => {
     setIsLoadingPortal(true);
     setPortalNotice(null);
+    setCheckoutError(null);
     try {
       const res = await apiFetch("/api/v1/billing/customer-portal", {
         method: "POST",
@@ -250,7 +338,8 @@ export default function BillingPortalPage() {
         }
       }
       setPortalNotice("No active Stripe customer found. Select a plan below to activate your subscription.");
-    } catch {
+    } catch (portalErr) {
+      console.error("[PORTAL_ERROR]", portalErr);
       setPortalNotice("Failed to reach billing portal service.");
     } finally {
       setIsLoadingPortal(false);
@@ -288,6 +377,23 @@ export default function BillingPortalPage() {
           {isLoadingPortal ? "Opening Portal..." : "Manage Subscription"}
         </button>
       </div>
+
+      {checkoutError && (
+        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 text-red-300 text-xs font-mono animate-fadeIn">
+          <AlertCircle className="w-5 h-5 shrink-0 text-red-400 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-bold text-red-200">Unable to Initiate Checkout</div>
+            <div className="leading-relaxed">{checkoutError}</div>
+          </div>
+        </div>
+      )}
+
+      {checkoutSuccessMessage && (
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-3 text-emerald-300 text-xs font-mono animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+          <span>{checkoutSuccessMessage}</span>
+        </div>
+      )}
 
       {portalNotice && (
         <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2 text-amber-300 text-xs font-mono">

@@ -267,16 +267,20 @@ class StripeService:
                             "customer_id": customer_id,
                         }
                     else:
-                        logger.error(f"Stripe checkout session error {res.status_code}: {res.text}")
+                        error_body = res.text
+                        logger.error(f"Stripe checkout session error {res.status_code}: {error_body}")
+                        # If Stripe explicitly returned an error (e.g. invalid price or account restriction),
+                        # do not silently pretend offline fallback succeeded with raw unreplaced templates
             except Exception as e:
                 logger.error(f"Stripe API error: {e}")
 
-        # Local simulation / offline fallback
+        # Local simulation / offline fallback (safe replacement of Stripe template variables)
         mock_id = f"cs_test_{int(time.time())}_{user_id[:8]}"
+        simulated_s_url = s_url.replace("{CHECKOUT_SESSION_ID}", mock_id).replace("%7BCHECKOUT_SESSION_ID%7D", mock_id)
         return {
             "session_id": mock_id,
-            "checkout_url": s_url,
-            "url": s_url,
+            "checkout_url": simulated_s_url,
+            "url": simulated_s_url,
             "plan_tier": tier,
             "subscription_tier": tier,
             "amount": plan_meta["amount"] / 100,
