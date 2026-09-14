@@ -77,13 +77,13 @@ function SpotlightCard({
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`relative rounded-2xl border border-white/[0.08] bg-[#0E0E12] overflow-hidden transition-all duration-300 ${className}`}
+      className={`relative rounded-2xl border border-white/[0.08] hover:border-emerald-500/35 bg-[#0E1217] overflow-hidden transition-all duration-300 ${className}`}
     >
       {isHovered && (
         <div
           className="pointer-events-none absolute -inset-px transition-opacity duration-300 z-0"
           style={{
-            background: `radial-gradient(400px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(16, 185, 129, 0.12), transparent 80%)`,
+            background: `radial-gradient(400px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(0, 128, 96, 0.22), transparent 80%)`,
           }}
         />
       )}
@@ -199,7 +199,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#08080A] text-white selection:bg-emerald-500/30 selection:text-emerald-300 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#0B0F12] text-white selection:bg-emerald-500/30 selection:text-emerald-300 font-sans relative overflow-x-hidden">
       {/* Schema.org SEO & GEO JSON-LD */}
       <script
         type="application/ld+json"
@@ -207,12 +207,12 @@ export default function LandingPage() {
       />
 
       {/* Spatial Background Mesh & Ambient Glow */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none z-0 opacity-40" />
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-emerald-500/10 blur-[150px] pointer-events-none z-0 rounded-full" />
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-emerald-500/5 blur-[160px] pointer-events-none z-0 rounded-full" />
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none z-0 opacity-40" />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-[640px] bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(0,128,96,0.28),rgba(0,76,63,0.15)_45%,transparent_85%)] blur-[120px] pointer-events-none z-0" />
+      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[400px] bg-[radial-gradient(ellipse_at_bottom,rgba(0,76,63,0.12),transparent_75%)] blur-[140px] pointer-events-none z-0" />
 
       {/* Navigation Header */}
-      <nav className="border-b border-white/[0.08] bg-[#08080A]/85 backdrop-blur-md sticky top-0 z-50">
+      <nav className="border-b border-white/[0.06] bg-[#0B0F12]/85 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)] group-hover:border-emerald-500/50 transition">
@@ -259,19 +259,23 @@ export default function LandingPage() {
               icon={<ArrowRight size={14} />}
               iconPosition="right"
             >
-              Start Free Trial
+              Start 3-Day Free Trial
             </EmeraldHoverButton>
           </div>
         </div>
       </nav>
 
-      {/* 1. High-Suspense Hero Section with Interactive 3D WebGL Constellation */}
-      <section className="relative pt-20 pb-20 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center min-h-[620px] flex flex-col justify-center items-center">
-        {/* Interactive 3D Particle & Energy Beam Constellation (ThreeUI Inspired) */}
-        <Hero3DCanvas />
-        <ThreeUIHero />
+      {/* 1. Full-Width Edge-to-Edge Hero Section with Interactive 3D WebGL Constellation */}
+      <section className="relative pt-24 pb-20 px-4 sm:px-6 lg:px-8 w-full overflow-hidden text-center min-h-[660px] flex flex-col justify-center items-center">
+        {/* Full-Width Edge-to-Edge Background Glow & 3D WebGL Constellation */}
+        <div className="absolute inset-0 w-full left-0 right-0 inset-x-0 h-full pointer-events-none overflow-hidden select-none z-0">
+          <div className="absolute top-0 inset-x-0 w-full left-0 right-0 h-[720px] bg-[radial-gradient(ellipse_100%_75%_at_50%_-10%,rgba(0,128,96,0.38),rgba(0,76,63,0.22)_40%,rgba(16,185,129,0.08)_70%,transparent_90%)] blur-[100px] pointer-events-none" />
+          <div className="absolute top-1/4 -inset-x-24 h-56 bg-gradient-to-r from-transparent via-[#008060]/15 to-transparent blur-3xl pointer-events-none" />
+          <Hero3DCanvas className="absolute inset-0 w-full h-full" />
+          <ThreeUIHero className="w-full h-full" />
+        </div>
 
-        <div className="relative z-10 w-full space-y-8">
+        <div className="relative z-10 max-w-5xl mx-auto w-full space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -461,15 +465,15 @@ export default function LandingPage() {
               <span className="text-zinc-300">Klaviyo</span>
             </span>
             <span className="flex items-center gap-1.5 hover:text-white transition">
-              <Server size={14} className="text-orange-400" />
+              <Server size={14} className="text-emerald-500" />
               <span className="text-zinc-300">Cloudflare</span>
             </span>
             <span className="flex items-center gap-1.5 hover:text-white transition">
-              <Inbox size={14} className="text-blue-400" />
+              <Inbox size={14} className="text-teal-400" />
               <span className="text-zinc-300">Google Workspace</span>
             </span>
             <span className="flex items-center gap-1.5 hover:text-white transition">
-              <Zap size={14} className="text-amber-400" />
+              <Zap size={14} className="text-emerald-400" />
               <span className="text-zinc-300">Postmark</span>
             </span>
           </div>
@@ -504,15 +508,15 @@ export default function LandingPage() {
             </div>
 
             <div className="space-y-3 font-mono text-xs">
-              <div className="p-3 bg-[#08080A] rounded-xl border border-white/[0.04] flex items-center justify-between">
+              <div className="p-3 bg-[#0B0F12] rounded-xl border border-white/[0.04] flex items-center justify-between">
                 <span className="text-zinc-400">Completed Orders</span>
                 <span className="text-white font-bold">1,000 Orders</span>
               </div>
-              <div className="p-3 bg-[#08080A] rounded-xl border border-white/[0.04] flex items-center justify-between">
+              <div className="p-3 bg-[#0B0F12] rounded-xl border border-white/[0.04] flex items-center justify-between">
                 <span className="text-zinc-400">Order Receipts Sent</span>
                 <span className="text-white font-bold">1,000 Dispatched</span>
               </div>
-              <div className="p-3 bg-[#08080A] rounded-xl border border-white/[0.04] flex items-center justify-between">
+              <div className="p-3 bg-[#0B0F12] rounded-xl border border-white/[0.04] flex items-center justify-between">
                 <span className="text-zinc-400">Shopify Status</span>
                 <span className="text-emerald-400 font-bold">✓ All Systems Normal</span>
               </div>
@@ -523,29 +527,29 @@ export default function LandingPage() {
           </div>
 
           {/* Card 2: What Actually Happens */}
-          <div className="obsidian-card p-6 rounded-2xl border border-red-500/20 bg-[#0E0E12] space-y-4 relative overflow-hidden">
+          <div className="obsidian-card p-6 rounded-2xl border border-rose-500/20 bg-[#0E1217] space-y-4 relative overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-              <span className="text-xs font-bold text-red-400 font-mono flex items-center gap-1.5">
-                <Flame size={15} className="text-red-400" />
+              <span className="text-xs font-bold text-rose-400 font-mono flex items-center gap-1.5">
+                <Flame size={15} className="text-rose-400" />
                 WHAT ACTUALLY HAPPENS AT GMAIL / YAHOO
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">
+              <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
                 Silent Loss
               </span>
             </div>
 
             <div className="space-y-3 font-mono text-xs">
-              <div className="p-3 bg-[#08080A] rounded-xl border border-red-500/10 flex items-center justify-between">
+              <div className="p-3 bg-[#0B0F12] rounded-xl border border-rose-500/15 flex items-center justify-between">
                 <span className="text-zinc-400">Filtered into SPAM folder</span>
-                <span className="text-red-400 font-bold">240 Receipts (24%)</span>
+                <span className="text-rose-400 font-bold">240 Receipts (24%)</span>
               </div>
-              <div className="p-3 bg-[#08080A] rounded-xl border border-red-500/10 flex items-center justify-between">
+              <div className="p-3 bg-[#0B0F12] rounded-xl border border-rose-500/15 flex items-center justify-between">
                 <span className="text-zinc-400">Support Tickets (&ldquo;Where is my order?&rdquo;)</span>
                 <span className="text-amber-400 font-bold">42 Angry Customers</span>
               </div>
-              <div className="p-3 bg-[#08080A] rounded-xl border border-red-500/10 flex items-center justify-between">
+              <div className="p-3 bg-[#0B0F12] rounded-xl border border-rose-500/15 flex items-center justify-between">
                 <span className="text-zinc-400">Lost LTV & Repeat GMV</span>
-                <span className="text-red-400 font-bold">-$4,200.00 / mo</span>
+                <span className="text-rose-400 font-bold">-$4,200.00 / mo</span>
               </div>
             </div>
             <p className="text-xs text-zinc-400 font-sans">
@@ -577,14 +581,14 @@ export default function LandingPage() {
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                 <Server size={18} />
               </div>
-              <h3 className="text-base font-bold text-white tracking-tight">1-Click DNS Inspector</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight">1-Click DNS Inspector</h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Interactive 3D wireframe plane auditing SPF syntax, DKIM 2048-bit selectors, and DMARC alignment rules in real-time.
               </p>
             </div>
 
             {/* Interactive Toggle Fixing Widget */}
-            <div className="p-4 bg-[#08080A]/90 backdrop-blur-md rounded-xl border border-white/[0.08] space-y-3 font-mono text-xs relative z-10">
+            <div className="p-4 bg-[#0B0F12]/90 backdrop-blur-md rounded-xl border border-white/[0.08] space-y-3 font-mono text-xs relative z-10">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-zinc-400">SPF LOOKUP OPTIMIZER</span>
                 <button
@@ -593,7 +597,7 @@ export default function LandingPage() {
                   className={`text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer transition ${
                     dnsToggleFixed
                       ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]"
-                      : "bg-[#1E1E26] text-zinc-300 hover:text-white"
+                      : "bg-[#161B22] text-zinc-300 hover:text-white"
                   }`}
                 >
                   {dnsToggleFixed ? "✓ Flattened (3 / 10)" : "⚡ Flatten SPF"}
@@ -614,14 +618,14 @@ export default function LandingPage() {
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                 <Radio size={18} />
               </div>
-              <h3 className="text-base font-bold text-white tracking-tight">Real-Time Blacklist Radar</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight">Real-Time Blacklist Radar</h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Concentric WebGL radar waves scanning 10 global threat matrices every hour before your sending domain gets burned.
               </p>
             </div>
 
             {/* Radar Animation Widget */}
-            <div className="p-4 bg-[#08080A]/90 backdrop-blur-md rounded-xl border border-white/[0.08] space-y-3 font-mono text-xs relative z-10">
+            <div className="p-4 bg-[#0B0F12]/90 backdrop-blur-md rounded-xl border border-white/[0.08] space-y-3 font-mono text-xs relative z-10">
               <div className="flex items-center justify-between text-[10px] text-zinc-500">
                 <span>RBL THREAT MATRIX</span>
                 <span className="text-emerald-400 flex items-center gap-1">
@@ -652,23 +656,23 @@ export default function LandingPage() {
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                 <Send size={18} />
               </div>
-              <h3 className="text-base font-bold text-white tracking-tight">Telegram Incident Bot</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight">Telegram Incident Bot</h3>
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Floating 3D glassmorphic push notification engine dispatching critical incident alerts directly to your phone.
               </p>
             </div>
 
-            {/* Telegram Push Mockup wrapped in 3D Tilt Hover Physics */}
+            {/* Telegram Push Mockup wrapped in 3D Tilt Hover Physics & Shopify Green accents */}
             <Tilt3DCard className="relative z-10">
-              <div className="p-3.5 bg-[#1C2430]/95 backdrop-blur-md rounded-xl border border-blue-500/30 space-y-1.5 text-xs shadow-2xl">
+              <div className="p-3.5 bg-[#0B0F12]/95 backdrop-blur-md rounded-xl border border-emerald-500/30 space-y-1.5 text-xs shadow-2xl">
                 <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                  <span className="flex items-center gap-1 text-blue-400 font-bold">
+                  <span className="flex items-center gap-1 text-emerald-400 font-bold">
                     <Send size={10} /> @InboundCheckBot
                   </span>
                   <span>now</span>
                 </div>
                 <div className="text-[11px] font-bold text-white flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
                   🚨 CRITICAL: Spam Placement Detected
                 </div>
                 <p className="text-[10px] text-zinc-300 font-mono leading-normal">
@@ -780,151 +784,170 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto items-stretch">
           {/* Starter Plan */}
-          <div className="obsidian-card p-7 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-6 hover:border-emerald-500/30 transition">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-white">Starter Merchant</h3>
-                <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
-                  Single DTC Brand
-                </span>
-              </div>
-              <div className="text-3xl font-extrabold text-white font-mono">
-                $29 <span className="text-xs font-normal text-zinc-400 font-sans">/ month</span>
-              </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Essential DNS governance and on-demand audits for emerging DTC stores.
-              </p>
+          <div className="uiverse-card group flex flex-col justify-between h-full">
+            <div className="uiverse-card-inner p-7 flex flex-col justify-between h-full space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase px-2.5 py-1 rounded-full bg-white/[0.05] text-slate-300 border border-white/[0.1]">
+                    Single DTC Brand
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">Starter Merchant</h3>
+                  <div className="text-3xl sm:text-4xl font-extrabold text-white font-mono tracking-tight pt-2">
+                    $29 <span className="text-xs font-normal text-slate-400 font-sans">/ month</span>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-400 leading-relaxed min-h-[44px]">
+                  Essential DNS governance and on-demand audits for emerging DTC stores.
+                </p>
 
-              <div className="space-y-2.5 pt-4 border-t border-white/[0.06] text-xs font-sans text-zinc-300">
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>1 Verified Apex Sending Domain</span>
+                <div className="space-y-3 pt-5 border-t border-white/[0.08] text-xs sm:text-sm font-sans text-slate-300">
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>1 Verified Apex Sending Domain</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Daily Multi-Resolver DNS Audits</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>10-List Blacklist Radar Probing</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Telegram Bot Alert Engine</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>Daily Multi-Resolver DNS Audits</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>10-List Blacklist Radar Probing</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>Telegram Bot Alert Engine</span>
-                </div>
+              </div>
+
+              <div className="pt-4">
+                <EmeraldHoverButton
+                  href="/auth/signup"
+                  size="md"
+                  variant="ghost"
+                  className="w-full"
+                >
+                  Start 3-Day Free Trial
+                </EmeraldHoverButton>
               </div>
             </div>
-
-            <EmeraldHoverButton
-              href="/auth/signup"
-              size="md"
-              variant="ghost"
-              className="w-full"
-            >
-              Start 3-Day Free Trial
-            </EmeraldHoverButton>
           </div>
 
           {/* Growth Plan (Most Popular) */}
-          <div className="obsidian-card p-7 rounded-2xl border border-emerald-500/40 relative overflow-hidden flex flex-col justify-between space-y-6 shadow-[0_0_30px_rgba(16,185,129,0.12)] hover:border-emerald-500/60 transition">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-white">Growth Tier</h3>
-                <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  Most Popular • Scaling Multi-Brand
-                </span>
-              </div>
-              <div className="text-3xl font-extrabold text-white font-mono">
-                $79 <span className="text-xs font-normal text-zinc-400 font-sans">/ month</span>
-              </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Comprehensive 24/7 automated deliverability & 1-click zone auto-fixer for scaling Shopify brands.
-              </p>
+          <div className="uiverse-card group flex flex-col justify-between h-full">
+            <div className="uiverse-card-inner p-7 flex flex-col justify-between h-full space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Most Popular • Scaling Multi-Brand
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">Growth Tier</h3>
+                  <div className="text-3xl sm:text-4xl font-extrabold text-white font-mono tracking-tight pt-2">
+                    $79 <span className="text-xs font-normal text-slate-400 font-sans">/ month</span>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-400 leading-relaxed min-h-[44px]">
+                  Comprehensive 24/7 automated deliverability & 1-click zone auto-fixer for scaling Shopify brands.
+                </p>
 
-              <div className="space-y-2.5 pt-4 border-t border-white/[0.06] text-xs font-sans text-zinc-300">
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <strong className="text-white">Up to 5 Apex Sending Domains</strong>
+                <div className="space-y-3 pt-5 border-t border-white/[0.08] text-xs sm:text-sm font-sans text-slate-300">
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <strong className="text-white font-semibold">Up to 5 Apex Sending Domains</strong>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Hourly DNS & IMAP Telemetry Ingestion</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>1-Click Cloudflare & GoDaddy Auto-Fixer</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>AI Content Lab & Liquid Template Optimizer</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Instant Telegram Incident Alert Engine</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>Hourly DNS & IMAP Telemetry Ingestion</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>1-Click Cloudflare & GoDaddy Auto-Fixer</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>AI Content Lab & Liquid Template Optimizer</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>Instant Telegram Incident Alert Engine</span>
-                </div>
+              </div>
+
+              <div className="pt-4">
+                <EmeraldHoverButton
+                  href="/auth/signup"
+                  size="md"
+                  variant="primary"
+                  className="w-full"
+                >
+                  Start 3-Day Free Trial
+                </EmeraldHoverButton>
               </div>
             </div>
-
-            <EmeraldHoverButton
-              href="/auth/signup"
-              size="md"
-              variant="primary"
-              className="w-full"
-            >
-              Start 3-Day Free Trial
-            </EmeraldHoverButton>
           </div>
 
           {/* Enterprise Plan */}
-          <div className="obsidian-card p-7 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-6 hover:border-emerald-500/30 transition">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-white">Enterprise Tier</h3>
-                <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-zinc-800/80 text-emerald-400 border border-emerald-500/30">
-                  Shopify Plus &amp; Aggregators
-                </span>
-              </div>
-              <div className="text-3xl font-extrabold text-white font-mono">
-                $199 <span className="text-xs font-normal text-zinc-400 font-sans">/ month</span>
-              </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Maximum-scale deliverability surveillance and white-glove governance for high-volume stores.
-              </p>
+          <div className="uiverse-card group flex flex-col justify-between h-full">
+            <div className="uiverse-card-inner p-7 flex flex-col justify-between h-full space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+                    Shopify Plus &amp; Aggregators
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">Enterprise Tier</h3>
+                  <div className="text-3xl sm:text-4xl font-extrabold text-white font-mono tracking-tight pt-2">
+                    $199 <span className="text-xs font-normal text-slate-400 font-sans">/ month</span>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-400 leading-relaxed min-h-[44px]">
+                  Maximum-scale deliverability surveillance and white-glove governance for high-volume stores.
+                </p>
 
-              <div className="space-y-2.5 pt-4 border-t border-white/[0.06] text-xs font-sans text-zinc-300">
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <strong className="text-white">Unlimited Monitored Domains</strong>
+                <div className="space-y-3 pt-5 border-t border-white/[0.08] text-xs sm:text-sm font-sans text-slate-300">
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <strong className="text-white font-semibold">Unlimited Monitored Domains</strong>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Dedicated 15m Sweeps & IMAP Probes</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Custom Webhooks & REST API Access</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>White-Glove Onboarding & Zone Migration</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Priority 24/7 Deliverability Engineer</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>Dedicated 15m Sweeps & IMAP Probes</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>Custom Webhooks & REST API Access</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>White-Glove Onboarding & Zone Migration</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
-                  <span>Priority 24/7 Deliverability Engineer</span>
-                </div>
+              </div>
+
+              <div className="pt-4">
+                <EmeraldHoverButton
+                  href="/auth/signup"
+                  size="md"
+                  variant="secondary"
+                  className="w-full"
+                >
+                  Start 3-Day Free Trial
+                </EmeraldHoverButton>
               </div>
             </div>
-
-            <EmeraldHoverButton
-              href="/auth/signup"
-              size="md"
-              variant="secondary"
-              className="w-full"
-            >
-              Start 3-Day Free Trial
-            </EmeraldHoverButton>
           </div>
         </div>
       </section>
