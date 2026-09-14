@@ -118,7 +118,13 @@ async def create_checkout_session(
             cancel_url=payload.cancel_url,
             plan_tier=payload.plan_tier,
         )
-        return {"success": True, **session_data}
+        target_url = session_data.get("url") or session_data.get("checkout_url")
+        return {
+            "success": True,
+            "url": target_url,
+            "checkout_url": target_url,
+            **session_data,
+        }
     except Exception as e:
         logger.error(f"Error creating checkout session: {e}")
         raise HTTPException(status_code=500, detail="Failed to create checkout session")

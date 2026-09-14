@@ -92,15 +92,20 @@ export function ObsidianPaywallModal({ onPlanSelected }: ObsidianPaywallModalPro
         }),
       });
 
+      if (res.status === 401) {
+        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
-        if (data.checkout_url) {
-          window.location.href = data.checkout_url;
+        const checkoutUrl = data.url || data.checkout_url;
+        if (checkoutUrl) {
+          window.location.href = checkoutUrl;
           return;
         }
       }
-      const errData = await res.json().catch(() => ({}));
-      setErrorMessage(errData.detail || "Unable to initiate Stripe checkout. Please try again.");
+      setErrorMessage(data.detail || "Unable to initiate Stripe checkout. Please try again.");
     } catch (err: any) {
       setErrorMessage(err?.message || "Network communication error with Stripe checkout service.");
     } finally {

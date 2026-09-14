@@ -17,14 +17,46 @@ export async function getAuthHeaders(customHeaders: HeadersInit = {}): Promise<H
   const headers: Record<string, string> = {};
 
   try {
-    const sessionPromise = supabase.auth.getSession();
-    const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) => {
-      setTimeout(() => resolve({ data: { session: null } }), 1500);
-    });
+    let token: string | undefined;
 
-    const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
-    if (session?.access_token) {
-      headers["Authorization"] = `Bearer ${session.access_token}`;
+    // 1. Primary: Retrieve session via Supabase JS client
+    try {
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) => {
+        setTimeout(() => resolve({ data: { session: null } }), 3000);
+      });
+
+      const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+      if (session?.access_token) {
+        token = session.access_token;
+      }
+    } catch (e) {
+      console.warn("Supabase getSession error:", e);
+    }
+
+    // 2. Secondary: Fallback to direct localStorage inspection for Supabase auth tokens
+    if (!token && typeof window !== "undefined" && window.localStorage) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith("sb-") || key.includes("supabase")) && key.endsWith("-auth-token")) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed?.access_token) {
+                token = parsed.access_token;
+                break;
+              }
+            }
+          }
+        }
+      } catch {
+        // Suppress localStorage parsing errors
+      }
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
     }
   } catch (err) {
     console.warn("Failed to retrieve Supabase session JWT:", err);

@@ -187,21 +187,34 @@ export default function BillingPortalPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan_tier: planTier,
+          price_id: planTier,
           success_url: `${window.location.origin}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}&upgraded=${planTier}`,
           cancel_url: `${window.location.origin}/dashboard/billing`,
         }),
       });
 
+      if (res.status === 401) {
+        console.warn("User unauthorized for checkout session. Redirecting to login...");
+        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
-        if (data.checkout_url) {
-          window.location.href = data.checkout_url;
+        const redirectUrl = data.url || data.checkout_url;
+        if (redirectUrl) {
+          window.location.href = redirectUrl;
           return;
         }
+        setPortalNotice("Stripe checkout session initialized, but no redirection URL was provided.");
+      } else {
+        const errorDetail = data.detail || `Checkout initiation failed (${res.status}).`;
+        console.error("Stripe checkout error:", res.status, data);
+        setPortalNotice(errorDetail);
       }
-      setPortalNotice("Could not initiate Stripe checkout session. Please check your credentials.");
-    } catch (err) {
-      setPortalNotice("Network exception initiating checkout session.");
+    } catch (err: any) {
+      console.error("Network exception initiating checkout session:", err);
+      setPortalNotice(err?.message || "Network exception initiating checkout session.");
     } finally {
       setLoadingTier(null);
     }
@@ -219,10 +232,17 @@ export default function BillingPortalPage() {
         }),
       });
 
+      if (res.status === 401) {
+        console.warn("User unauthorized for customer portal. Redirecting to login...");
+        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
-        if (data.portal_url && data.has_customer) {
-          window.open(data.portal_url, "_blank");
+        const portalUrl = data.url || data.portal_url;
+        if (portalUrl && data.has_customer) {
+          window.open(portalUrl, "_blank");
           return;
         } else if (data.message) {
           setPortalNotice(data.message);

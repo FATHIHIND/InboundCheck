@@ -256,9 +256,11 @@ class StripeService:
                     )
                     if res.status_code == 200:
                         data = res.json()
+                        raw_url = data.get("url")
                         return {
                             "session_id": data.get("id"),
-                            "checkout_url": data.get("url"),
+                            "checkout_url": raw_url,
+                            "url": raw_url,
                             "plan_tier": tier,
                             "subscription_tier": tier,
                             "amount": plan_meta["amount"] / 100,
@@ -274,6 +276,7 @@ class StripeService:
         return {
             "session_id": mock_id,
             "checkout_url": s_url,
+            "url": s_url,
             "plan_tier": tier,
             "subscription_tier": tier,
             "amount": plan_meta["amount"] / 100,
