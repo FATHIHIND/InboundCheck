@@ -258,10 +258,36 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed"
+            className="text-base md:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed font-normal"
           >
             Google and Yahoo changed the deliverability rules. Over 28% of Shopify transactional receipts quietly vanish into junk folders—costing you repeat sales and customer trust.
           </motion.p>
+
+          {/* Primary High-Converting CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.25 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1"
+          >
+            <EmeraldHoverButton
+              href="/auth/signup"
+              size="lg"
+              variant="primary"
+              icon={<ArrowRight size={16} />}
+              iconPosition="right"
+              className="w-full sm:w-auto shadow-[0_0_25px_rgba(16,185,129,0.3)] hover:shadow-[0_0_35px_rgba(16,185,129,0.5)] transition-all"
+            >
+              Start 3-Day Free Trial
+            </EmeraldHoverButton>
+            <Link
+              href="/auth/login"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-white/[0.12] bg-[#0E0E12]/80 hover:bg-[#16161D] hover:border-emerald-500/40 text-sm font-medium text-zinc-300 hover:text-white transition-all shadow-sm group"
+            >
+              <ShoppingBag size={15} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+              <span>Connect Shopify Store</span>
+            </Link>
+          </motion.div>
 
           {/* Interactive Live Bait (Free Domain Health Check) */}
           <motion.div
@@ -658,7 +684,7 @@ export default function LandingPage() {
       </section>
 
       {/* 5. High-Converting Pricing Cards */}
-      <section id="pricing" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto border-t border-white/[0.06]">
+      <section id="pricing" className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto border-t border-white/[0.06]">
         <div className="text-center space-y-3 mb-12">
           <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
             TRANSPARENT PRICING
@@ -671,7 +697,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {/* Starter Plan */}
           <div className="obsidian-card p-7 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-6">
             <div className="space-y-4">
@@ -690,19 +716,19 @@ export default function LandingPage() {
 
               <div className="space-y-2.5 pt-4 border-t border-white/[0.06] text-xs font-sans text-zinc-300">
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>1 Verified Apex Sending Domain</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>Daily Multi-Resolver DNS Audits</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>10-List Blacklist Radar Probing</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>Telegram Bot Alert Engine</span>
                 </div>
               </div>
@@ -714,7 +740,7 @@ export default function LandingPage() {
               variant="ghost"
               className="w-full"
             >
-              Start 14-Day Free Trial
+              Start 3-Day Free Trial
             </EmeraldHoverButton>
           </div>
 
@@ -736,23 +762,23 @@ export default function LandingPage() {
 
               <div className="space-y-2.5 pt-4 border-t border-white/[0.06] text-xs font-sans text-zinc-300">
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <strong className="text-white">Up to 5 Apex Sending Domains</strong>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>Hourly DNS & IMAP Telemetry Ingestion</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>1-Click Cloudflare & GoDaddy Auto-Fixer</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>AI Content Lab & Liquid Template Optimizer</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check size={14} className="text-emerald-400" />
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
                   <span>Instant Telegram Incident Alert Engine</span>
                 </div>
               </div>
@@ -764,7 +790,57 @@ export default function LandingPage() {
               variant="primary"
               className="w-full"
             >
-              Start 14-Day Free Trial
+              Start 3-Day Free Trial
+            </EmeraldHoverButton>
+          </div>
+
+          {/* Enterprise Plan */}
+          <div className="obsidian-card p-7 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-6 hover:border-emerald-500/30 transition">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-white">Enterprise Tier</h3>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-emerald-500/20">
+                  Shopify Plus
+                </span>
+              </div>
+              <div className="text-3xl font-extrabold text-white font-mono">
+                $199 <span className="text-xs font-normal text-zinc-400 font-sans">/ month</span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Maximum-scale deliverability surveillance and white-glove governance for high-volume stores.
+              </p>
+
+              <div className="space-y-2.5 pt-4 border-t border-white/[0.06] text-xs font-sans text-zinc-300">
+                <div className="flex items-center gap-2">
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
+                  <strong className="text-white">Unlimited Monitored Domains</strong>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
+                  <span>Dedicated 15m Sweeps & IMAP Probes</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
+                  <span>Custom Webhooks & REST API Access</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
+                  <span>White-Glove Onboarding & Zone Migration</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check size={14} className="text-emerald-400 flex-shrink-0" />
+                  <span>Priority 24/7 Deliverability Engineer</span>
+                </div>
+              </div>
+            </div>
+
+            <EmeraldHoverButton
+              href="/auth/signup"
+              size="md"
+              variant="secondary"
+              className="w-full"
+            >
+              Start 3-Day Free Trial
             </EmeraldHoverButton>
           </div>
         </div>
@@ -776,7 +852,7 @@ export default function LandingPage() {
           <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
             FREQUENTLY ASKED QUESTIONS
           </span>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Everything You Need to Know About InboundCheck
           </h2>
         </div>
@@ -784,7 +860,7 @@ export default function LandingPage() {
         <div className="space-y-3">
           {faqItems.map((item, idx) => (
             <div
-              key={idx}
+              key={item.q}
               className="obsidian-card rounded-xl border border-white/[0.08] overflow-hidden"
             >
               <button
@@ -825,7 +901,7 @@ export default function LandingPage() {
             variant="primary"
             className="whitespace-nowrap"
           >
-            Start 14-Day Free Trial
+            Start 3-Day Free Trial
           </EmeraldHoverButton>
         </div>
       </div>
