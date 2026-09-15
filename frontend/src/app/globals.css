@@ -62,6 +62,42 @@ body::before {
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* 3D Ticket Audit Pass Component */
+.ticket-container {
+  perspective: 1000px;
+}
+
+.ticket-pass {
+  --t-bg: #0E1217;
+  --t-bg-light: #161B22;
+  --t-accent: #10B981;
+  --t-accent-glow: rgba(16, 185, 129, 0.35);
+  background-color: var(--t-bg);
+  background-image: 
+    linear-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+  position: relative;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+  transform-style: preserve-3d;
+}
+
+.ticket-pass:hover {
+  transform: rotateX(4deg) rotateY(-6deg) scale(1.02);
+  box-shadow: 0 24px 48px -12px var(--t-accent-glow);
+}
+
+.ticket-pass-leak {
+  --t-bg: #0E1217;
+  --t-bg-light: #161B22;
+  --t-accent: #F43F5E;
+  --t-accent-glow: rgba(244, 63, 94, 0.22);
+}
+
+.ticket-pass-leak:hover {
+  box-shadow: 0 24px 48px -12px rgba(244, 63, 94, 0.22);
+}
+
 /* Uiverse-Inspired Shopify Green Glow Card Effect */
 .uiverse-card {
   position: relative;

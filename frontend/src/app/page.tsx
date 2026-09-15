@@ -27,9 +27,10 @@ import {
   Lock,
   ChevronRight,
   ExternalLink,
-  Activity
+  Activity,
 } from "lucide-react";
 import FadeInUp from "@/components/landing/FadeInUp";
+import ShopifyAuditPasses from "@/components/landing/ShopifyAuditPass";
 
 // 5 Core High-Intent FAQ Items
 const FAQ_ITEMS = [
@@ -563,77 +564,9 @@ export default function LandingPage() {
           </div>
         </FadeInUp>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Card 1: What You See */}
-          <FadeInUp delay={0.1}>
-            <div className="h-full p-8 rounded-3xl bg-[#0E0E12]/80 backdrop-blur-xl border border-white/10 space-y-6 shadow-2xl relative overflow-hidden group hover:border-white/20 transition-all">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <span className="text-xs font-semibold text-zinc-300 font-mono flex items-center gap-2">
-                  <CheckCircle2 size={16} className="text-emerald-400" />
-                  WHAT YOUR SHOPIFY DASHBOARD SHOWS
-                </span>
-                <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-white/5 text-zinc-400 border border-white/10">
-                  Surface Metrics
-                </span>
-              </div>
-
-              <div className="space-y-3 font-mono text-xs">
-                <div className="p-4 bg-black/60 rounded-xl border border-white/5 flex items-center justify-between">
-                  <span className="text-zinc-400">Completed Orders</span>
-                  <span className="text-white font-semibold">1,000 Orders</span>
-                </div>
-                <div className="p-4 bg-black/60 rounded-xl border border-white/5 flex items-center justify-between">
-                  <span className="text-zinc-400">Order Receipts Sent</span>
-                  <span className="text-white font-semibold">1,000 Dispatched</span>
-                </div>
-                <div className="p-4 bg-black/60 rounded-xl border border-white/5 flex items-center justify-between">
-                  <span className="text-zinc-400">Shopify Status</span>
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
-                    <Check size={14} /> All Systems Normal
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-xs text-gray-400 italic">
-                &ldquo;Everything looks green. You assume your customers are receiving tracking codes and receipts.&rdquo;
-              </p>
-            </div>
-          </FadeInUp>
-
-          {/* Card 2: What Actually Happens */}
-          <FadeInUp delay={0.2}>
-            <div className="h-full p-8 rounded-3xl bg-rose-950/20 backdrop-blur-xl border border-rose-900/40 space-y-6 shadow-2xl relative overflow-hidden group hover:border-rose-700/50 transition-all">
-              <div className="flex items-center justify-between border-b border-rose-900/30 pb-4">
-                <span className="text-xs font-semibold text-rose-400 font-mono flex items-center gap-2">
-                  <Flame size={16} className="text-rose-400" />
-                  WHAT ACTUALLY HAPPENS AT GMAIL / YAHOO
-                </span>
-                <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-rose-950/60 text-rose-400 border border-rose-800/50 font-medium">
-                  Silent Loss
-                </span>
-              </div>
-
-              <div className="space-y-3 font-mono text-xs">
-                <div className="p-4 bg-black/60 rounded-xl border border-rose-900/30 flex items-center justify-between">
-                  <span className="text-zinc-400">Filtered into SPAM folder</span>
-                  <span className="text-rose-400 font-semibold">240 Receipts (24%)</span>
-                </div>
-                <div className="p-4 bg-black/60 rounded-xl border border-rose-900/30 flex items-center justify-between">
-                  <span className="text-zinc-400">Support Tickets (&ldquo;Where is my order?&rdquo;)</span>
-                  <span className="text-rose-300 font-semibold">42 Angry Customers</span>
-                </div>
-                <div className="p-4 bg-black/60 rounded-xl border border-rose-900/30 flex items-center justify-between">
-                  <span className="text-zinc-400">Lost LTV &amp; Dispute Risk</span>
-                  <span className="text-rose-400 font-semibold">-$4,200.00 / mo</span>
-                </div>
-              </div>
-
-              <p className="text-xs text-zinc-300">
-                InboundCheck eliminates this blindspot with 24/7 proactive DNS and deliverability monitoring.
-              </p>
-            </div>
-          </FadeInUp>
-        </div>
+        <FadeInUp delay={0.2} className="w-full flex justify-center">
+          <ShopifyAuditPasses />
+        </FadeInUp>
       </section>
 
       {/* 4. Interactive Feature Sections (Two-Column Layouts) */}
