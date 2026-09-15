@@ -237,10 +237,11 @@ export default function LandingPage() {
             </div>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8 text-xs font-mono text-zinc-400">
-            <a href="#threat" className="hover:text-white transition">The $4.2k Leak</a>
-            <a href="#capabilities" className="hover:text-white transition">Platform Radar</a>
-            <a href="#protocol" className="hover:text-white transition">Governance Protocol</a>
+          <div className="hidden md:flex items-center gap-7 text-xs font-mono text-zinc-400">
+            <a href="#threat" className="hover:text-white transition">The Blindspot</a>
+            <a href="#capabilities" className="hover:text-white transition">DNS Inspector</a>
+            <a href="#capabilities" className="hover:text-white transition">Blacklist Radar</a>
+            <a href="#how-it-works" className="hover:text-white transition">Shopify Sync</a>
             <a href="#pricing" className="hover:text-white transition">Pricing</a>
             <a href="#faq" className="hover:text-white transition">FAQ</a>
           </div>
@@ -259,7 +260,7 @@ export default function LandingPage() {
               icon={<ArrowRight size={14} />}
               iconPosition="right"
             >
-              Get Started
+              Start Free Trial
             </EmeraldHoverButton>
           </div>
         </div>
@@ -301,9 +302,9 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-base md:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed font-normal"
+            className="text-base md:text-lg text-slate-300 max-w-3xl mx-auto leading-relaxed font-normal"
           >
-            Google and Yahoo changed the deliverability rules. Over 28% of Shopify transactional receipts quietly vanish into junk folders—costing you repeat sales and customer trust.
+            Google and Yahoo 2024 deliverability rules silently discard up to 28% of Shopify order receipts, shipping notifications, and abandoned cart recoveries. InboundCheck continuously governs your DNS and alerts you before chargebacks occur.
           </motion.p>
 
           {/* Primary High-Converting CTAs */}
@@ -360,7 +361,7 @@ export default function LandingPage() {
                   variant="primary"
                   className="whitespace-nowrap"
                 >
-                  Check Inboxing Risk Free
+                  Check Inboxing Risk-Free
                 </EmeraldHoverButton>
               </form>
 
@@ -491,8 +492,8 @@ export default function LandingPage() {
           {/* Card 1: What You See */}
           <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] space-y-4">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-              <span className="text-xs font-semibold text-zinc-400 font-mono flex items-center gap-1.5">
-                <CheckCircle2 size={15} className="text-zinc-500" />
+              <span className="text-xs font-semibold text-zinc-300 font-mono flex items-center gap-1.5">
+                <CheckCircle2 size={15} className="text-emerald-400" />
                 WHAT YOUR SHOPIFY DASHBOARD SHOWS
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 border border-white/[0.06]">
@@ -515,12 +516,12 @@ export default function LandingPage() {
               </div>
             </div>
             <p className="text-xs text-slate-300 font-sans italic">
-              &ldquo;Everything looks green. You assume your customers are receiving their tracking codes and receipts.&rdquo;
+              &ldquo;Everything looks green. You assume your customers are receiving tracking codes and receipts.&rdquo;
             </p>
           </div>
 
           {/* Card 2: What Actually Happens */}
-          <div className="obsidian-card p-6 rounded-2xl border border-rose-800/40 bg-[#0E1217] space-y-4 relative overflow-hidden">
+          <div className="obsidian-card p-6 rounded-2xl border border-rose-900/40 bg-rose-950/20 space-y-4 relative overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
               <span className="text-xs font-semibold text-rose-400 font-mono flex items-center gap-1.5">
                 <Flame size={15} className="text-rose-400" />
@@ -536,71 +537,77 @@ export default function LandingPage() {
                 <span className="text-zinc-400">Filtered into SPAM folder</span>
                 <span className="text-rose-400 font-semibold">240 Receipts (24%)</span>
               </div>
-              <div className="p-3 bg-[#0B0F12] rounded-xl border border-amber-900/30 flex items-center justify-between">
+              <div className="p-3 bg-[#0B0F12] rounded-xl border border-rose-900/30 flex items-center justify-between">
                 <span className="text-zinc-400">Support Tickets (&ldquo;Where is my order?&rdquo;)</span>
-                <span className="text-amber-400 font-semibold">42 Angry Customers</span>
+                <span className="text-rose-300 font-semibold">42 Angry Customers</span>
               </div>
               <div className="p-3 bg-[#0B0F12] rounded-xl border border-rose-900/30 flex items-center justify-between">
-                <span className="text-zinc-400">Lost LTV & Repeat GMV</span>
+                <span className="text-zinc-400">Lost LTV & Dispute Risk</span>
                 <span className="text-rose-400 font-semibold">-$4,200.00 / mo</span>
               </div>
             </div>
             <p className="text-xs text-slate-300 font-sans">
-              <strong className="text-white font-medium">InboundCheck eliminates this blindspot.</strong> We act as your 24/7 radar to guarantee transactional deliverability.
+              InboundCheck eliminates this blindspot with 24/7 proactive DNS and deliverability monitoring.
             </p>
           </div>
         </div>
       </section>
 
-      {/* 3. Interactive Spotlight Bento Grid (Core Platform Capabilities) */}
+      {/* 3. Core Features Section (Actual Dashboard Modules) */}
       <section id="capabilities" className="relative z-10 py-24 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto border-t border-white/[0.06]">
         <div className="text-center space-y-3 mb-14">
           <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
-            ENGINEERED FOR SUPREMACY
+            DIAGNOSTIC ENGINES &amp; AUTOMATION
           </span>
           <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
-            Real-Time Surveillance & Automated DNS Governance
+            Enterprise Deliverability Tools Built for DTC Brands
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
-            Explore interactive live widgets from our enterprise engine.
+            Powered by live multi-resolver DNS audits, automated zone patchers, and continuous threat radar.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: 3D Wireframe DNS Inspector */}
+          {/* Card 1: 1-Click DNS Inspector & Auto-Fix */}
           <SpotlightCard className="p-6 flex flex-col justify-between space-y-6 relative overflow-hidden group">
             <WireframeGridCanvas />
             <div className="space-y-2 relative z-10">
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                 <Server size={18} />
               </div>
-              <h3 className="text-lg font-semibold text-white tracking-tight">1-Click DNS Inspector</h3>
+              <h3 className="text-lg font-semibold text-white tracking-tight">1-Click DNS Inspector &amp; Auto-Fix</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Interactive 3D wireframe plane auditing SPF syntax, DKIM 2048-bit selectors, and DMARC alignment rules in real-time.
+                Audit SPF syntax, resolve conflicting multi-sender records (RFC 7208), verify 2048-bit DKIM selectors, and enforce DMARC alignment. Auto-inject fixes directly to Cloudflare and GoDaddy.
               </p>
             </div>
 
-            {/* Interactive Toggle Fixing Widget */}
+            {/* Visual Mock Preview: SPF Budget & DMARC Policy */}
             <div className="p-4 bg-[#0B0F12]/90 backdrop-blur-md rounded-xl border border-white/[0.08] space-y-3 font-mono text-xs relative z-10">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-400">SPF LOOKUP OPTIMIZER</span>
-                <button
-                  type="button"
-                  onClick={() => setDnsToggleFixed(!dnsToggleFixed)}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer transition ${
-                    dnsToggleFixed
-                      ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]"
-                      : "bg-[#161B22] text-zinc-300 hover:text-white"
-                  }`}
-                >
-                  {dnsToggleFixed ? "✓ Flattened (3 / 10)" : "⚡ Flatten SPF"}
-                </button>
+              <div className="flex items-center justify-between border-b border-white/[0.04] pb-2 text-[10px]">
+                <span className="text-zinc-400">SPF LOOKUP BUDGET</span>
+                <span className="text-emerald-400 font-bold">4 / 10 Used</span>
               </div>
-              <div className="text-[11px] text-zinc-300 font-mono truncate">
-                {dnsToggleFixed
-                  ? "v=spf1 include:_spf.shopify.com ~all"
-                  : "v=spf1 include:klaviyo.com include:zendesk.com include:shops.shopify.com (12 Lookups - FAIL)"}
+              <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-emerald-400 h-1.5 rounded-full w-[40%]" />
               </div>
+              <div className="flex items-center justify-between pt-1 text-[11px]">
+                <span className="text-zinc-400">DMARC Policy:</span>
+                <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                  p=quarantine
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDnsToggleFixed(!dnsToggleFixed)}
+                className={`w-full text-center py-1.5 px-3 rounded text-[11px] font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                  dnsToggleFixed
+                    ? "bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                    : "bg-[#161B22] text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30"
+                }`}
+              >
+                <Zap size={12} className="fill-current" />
+                {dnsToggleFixed ? "✓ Records Auto-Applied to Cloudflare" : "1-Click Auto-Apply DNS Fix"}
+              </button>
             </div>
           </SpotlightCard>
 
@@ -613,51 +620,57 @@ export default function LandingPage() {
               </div>
               <h3 className="text-lg font-semibold text-white tracking-tight">Real-Time Blacklist Radar</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Concentric WebGL radar waves scanning 10 global threat matrices every hour before your sending domain gets burned.
+                Continuous background surveillance querying 10+ authoritative anti-spam databases (Spamhaus, Barracuda, SpamCop, SORBS) every hour before your domain reputation gets burned.
               </p>
             </div>
 
-            {/* Radar Animation Widget */}
+            {/* Radar Animation Widget with Real Nodes */}
             <div className="p-4 bg-[#0B0F12]/90 backdrop-blur-md rounded-xl border border-white/[0.08] space-y-3 font-mono text-xs relative z-10">
               <div className="flex items-center justify-between text-[10px] text-zinc-500">
-                <span>RBL THREAT MATRIX</span>
+                <span>RBL THREAT RADAR</span>
                 <span className="text-emerald-400 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  PROBING
+                  PROBING 10+ RBLs
                 </span>
               </div>
               <div className="space-y-1.5 text-[11px]">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-1.5 rounded bg-[#08080A] border border-white/[0.04]">
                   <span className="text-zinc-300">Spamhaus ZEN</span>
-                  <span className="text-emerald-400 font-semibold">CLEAN (18ms)</span>
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <Check size={12} /> CLEAN
+                  </span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-1.5 rounded bg-[#08080A] border border-white/[0.04]">
                   <span className="text-zinc-300">Barracuda BRBL</span>
-                  <span className="text-emerald-400 font-semibold">CLEAN (22ms)</span>
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <Check size={12} /> CLEAN
+                  </span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-1.5 rounded bg-[#08080A] border border-white/[0.04]">
                   <span className="text-zinc-300">SpamCop SCBL</span>
-                  <span className="text-emerald-400 font-semibold">CLEAN (14ms)</span>
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <Check size={12} /> CLEAN
+                  </span>
                 </div>
               </div>
             </div>
           </SpotlightCard>
 
-          {/* Card 3: Instant Telegram Bot Radar (with 3D Tilt Hover Physics) */}
+          {/* Card 3: Telegram Instant Incident Alerts */}
           <SpotlightCard className="p-6 flex flex-col justify-between space-y-6 relative overflow-hidden group">
             <div className="space-y-2 relative z-10">
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                 <Send size={18} />
               </div>
-              <h3 className="text-lg font-semibold text-white tracking-tight">Telegram Incident Bot</h3>
+              <h3 className="text-lg font-semibold text-white tracking-tight">Telegram Instant Incident Alerts</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Floating 3D glassmorphic push notification engine dispatching critical incident alerts directly to your phone.
+                Never get blindsided by broken records. Get rich incident push alerts directly to your team&apos;s Telegram bot the moment an order receipt bounces or health score drops.
               </p>
             </div>
 
-            {/* Telegram Push Mockup wrapped in 3D Tilt Hover Physics & Shopify Green accents */}
+            {/* Telegram Push Mockup */}
             <Tilt3DCard className="relative z-10">
-              <div className="p-3.5 bg-[#0B0F12]/95 backdrop-blur-md rounded-xl border border-emerald-500/30 space-y-1.5 text-xs shadow-2xl">
+              <div className="p-3.5 bg-[#0B0F12]/95 backdrop-blur-md rounded-xl border border-emerald-500/30 space-y-2 text-xs shadow-2xl">
                 <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
                   <span className="flex items-center gap-1 text-emerald-400 font-semibold">
                     <Send size={10} /> @InboundCheckBot
@@ -666,28 +679,34 @@ export default function LandingPage() {
                 </div>
                 <div className="text-[11px] font-semibold text-white flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
-                  🚨 CRITICAL: Spam Placement Detected
+                  CRITICAL: Spam Placement Detected
                 </div>
-                <p className="text-[10px] text-zinc-300 font-mono leading-normal">
-                  Order #10492 routed to SPAM by Gmail filter. Health score dropped to 64%.
+                <p className="text-[10px] text-zinc-300 font-mono leading-relaxed bg-[#08080A] p-2 rounded border border-white/[0.04]">
+                  Health score dropped below 75%. Order #10492 routed to SPAM by Gmail filter.
                 </p>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    Auto-Fix Ready
+                  </span>
+                  <span className="text-[9px] font-mono text-zinc-500">1-click remediate</span>
+                </div>
               </div>
             </Tilt3DCard>
           </SpotlightCard>
         </div>
       </section>
 
-      {/* 4. Interactive Protocol Steps (01, 02, 03 Execution Methodology) */}
-      <section id="protocol" className="relative z-10 py-24 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto border-t border-white/[0.06]">
+      {/* 4. How It Works (3 Simple Steps) */}
+      <section id="how-it-works" className="relative z-10 py-24 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto border-t border-white/[0.06]">
         <div className="text-center space-y-3 mb-14">
           <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
-            EXECUTION METHODOLOGY
+            ONBOARDING IN 60 SECONDS
           </span>
           <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
-            The InboundCheck Governance Protocol
+            How InboundCheck Protects Your Store
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto">
-            A closed-loop mathematical pipeline protecting transactional receipts from server to subscriber.
+            Three simple steps to permanently eliminate spam placement for your order confirmations.
           </p>
         </div>
 
@@ -707,9 +726,9 @@ export default function LandingPage() {
                 01
               </span>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-white">Multi-Resolver Cryptographic Ingestion</h3>
+                <h3 className="text-sm font-semibold text-white">Connect Your Sending Domain</h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Asynchronously queries Cloudflare (1.1.1.1), Google (8.8.8.8), and Quad9 resolvers with SSRF-safe syntax parsers to confirm record propagation and DKIM 2048-bit keys globally.
+                  Enter your store&apos;s sending domain. Our engine probes Cloudflare, Google, and Quad9 resolvers in real-time to benchmark your authentication baseline.
                 </p>
               </div>
             </div>
@@ -730,9 +749,9 @@ export default function LandingPage() {
                 02
               </span>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-white">1-Click Zone Record Auto-Insertion</h3>
+                <h3 className="text-sm font-semibold text-white">1-Click Automated DNS Remediation</h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Connect Cloudflare API tokens or GoDaddy keys to auto-publish SPF, CNAMEs, and DMARC records with pre-flight conflict checks and instant snapshot rollback.
+                  Connect your Cloudflare or GoDaddy API to auto-patch missing SPF includes, DMARC policies, and Shopify DKIM keys without touching DNS zone files manually.
                 </p>
               </div>
             </div>
@@ -753,9 +772,9 @@ export default function LandingPage() {
                 03
               </span>
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-white">Predictive Dispute & Protected Revenue ROI</h3>
+                <h3 className="text-sm font-semibold text-white">24/7 Radar &amp; Revenue Protection</h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Directly correlates real delivery health to store GMV, computing protected revenue metrics ($R_protected) and dispute reduction multipliers.
+                  Relax while our hourly daemon monitors spam blacklists, catches IP traps, and alerts your team on Telegram before customer disputes hit your payment processor.
                 </p>
               </div>
             </div>
