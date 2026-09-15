@@ -5,10 +5,10 @@
 @tailwind utilities;
 
 :root {
-  --background: #0B0F12;
+  --background: #000000;
   --foreground: #FFFFFF;
-  --surface: #0E1217;
-  --surface-hover: #161B22;
+  --surface: #0A0A0C;
+  --surface-hover: #121216;
   --border-subtle: rgba(0, 128, 96, 0.2);
   --border-active: rgba(16, 185, 129, 0.45);
   --text-primary: #FFFFFF;
@@ -24,8 +24,12 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background-color: #0B0F12;
+  background-color: #000000;
   color: #FFFFFF;
   font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
