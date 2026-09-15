@@ -610,9 +610,15 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left: Copy */}
           <FadeInUp className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold">
-              <Server size={14} />
-              <span>DNS GOVERNANCE ENGINE</span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold">
+                <Server size={14} />
+                <span>DNS GOVERNANCE ENGINE</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-emerald-400 text-xs font-mono font-medium">
+                <ShieldCheck size={13} className="text-emerald-400" />
+                <span>2024 Compliance Enforced</span>
+              </div>
             </div>
 
             {/* Descriptive H3 for AI Search Engines & Screen Readers */}
@@ -622,7 +628,7 @@ export default function LandingPage() {
               Fix Hidden DNS Conflicts in 1 Click
             </h2>
             <p className="text-base text-gray-400 leading-relaxed">
-              Google and Yahoo reject order emails if your store connects more than 3 sending tools (Shopify, Klaviyo, Zendesk). InboundCheck merges your records automatically so every receipt reaches the inbox.
+              When you connect Shopify, Klaviyo, and support inboxes, your DNS breaks Google &amp; Yahoo 2024 deliverability rules. InboundCheck merges your records into a single compliant entry automatically.
             </p>
             <div className="space-y-3.5 font-sans text-sm text-gray-300">
               <div className="flex items-start gap-3">
@@ -630,7 +636,7 @@ export default function LandingPage() {
                   <Check size={13} />
                 </div>
                 <span>
-                  <strong className="text-white">Zero Email Drop Limit:</strong> Merges Klaviyo and Shopify records into one clean entry to bypass Google&apos;s 10-lookup barrier.
+                  <strong className="text-white">Prevents Spam Routing:</strong> Automatically merges multi-app SPF records to bypass Google&apos;s 10-lookup barrier.
                 </span>
               </div>
               <div className="flex items-start gap-3">
@@ -638,7 +644,7 @@ export default function LandingPage() {
                   <Check size={13} />
                 </div>
                 <span>
-                  <strong className="text-white">Verified Sender Keys:</strong> Confirms your store&apos;s DKIM identity keys are valid and trusted by Gmail.
+                  <strong className="text-white">Guarantees Trusted Sender Status:</strong> Validates 2048-bit DKIM keys to pass DMARC alignment on Gmail and Yahoo.
                 </span>
               </div>
               <div className="flex items-start gap-3">
@@ -646,24 +652,36 @@ export default function LandingPage() {
                   <Check size={13} />
                 </div>
                 <span>
-                  <strong className="text-white">1-Click Auto-Patch:</strong> Fixes your DNS in Cloudflare or GoDaddy automatically without manually editing code or records.
+                  <strong className="text-white">Zero Manual Editing:</strong> Syncs verified records directly to Cloudflare, GoDaddy, or Namecheap via secure API.
                 </span>
-              </div>
-            </div>
-            <div className="pt-2">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-medium">
-                <ShieldCheck size={14} className="text-emerald-400" />
-                <span>Protected against Google &amp; Yahoo 2024 restrictions</span>
               </div>
             </div>
           </FadeInUp>
 
-          {/* Right Mockup: Glassmorphic floating card with Pure Shopify Emerald Waving Background */}
+          {/* Right Mockup: Glassmorphic floating card with Dynamic Flowing Emerald Background */}
           <FadeInUp delay={0.2}>
             <div className="bg-[#1C1C1E]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
-              {/* Pure Shopify Emerald Waving Background Aura (Purged all purple/pink) */}
-              <div className="absolute inset-0 emerald-wave-bg -z-10 pointer-events-none rounded-3xl" />
-              <div className="absolute -inset-10 bg-[radial-gradient(circle_at_50%_30%,rgba(0,128,96,0.35),rgba(16,185,129,0.15)_45%,transparent_75%)] blur-2xl emerald-aura-animated pointer-events-none -z-10" />
+              {/* Glowing Emerald Gradient Wave Base */}
+              <div
+                className="absolute inset-0 -z-20 pointer-events-none rounded-3xl"
+                style={{
+                  background:
+                    "radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.25) 0%, rgba(0, 128, 96, 0.1) 40%, rgba(14, 18, 23, 0.95) 100%)",
+                }}
+              />
+              {/* Flowing Ambient Background Video with Screen Blend */}
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="opacity-20 absolute inset-0 w-full h-full object-cover pointer-events-none mix-blend-screen -z-10"
+              >
+                <source
+                  src="https://cdn.sceneai.art/Hero%20Section%20Video/1bcc8fa3-37f6-4c53-8591-0347e4c7f8ac.mp4"
+                  type="video/mp4"
+                />
+              </video>
 
               {/* Card Content */}
               <div className="space-y-6 relative z-10">
@@ -698,31 +716,29 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                {/* DMARC and DKIM Status Chips */}
+                {/* DMARC and DKIM Status Chips (Static Display) */}
                 <div className="grid grid-cols-2 gap-3 font-mono text-xs">
                   <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1.5">
                     <span className="text-[10px] text-zinc-400 block">DMARC STATUS</span>
-                    <span className="text-emerald-400 font-bold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
+                    <span className="text-emerald-400 font-semibold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
                       DMARC: Inboxing Safe
                     </span>
                   </div>
                   <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1.5">
                     <span className="text-[10px] text-zinc-400 block">DKIM STATUS</span>
-                    <span className="text-emerald-400 font-bold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
+                    <span className="text-emerald-400 font-semibold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
                       DKIM: Verified &amp; Active
                     </span>
                   </div>
                 </div>
 
-                {/* Inside Button: Clean Status Action */}
-                <button
-                  type="button"
-                  onClick={() => setDnsToggleFixed(!dnsToggleFixed)}
-                  className="w-full py-3 px-4 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.15)] transition-all cursor-pointer select-none"
-                >
-                  <Check size={14} className="text-emerald-400" />
-                  <span>Auto-Fix Active (Cloudflare Synced)</span>
-                </button>
+                {/* Verified System Footer Status Strip */}
+                <div className="w-full py-3 px-4 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center gap-2.5 text-xs text-zinc-300 font-mono shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                  <span className="tracking-tight text-center">
+                    Automated DNS Synchronization Active • Cloudflare API Connected
+                  </span>
+                </div>
               </div>
             </div>
           </FadeInUp>
