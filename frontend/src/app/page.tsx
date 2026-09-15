@@ -151,7 +151,7 @@ export default function LandingPage() {
     setMobileMenuOpen(false);
   };
 
-  // Structured Data Schema.org
+  // Structured Data Schema.org with Technical SEO & GEO Enhancements
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -165,6 +165,14 @@ export default function LandingPage() {
         applicationSubCategory: "Email Deliverability & DNS Governance for E-Commerce",
         description:
           "Enterprise email deliverability, real-time blacklist surveillance, and 1-click DNS governance platform for Shopify DTC merchants.",
+        featureList: [
+          "Shopify DNS Auto-Fix & SPF Conflict Optimization",
+          "Zero Email Drop Limit SPF Record Merging",
+          "Google & Yahoo 2024 Compliance Defense",
+          "DKIM 2048-Bit Verified Sender Keys",
+          "1-Click Cloudflare and GoDaddy Zone Auto-Patch",
+          "Real-Time RBL Blacklist Surveillance"
+        ],
         offers: [
           {
             "@type": "Offer",
@@ -191,6 +199,28 @@ export default function LandingPage() {
             description: "Shopify Plus & Aggregators - Unlimited Monitored Domains",
           },
         ],
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://inboundcheck.com/#dns-inspector",
+        name: "Shopify DNS Auto-Fix & SPF Conflict Optimization",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Cloud, Web",
+        description:
+          "Automated DNS governance merging Shopify, Klaviyo, and Zendesk records to eliminate Google and Yahoo 10-lookup SPF limit email rejections.",
+        featureList: [
+          "Zero Email Drop Limit SPF Record Merging",
+          "Google & Yahoo 2024 Compliance Defense",
+          "DKIM 2048-Bit Verified Sender Keys",
+          "1-Click Cloudflare and GoDaddy Zone Auto-Patch"
+        ],
+        offers: {
+          "@type": "Offer",
+          price: "0.00",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+          description: "Free Instant Domain Deliverability Health Check"
+        }
       },
       {
         "@type": "FAQPage",
@@ -571,8 +601,12 @@ export default function LandingPage() {
 
       {/* 4. Interactive Feature Sections (Two-Column Layouts) */}
       
-      {/* Column 1: 1-Click DNS Inspector & SPF Conflict Resolver (id="dns-inspector") */}
-      <section id="dns-inspector" className="py-28 px-6 max-w-7xl mx-auto border-t border-white/5 relative z-10">
+      {/* Column 1: Fix Hidden DNS Conflicts in 1 Click (id="dns-inspector") */}
+      <section
+        id="dns-inspector"
+        aria-label="Shopify DNS Automation"
+        className="py-28 px-6 max-w-7xl mx-auto border-t border-white/5 relative z-10"
+      >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left: Copy */}
           <FadeInUp className="space-y-6">
@@ -580,60 +614,56 @@ export default function LandingPage() {
               <Server size={14} />
               <span>DNS GOVERNANCE ENGINE</span>
             </div>
+
+            {/* Descriptive H3 for AI Search Engines & Screen Readers */}
+            <h3 className="sr-only">Shopify DNS Auto-Fix &amp; SPF Conflict Optimization</h3>
+
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white leading-tight">
-              1-Click DNS Inspector &amp; SPF Conflict Resolver
+              Fix Hidden DNS Conflicts in 1 Click
             </h2>
             <p className="text-base text-gray-400 leading-relaxed">
-              Google and Yahoo enforce a strict 10-lookup limit on SPF records. DTC stores using Shopify, Klaviyo, Zendesk, and Postmark exceed this limit almost immediately, triggering silent spam classification.
+              Google and Yahoo reject order emails if your store connects more than 3 sending tools (Shopify, Klaviyo, Zendesk). InboundCheck merges your records automatically so every receipt reaches the inbox.
             </p>
-            <div className="space-y-3 font-sans text-sm text-gray-300">
+            <div className="space-y-3.5 font-sans text-sm text-gray-300">
               <div className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Check size={13} />
                 </div>
-                <span><strong>SPF 10-Lookup Cap Enforcement:</strong> Automated recursion flattening maintains compliance with RFC 7208.</span>
+                <span>
+                  <strong className="text-white">Zero Email Drop Limit:</strong> Merges Klaviyo and Shopify records into one clean entry to bypass Google&apos;s 10-lookup barrier.
+                </span>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Check size={13} />
                 </div>
-                <span><strong>DKIM 2048-Bit Cryptographic Alignment:</strong> Automatically validates and rotates Shopify CNAME selector records.</span>
+                <span>
+                  <strong className="text-white">Verified Sender Keys:</strong> Confirms your store&apos;s DKIM identity keys are valid and trusted by Gmail.
+                </span>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Check size={13} />
                 </div>
-                <span><strong>1-Click Cloudflare &amp; GoDaddy Sync:</strong> Insert or rollback verified records directly via secure API with zero manual zone editing.</span>
+                <span>
+                  <strong className="text-white">1-Click Auto-Patch:</strong> Fixes your DNS in Cloudflare or GoDaddy automatically without manually editing code or records.
+                </span>
               </div>
             </div>
             <div className="pt-2">
-              <Link
-                href="/auth/signup"
-                className="inline-flex items-center gap-2 text-emerald-400 font-semibold text-sm hover:text-emerald-300 transition-colors"
-              >
-                <span>Audit your SPF budget now</span>
-                <ChevronRight size={16} />
-              </Link>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-medium">
+                <ShieldCheck size={14} className="text-emerald-400" />
+                <span>Protected against Google &amp; Yahoo 2024 restrictions</span>
+              </div>
             </div>
           </FadeInUp>
 
-          {/* Right Mockup: Glassmorphic floating card with background video */}
+          {/* Right Mockup: Glassmorphic floating card with Pure Shopify Emerald Waving Background */}
           <FadeInUp delay={0.2}>
             <div className="bg-[#1C1C1E]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
-              {/* Background Video */}
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="absolute inset-0 w-full h-full object-cover opacity-30 -z-10 pointer-events-none"
-              >
-                <source
-                  src="https://cdn.sceneai.art/Hero%20Section%20Video/1bcc8fa3-37f6-4c53-8591-0347e4c7f8ac.mp4"
-                  type="video/mp4"
-                />
-              </video>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 -z-10" />
+              {/* Pure Shopify Emerald Waving Background Aura (Purged all purple/pink) */}
+              <div className="absolute inset-0 emerald-wave-bg -z-10 pointer-events-none rounded-3xl" />
+              <div className="absolute -inset-10 bg-[radial-gradient(circle_at_50%_30%,rgba(0,128,96,0.35),rgba(16,185,129,0.15)_45%,transparent_75%)] blur-2xl emerald-aura-animated pointer-events-none -z-10" />
 
               {/* Card Content */}
               <div className="space-y-6 relative z-10">
@@ -647,58 +677,51 @@ export default function LandingPage() {
                       <div className="text-[10px] text-gray-400 font-mono">Cloudflare Managed Zone</div>
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
-                    SYNCED
+                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    PROTECTED &amp; CONNECTED
                   </span>
                 </div>
 
-                {/* SPF Lookup Gauge (4/10 used) */}
+                {/* SPF Lookup Gauge */}
                 <div className="p-4 bg-black/75 backdrop-blur-md rounded-2xl border border-white/10 space-y-3 font-mono">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-zinc-400">SPF LOOKUP BUDGET</span>
-                    <span className="text-emerald-400 font-bold">4 / 10 Used</span>
+                    <span className="text-emerald-400 font-bold">4 of 10 Lookups Used - Safe Range</span>
                   </div>
                   <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
                     <div className="bg-emerald-400 h-2 rounded-full w-[40%] shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
                   </div>
                   <div className="flex items-center justify-between text-[11px] pt-1">
-                    <span className="text-zinc-400 font-sans">Google / Yahoo Threshold</span>
+                    <span className="text-zinc-400 font-sans">Google &amp; Yahoo Threshold</span>
                     <span className="text-emerald-400 font-medium">Within Safe Limits</span>
                   </div>
                 </div>
 
-                {/* DMARC and DKIM Status */}
+                {/* DMARC and DKIM Status Chips */}
                 <div className="grid grid-cols-2 gap-3 font-mono text-xs">
-                  <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1">
-                    <span className="text-[10px] text-zinc-500 block">DMARC POLICY</span>
-                    <span className="text-emerald-400 font-bold text-xs bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 inline-block">
-                      p=quarantine
+                  <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1.5">
+                    <span className="text-[10px] text-zinc-400 block">DMARC STATUS</span>
+                    <span className="text-emerald-400 font-bold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
+                      DMARC: Inboxing Safe
                     </span>
                   </div>
-                  <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1">
-                    <span className="text-[10px] text-zinc-500 block">DKIM KEY LENGTH</span>
-                    <span className="text-white font-bold text-xs inline-block">
-                      2048-bit RSA
+                  <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1.5">
+                    <span className="text-[10px] text-zinc-400 block">DKIM STATUS</span>
+                    <span className="text-emerald-400 font-bold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
+                      DKIM: Verified &amp; Active
                     </span>
                   </div>
                 </div>
 
-                {/* 1-Click Fix Toggle */}
+                {/* Inside Button: Clean Status Action */}
                 <button
                   type="button"
                   onClick={() => setDnsToggleFixed(!dnsToggleFixed)}
-                  className={`w-full py-3 px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg ${
-                    dnsToggleFixed
-                      ? "bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]"
-                      : "bg-[#1F1F22] text-emerald-400 hover:bg-[#2A2A2D] border border-emerald-500/30 hover:border-emerald-500/50"
-                  }`}
+                  className="w-full py-3 px-4 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.15)] transition-all cursor-pointer select-none"
                 >
-                  <Zap size={14} className="fill-current" />
-                  <span>
-                    {dnsToggleFixed
-                      ? "✓ Records Auto-Applied to Cloudflare"
-                      : "1-Click Auto-Apply DNS Fix"}
-                  </span>
+                  <Check size={14} className="text-emerald-400" />
+                  <span>Auto-Fix Active (Cloudflare Synced)</span>
                 </button>
               </div>
             </div>

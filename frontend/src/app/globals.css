@@ -108,6 +108,26 @@ body::before {
   }
 }
 
+/* Shopify Signature Forest Aura Wave */
+@keyframes emeraldWaveAura {
+  0%, 100% {
+    transform: scale(1) translate(0%, 0%) rotate(0deg);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.08) translate(-1.5%, 1.5%) rotate(2.5deg);
+    opacity: 0.95;
+  }
+}
+
+.emerald-wave-bg {
+  background: linear-gradient(135deg, rgba(0, 128, 96, 0.25) 0%, rgba(16, 185, 129, 0.15) 50%, rgba(14, 18, 23, 0.8) 100%);
+}
+
+.emerald-aura-animated {
+  animation: emeraldWaveAura 8s ease-in-out infinite alternate;
+}
+
 /* Uiverse-Inspired Shopify Green Glow Card Effect */
 .uiverse-card {
   position: relative;
