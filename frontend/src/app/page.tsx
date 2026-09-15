@@ -425,28 +425,8 @@ export default function LandingPage() {
             </p>
           </FadeInUp>
 
-          {/* Dual CTAs */}
-          <FadeInUp delay={0.4}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14 w-full sm:w-auto">
-              <Link
-                href="/auth/signup"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-black font-semibold text-sm px-7 py-3.5 rounded-full shadow-[0_0_30px_rgba(255,255,255,0.2)] transition-all hover:scale-105 active:scale-95"
-              >
-                <span>Start 3-Day Free Trial</span>
-                <ArrowRight size={16} />
-              </Link>
-              <Link
-                href="/auth/login"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium px-7 py-3.5 rounded-full border border-white/10 transition-all hover:border-white/25 active:scale-95"
-              >
-                <ShoppingBag size={16} className="text-emerald-400" />
-                <span>Connect Shopify Store</span>
-              </Link>
-            </div>
-          </FadeInUp>
-
           {/* Interactive Live Bait Domain Health Check */}
-          <FadeInUp delay={0.5} className="w-full max-w-xl mx-auto mb-16">
+          <FadeInUp delay={0.4} className="w-full max-w-xl mx-auto mt-8 mb-14">
             <div className="p-2.5 rounded-2xl border border-white/10 bg-[#0E0E12]/90 backdrop-blur-xl shadow-2xl">
               <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="relative flex-1">
