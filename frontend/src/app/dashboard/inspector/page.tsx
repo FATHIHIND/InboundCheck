@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import {
   Terminal,
@@ -20,7 +21,8 @@ import {
   ShieldCheck,
   Lock,
   Globe,
-  Layers
+  Layers,
+  Radio,
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
@@ -28,6 +30,7 @@ import { OperationalErrorCard } from "@/components/operational/OperationalErrorC
 import { ApiError } from "@/lib/apiResource";
 import { SpfMergePreview } from "./spf-merge-preview";
 import { AssetVerificationResult } from "./asset-verification-result";
+import { SeedTestingView } from "./SeedTestingView";
 
 interface AuditResult {
   domain: string;
@@ -88,15 +91,24 @@ interface GeneratedFix {
 function DNSInspectorContent() {
   const searchParams = useSearchParams();
   const queryDomain = searchParams.get("domain");
+  const queryTab = searchParams.get("tab");
 
   const [domainInput, setDomainInput] = useState(
     queryDomain ? queryDomain.trim().toLowerCase() : ""
   );
   const [customSelectors, setCustomSelectors] = useState("shopify, google, k1");
-  const [activeTab, setActiveTab] = useState<"generator" | "inspector" | "spf-merge">("generator");
+  const [activeTab, setActiveTab] = useState<"generator" | "inspector" | "spf-merge" | "seed-testing">(
+    queryTab === "seed-testing" || queryTab === "seed" ? "seed-testing" : "generator"
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [auditData, setAuditData] = useState<AuditResult | null>(null);
   const [auditError, setAuditError] = useState<ApiError | null>(null);
+
+  // Auto-Fix Provider Credentials & Connection State
+  const [hasProviderConnected, setHasProviderConnected] = useState(false);
+  const [activeProviderName, setActiveProviderName] = useState<"cloudflare" | "godaddy" | null>(null);
+  const [fixStatus, setFixStatus] = useState<Record<string, "idle" | "applying" | "applied" | "error">>({});
+  const [fixErrorMsg, setFixErrorMsg] = useState<Record<string, string>>({});
 
   // Generator State
   const [includeShopify, setIncludeShopify] = useState(true);
@@ -125,6 +137,46 @@ function DNSInspectorContent() {
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
   const [showRawDrawer, setShowRawDrawer] = useState(false);
+
+  // Deep-link tab sync
+  useEffect(() => {
+    if (queryTab === "seed-testing" || queryTab === "seed") {
+      setActiveTab("seed-testing");
+    } else if (queryTab === "spf-merge") {
+      setActiveTab("spf-merge");
+    } else if (queryTab === "inspector" || queryTab === "audit") {
+      setActiveTab("inspector");
+    }
+  }, [queryTab]);
+
+  // Query DNS Provider Credentials on mount
+  useEffect(() => {
+    async function checkProviderCredentials() {
+      try {
+        const res = await apiFetch("/api/v1/dns/auto-fix/credentials");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.credentials) {
+            const cf = data.credentials.cloudflare;
+            const gd = data.credentials.godaddy;
+            if (cf?.is_active || cf?.api_token_configured) {
+              setHasProviderConnected(true);
+              setActiveProviderName("cloudflare");
+            } else if (gd?.is_active || gd?.api_key_configured) {
+              setHasProviderConnected(true);
+              setActiveProviderName("godaddy");
+            } else {
+              setHasProviderConnected(false);
+              setActiveProviderName(null);
+            }
+          }
+        }
+      } catch {
+        // Fallback gracefully in offline / dev mode
+      }
+    }
+    checkProviderCredentials();
+  }, []);
 
   // Initial load and URL param deep-link reactivity
   useEffect(() => {
@@ -334,6 +386,57 @@ function DNSInspectorContent() {
     a.click();
   };
 
+  const handleApplyAutoFix = async (fix: GeneratedFix) => {
+    const d = domainInput.trim().toLowerCase();
+    if (!d) {
+      alert("Please enter or select a target domain first.");
+      return;
+    }
+
+    setFixStatus((prev) => ({ ...prev, [fix.id]: "applying" }));
+    setFixErrorMsg((prev) => {
+      const copy = { ...prev };
+      delete copy[fix.id];
+      return copy;
+    });
+
+    try {
+      const res = await apiFetch("/api/v1/dns/auto-fix/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain_name: d,
+          provider_name: activeProviderName || "cloudflare",
+          record_type: fix.record_type,
+          host: fix.host,
+          record_value: fix.value,
+          ttl: parseInt(fix.ttl, 10) || 3600,
+        }),
+      });
+
+      if (res.ok) {
+        setFixStatus((prev) => ({ ...prev, [fix.id]: "applied" }));
+      } else if (res.status === 403) {
+        setFixStatus((prev) => ({ ...prev, [fix.id]: "error" }));
+        setFixErrorMsg((prev) => ({
+          ...prev,
+          [fix.id]: "Growth or Agency plan required for 1-click automated DNS injection.",
+        }));
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setFixStatus((prev) => ({ ...prev, [fix.id]: "error" }));
+        setFixErrorMsg((prev) => ({
+          ...prev,
+          [fix.id]: body.detail || "Failed to auto-insert record into DNS zone.",
+        }));
+      }
+    } catch (err: unknown) {
+      setFixStatus((prev) => ({ ...prev, [fix.id]: "error" }));
+      const msg = err instanceof Error ? err.message : "Network error during DNS injection.";
+      setFixErrorMsg((prev) => ({ ...prev, [fix.id]: msg }));
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn pb-16 max-w-[1360px] mx-auto">
       {/* 1. Header with Navigation Mode Switcher */}
@@ -349,7 +452,7 @@ function DNSInspectorContent() {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1.5 p-1 bg-[#0E0E12] border border-zinc-800/80 rounded-xl font-mono text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#0E0E12] border border-zinc-800/80 rounded-xl font-mono text-xs">
           <button
             type="button"
             onClick={() => setActiveTab("generator")}
@@ -385,6 +488,18 @@ function DNSInspectorContent() {
           >
             <Layers className="w-3.5 h-3.5" />
             SPF Merge Engine
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("seed-testing")}
+            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "seed-testing"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5 text-emerald-400" />
+            Seed Inbox Verifier
           </button>
         </div>
       </div>
@@ -632,7 +747,49 @@ function DNSInspectorContent() {
                           <span className="text-xs font-bold text-white">{fix.category}</span>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* 1-Click Auto-Insert to Cloudflare / GoDaddy or subtle CTA */}
+                          {hasProviderConnected ? (
+                            <button
+                              type="button"
+                              onClick={() => handleApplyAutoFix(fix)}
+                              disabled={fixStatus[fix.id] === "applying" || fixStatus[fix.id] === "applied"}
+                              className={`px-3 py-1 rounded-lg text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                                fixStatus[fix.id] === "applied"
+                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 cursor-default"
+                                  : fixStatus[fix.id] === "applying"
+                                  ? "bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-wait"
+                                  : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                              }`}
+                            >
+                              {fixStatus[fix.id] === "applied" ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>✓ Injected to Zone</span>
+                                </>
+                              ) : fixStatus[fix.id] === "applying" ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                                  <span>Injecting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20" />
+                                  <span>Auto-Insert to {activeProviderName === "godaddy" ? "GoDaddy" : "Cloudflare"}</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <Link
+                              href="/dashboard/settings?tab=providers"
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-mono text-zinc-400 hover:text-emerald-400 bg-zinc-900/60 hover:bg-zinc-800/80 border border-zinc-800/80 hover:border-emerald-500/30 transition flex items-center gap-1.5"
+                              title="Connect Cloudflare or GoDaddy in Settings to enable 1-click zone auto-insertion"
+                            >
+                              <Zap className="w-3 h-3 text-zinc-500" />
+                              <span>Connect Cloudflare to Auto-Insert</span>
+                            </Link>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => copyToClipboard(fix.value, fix.id)}
@@ -657,6 +814,18 @@ function DNSInspectorContent() {
                           </button>
                         </div>
                       </div>
+
+                      {/* Optional Error notification if auto-fix fails */}
+                      {fixErrorMsg[fix.id] && (
+                        <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-mono text-rose-400 flex items-center justify-between gap-2 animate-fadeIn">
+                          <span>{fixErrorMsg[fix.id]}</span>
+                          {fixErrorMsg[fix.id].includes("plan required") && (
+                            <Link href="/dashboard/billing" className="underline hover:text-white text-[11px] font-bold">
+                              Upgrade to Growth
+                            </Link>
+                          )}
+                        </div>
+                      )}
 
                       {/* Record Content Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs bg-[#08080A] p-3 rounded-lg border border-zinc-800/80">
@@ -860,6 +1029,11 @@ function DNSInspectorContent() {
             handleRunAudit();
           }}
         />
+      )}
+
+      {/* SEED INBOX VERIFIER VIEW */}
+      {activeTab === "seed-testing" && (
+        <SeedTestingView domain={domainInput} />
       )}
     </div>
   );
