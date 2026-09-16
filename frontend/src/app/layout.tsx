@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   description:
     "Stop Shopify order receipts from vanishing into spam. Continuous SPF, DKIM, DMARC governance & instant Telegram incident alerts.",
   keywords: [
+    "shopify order confirmation email going to spam",
+    "shopify order emails not received",
+    "shopify dkim dmarc 2024 compliance",
+    "fix spf 10 lookup limit shopify",
     "Shopify email deliverability",
     "Shopify DNS diagnostic",
     "transactional email spam prevention",
@@ -28,20 +32,29 @@ export const metadata: Metadata = {
     canonical: "https://inboundcheck.com",
   },
   openGraph: {
-    title: "InboundCheck — High-Precision Transactional Deliverability for Shopify",
+    title: "InboundCheck — Shopify Order Email Guardian & Deliverability Engine",
     description:
       "Stop Shopify order receipts from vanishing into spam. Continuous SPF, DKIM, DMARC governance & instant Telegram incident alerts.",
     url: "https://inboundcheck.com",
     siteName: "InboundCheck",
     locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "InboundCheck — Shopify Order Email Guardian & DNS Deliverability Platform",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "InboundCheck — Shopify Email Deliverability & DNS Governance",
+    title: "InboundCheck — Shopify Order Email Guardian & Deliverability Engine",
     description:
       "Stop Shopify order receipts from vanishing into spam. Continuous SPF, DKIM, DMARC governance & instant Telegram incident alerts.",
     creator: "@inboundcheck",
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,

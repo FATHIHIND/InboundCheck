@@ -282,6 +282,21 @@ export default function DashboardOverviewPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showAddModal]);
 
+  // Auto-populate pending domain from bait audit on first-time mount when registry is empty
+  useEffect(() => {
+    if (domainsResource.state === "empty") {
+      try {
+        const pending = typeof window !== "undefined" ? localStorage.getItem("inboundcheck_pending_domain") : null;
+        if (pending && pending.trim()) {
+          setNewDomainInput(pending.trim().toLowerCase());
+          setShowAddModal(true);
+        }
+      } catch {
+        // LocalStorage access restricted in private mode
+      }
+    }
+  }, [domainsResource.state]);
+
   // Run Full Live Diagnostic Pipeline
   const handleRunPipeline = async () => {
     setIsRunningPipeline(true);
@@ -349,6 +364,13 @@ export default function DashboardOverviewPage() {
       await reloadDomains();
       setNewDomainInput("");
       setShowAddModal(false);
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("inboundcheck_pending_domain");
+        }
+      } catch {
+        // Ignored
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to add domain to monitoring registry.";
       setAddError(message);

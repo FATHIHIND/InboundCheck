@@ -1,0 +1,75 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#09090B"/>
+  
+  <!-- Subtle Grid Pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255, 255, 255, 0.03)" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="emerald-glow" cx="50%" cy="45%" r="45%">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#059669" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#09090B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="text-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#D1D5DB"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <circle cx="600" cy="300" r="450" fill="url(#emerald-glow)"/>
+
+  <!-- Border Frame -->
+  <rect x="24" y="24" width="1152" height="582" rx="20" stroke="rgba(16, 185, 129, 0.3)" stroke-width="1.5" fill="none"/>
+  
+  <!-- Top Badge -->
+  <g transform="translate(420, 70)">
+    <rect width="360" height="38" rx="19" fill="rgba(16, 185, 129, 0.1)" stroke="rgba(16, 185, 129, 0.3)" stroke-width="1"/>
+    <text x="180" y="24" fill="#34D399" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" text-anchor="middle" letter-spacing="0.5">
+      ✨ SHOPIFY ORDER EMAIL GUARDIAN
+    </text>
+  </g>
+
+  <!-- Brand Logo & Name -->
+  <g transform="translate(600, 200)">
+    <text x="0" y="0" fill="url(#text-gradient)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="64" font-weight="800" text-anchor="middle" letter-spacing="-1.5">
+      InboundCheck
+    </text>
+  </g>
+
+  <!-- Main Value Proposition -->
+  <text x="600" y="280" fill="#E5E7EB" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="600" text-anchor="middle">
+    Know when your Shopify order emails stop reaching customers.
+  </text>
+  <text x="600" y="325" fill="#9CA3AF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="400" text-anchor="middle">
+    Continuous SPF, DKIM &amp; DMARC Governance • 24/7 Blacklist Radar &amp; Instant Telegram Alerts
+  </text>
+
+  <!-- Feature Pills -->
+  <g transform="translate(195, 420)">
+    <!-- Pill 1 -->
+    <rect x="0" y="0" width="250" height="48" rx="12" fill="rgba(20, 24, 28, 0.85)" stroke="rgba(16, 185, 129, 0.3)" stroke-width="1"/>
+    <text x="125" y="29" fill="#A7F3D0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" text-anchor="middle">
+      ✓ 1-Click DNS Auto-Fixer
+    </text>
+
+    <!-- Pill 2 -->
+    <rect x="280" y="0" width="250" height="48" rx="12" fill="rgba(20, 24, 28, 0.85)" stroke="rgba(16, 185, 129, 0.3)" stroke-width="1"/>
+    <text x="405" y="29" fill="#A7F3D0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" text-anchor="middle">
+      ✓ Telegram Failure Alerts
+    </text>
+
+    <!-- Pill 3 -->
+    <rect x="560" y="0" width="250" height="48" rx="12" fill="rgba(20, 24, 28, 0.85)" stroke="rgba(16, 185, 129, 0.3)" stroke-width="1"/>
+    <text x="685" y="29" fill="#A7F3D0" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600" text-anchor="middle">
+      ✓ 3-Day Free Trial
+    </text>
+  </g>
+
+  <!-- Footer Link -->
+  <text x="600" y="550" fill="#6B7280" font-family="monospace" font-size="14" text-anchor="middle" letter-spacing="1">
+    https://inboundcheck.com
+  </text>
+</svg>

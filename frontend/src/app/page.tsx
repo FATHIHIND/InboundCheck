@@ -40,11 +40,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "How does InboundCheck differ from Klaviyo, Omnisend, or Mailchimp?",
-    a: "Klaviyo and Omnisend manage marketing newsletters. InboundCheck operates at the infrastructure & DNS root level. We continuously monitor your apex domain, query authoritative RBL blacklists (Spamhaus, Barracuda), and simulate real-time IMAP delivery receipts to guarantee your highest-value transactional receipts land in the Primary Inbox.",
+    a: "Klaviyo and Omnisend manage marketing newsletters. InboundCheck operates at the infrastructure & DNS root level. We continuously monitor your apex domain, query authoritative RBL blacklists (Spamhaus, Barracuda), and simulate real-time IMAP delivery receipts to maximize primary inbox placement for your highest-value transactional receipts.",
   },
   {
     q: "Will this fix my Google & Yahoo 2024 compliance warnings?",
-    a: "Yes, 100%. InboundCheck generates verified Google & Yahoo 2024 compliant SPF records with automated recursion flattening (keeping lookup counts under 10), configures 2048-bit DKIM keys, and establishes continuous DMARC aggregate monitoring to permanently clear compliance warnings.",
+    a: "Yes. InboundCheck aligns your DNS records with official 2024 Google & Yahoo standards with automated recursion flattening (keeping lookup counts under 10), configures 2048-bit DKIM keys, and establishes continuous DMARC aggregate monitoring to clear compliance warnings.",
   },
   {
     q: "How long does the 1-Click Cloudflare & GoDaddy DNS auto-fix take?",
@@ -176,27 +176,27 @@ export default function LandingPage() {
         offers: [
           {
             "@type": "Offer",
-            name: "Starter Merchant",
-            price: "29.00",
+            name: "Starter",
+            price: "9.00",
             priceCurrency: "USD",
             availability: "https://schema.org/InStock",
-            description: "Single DTC Brand - 1 Verified Apex Sending Domain",
+            description: "Single DTC Brand - 1 Monitored Domain with 3-Day Free Trial",
           },
           {
             "@type": "Offer",
             name: "Growth Tier",
-            price: "79.00",
+            price: "29.00",
             priceCurrency: "USD",
             availability: "https://schema.org/InStock",
-            description: "Scaling Multi-Brand - Up to 5 Apex Sending Domains",
+            description: "Scaling Multi-Brand - Up to 3 Monitored Domains with 3-Day Free Trial",
           },
           {
             "@type": "Offer",
-            name: "Enterprise Tier",
-            price: "199.00",
+            name: "Agency Tier",
+            price: "79.00",
             priceCurrency: "USD",
             availability: "https://schema.org/InStock",
-            description: "Shopify Plus & Aggregators - Unlimited Monitored Domains",
+            description: "Agencies & High-Volume Brands - Up to 20 Monitored Domains with 3-Day Free Trial",
           },
         ],
       },
@@ -621,12 +621,13 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Descriptive H3 for AI Search Engines & Screen Readers */}
-            <h3 className="sr-only">Shopify DNS Auto-Fix &amp; SPF Conflict Optimization</h3>
-
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white leading-tight">
               Fix Hidden DNS Conflicts in 1 Click
             </h2>
+
+            {/* Descriptive H3 for AI Search Engines & Screen Readers */}
+            <h3 className="sr-only">Shopify DNS Auto-Fix &amp; SPF Conflict Optimization</h3>
+
             <p className="text-base text-gray-400 leading-relaxed">
               When you connect Shopify, Klaviyo, and support inboxes, your DNS breaks Google &amp; Yahoo 2024 deliverability rules. InboundCheck merges your records into a single compliant entry automatically.
             </p>
@@ -644,7 +645,7 @@ export default function LandingPage() {
                   <Check size={13} />
                 </div>
                 <span>
-                  <strong className="text-white">Guarantees Trusted Sender Status:</strong> Validates 2048-bit DKIM keys to pass DMARC alignment on Gmail and Yahoo.
+                  <strong className="text-white">Establishes Cryptographic Sender Trust:</strong> Validates 2048-bit DKIM keys to pass DMARC alignment on Gmail and Yahoo.
                 </span>
               </div>
               <div className="flex items-start gap-3">
@@ -930,20 +931,20 @@ export default function LandingPage() {
                 <span className="flex items-center gap-1.5 text-teal-400 font-semibold">
                   <Zap size={14} /> Omnichannel Failover Engine
                 </span>
-                <span>E.164 Fallback</span>
+                <span>International SMS &amp; WhatsApp Fallback</span>
               </div>
               <div className="text-sm font-semibold text-white flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                 Receipt Auto-Routed to WhatsApp
               </div>
               <p className="text-xs text-zinc-300 font-mono leading-relaxed bg-black/60 p-3 rounded-xl border border-white/5">
-                When customer email bounced, order confirmation #10492 was delivered via WhatsApp Business API within 1.2s. Zero dispute risk.
+                When customer email bounced, order confirmation #10492 was delivered via WhatsApp Business API within 1.2s. Eliminates silent delivery drop-off.
               </p>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-mono px-2.5 py-1 rounded bg-teal-500/20 text-teal-300 border border-teal-500/40">
                   Revenue Protected: $184.00
                 </span>
-                <span className="text-xs text-zinc-400 font-mono">100% Delivery SLA</span>
+                <span className="text-xs text-zinc-400 font-mono">Real-Time Failover Verification</span>
               </div>
             </div>
           </FadeInUp>
@@ -961,7 +962,7 @@ export default function LandingPage() {
               How InboundCheck Protects Your Store
             </h2>
             <p className="text-sm md:text-base text-gray-400 max-w-lg mx-auto">
-              Three simple steps to permanently eliminate spam placement for your order confirmations.
+              Three simple steps to protect your order confirmations from the spam folder.
             </p>
           </div>
         </FadeInUp>
@@ -1038,37 +1039,44 @@ export default function LandingPage() {
           <FadeInUp delay={0.1} className="h-full">
             <div className="h-full p-8 rounded-3xl bg-[#0E0E12]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-white/5 text-gray-300 border border-white/10">
                     Single DTC Brand
                   </span>
+                  <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    3-Day Free Trial
+                  </span>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-white tracking-tight">Starter Merchant</h3>
+                  <h3 className="text-xl font-bold text-white tracking-tight">Starter</h3>
                   <div className="text-4xl font-bold text-white font-mono tracking-tight pt-2">
-                    $29 <span className="text-xs font-normal text-gray-400 font-sans">/ month</span>
+                    $9 <span className="text-xs font-normal text-gray-400 font-sans">/ month</span>
                   </div>
                 </div>
                 <p className="text-sm text-gray-400 leading-relaxed min-h-[44px]">
-                  Essential DNS governance and on-demand audits for emerging DTC stores.
+                  Essential 24/7 continuous DNS monitoring and failure alerts for single-store DTC brands.
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>1 Verified Apex Sending Domain</span>
+                    <strong className="text-white font-semibold">1 Monitored Domain Cap</strong>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>Daily Multi-Resolver DNS Audits</span>
+                    <span>24/7 Continuous DNS &amp; 10-RBL Blacklist Radar</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>10-List Blacklist Radar Probing</span>
+                    <span>Instant Telegram Failure Alerts</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>Telegram Bot Alert Engine</span>
+                    <span>Multi-Resolver Automated Audits</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
               </div>
@@ -1076,9 +1084,9 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=starter"
-                  className="w-full inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all"
+                  className="w-full inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
-                  Get Started with Starter
+                  Start 3-Day Free Trial
                 </Link>
               </div>
             </div>
@@ -1088,42 +1096,49 @@ export default function LandingPage() {
           <FadeInUp delay={0.2} className="h-full">
             <div className="h-full p-8 rounded-3xl bg-[#0E0E12]/95 backdrop-blur-xl border border-emerald-500/50 flex flex-col justify-between shadow-[0_0_40px_-5px_rgba(16,185,129,0.3)] lg:-translate-y-3 relative z-10">
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     MOST POPULAR
+                  </span>
+                  <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                    3-Day Free Trial
                   </span>
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-white tracking-tight">Growth Tier</h3>
                   <div className="text-4xl font-bold text-white font-mono tracking-tight pt-2">
-                    $79 <span className="text-xs font-normal text-gray-400 font-sans">/ month</span>
+                    $29 <span className="text-xs font-normal text-gray-400 font-sans">/ month</span>
                   </div>
                 </div>
                 <p className="text-sm text-gray-300 leading-relaxed min-h-[44px]">
-                  Comprehensive 24/7 automated deliverability &amp; 1-click zone auto-fixer for scaling Shopify brands.
+                  Multi-domain governance, automated DNS repair, and store order sync for scaling brands.
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <strong className="text-white font-semibold">Up to 5 Apex Sending Domains</strong>
+                    <strong className="text-white font-semibold">Up to 3 Monitored Domains</strong>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>Hourly DNS &amp; IMAP Telemetry Ingestion</span>
+                    <span>Shopify Store OAuth Sync &amp; Alignment</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>1-Click Cloudflare &amp; GoDaddy Auto-Fixer</span>
+                    <span>1-Click DNS Auto-Remediation (Cloudflare &amp; GoDaddy)</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>AI Content Lab &amp; Liquid Template Optimizer</span>
+                    <span>Revenue &amp; Dispute Risk Analytics (Protected GMV)</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
                     <span>Instant Telegram Incident Alert Engine</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
               </div>
@@ -1131,37 +1146,48 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=growth"
-                  className="w-full inline-flex items-center justify-center py-3.5 px-5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)]"
+                  className="w-full inline-flex items-center justify-center py-3.5 px-5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)] cursor-pointer"
                 >
-                  Scale with Growth
+                  Start 3-Day Free Trial
                 </Link>
               </div>
             </div>
           </FadeInUp>
 
-          {/* Enterprise Plan */}
+          {/* Agency Plan */}
           <FadeInUp delay={0.3} className="h-full">
             <div className="h-full p-8 rounded-3xl bg-[#0E0E12]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
-                    Shopify Plus &amp; Aggregators
+                    High-Volume Scaling
+                  </span>
+                  <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    3-Day Free Trial
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-white tracking-tight">Enterprise Tier</h3>
+                  <h3 className="text-xl font-bold text-white tracking-tight">Agency Tier</h3>
                   <div className="text-4xl font-bold text-white font-mono tracking-tight pt-2">
-                    $199 <span className="text-xs font-normal text-gray-400 font-sans">/ month</span>
+                    $79 <span className="text-xs font-normal text-gray-400 font-sans">/ month</span>
                   </div>
                 </div>
                 <p className="text-sm text-gray-400 leading-relaxed min-h-[44px]">
-                  Maximum-scale deliverability surveillance and white-glove governance for high-volume stores.
+                  Expanded capacity, multi-store management, and white-label reporting for agencies &amp; DTC high-volume merchants.
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <strong className="text-white font-semibold">Unlimited Monitored Domains</strong>
+                    <strong className="text-white font-semibold">Up to 20 Monitored Domains</strong>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Multi-Store Management Hub</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <span>Priority Audit Queue &amp; White-Label Reporting</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
@@ -1169,25 +1195,21 @@ export default function LandingPage() {
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>Custom Webhooks &amp; REST API Access</span>
+                    <span>Automated Zone Auto-Patching &amp; Backups</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>White-Glove Onboarding &amp; Zone Migration</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
-                    <span>Priority 24/7 Deliverability Engineer</span>
+                    <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
               </div>
 
               <div className="pt-8 mt-auto">
                 <Link
-                  href="/auth/signup?tier=enterprise"
-                  className="w-full inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all"
+                  href="/auth/signup?tier=agency"
+                  className="w-full inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
-                  Get Enterprise Access
+                  Start 3-Day Free Trial
                 </Link>
               </div>
             </div>

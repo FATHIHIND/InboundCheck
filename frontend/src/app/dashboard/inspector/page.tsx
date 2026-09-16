@@ -90,7 +90,7 @@ function DNSInspectorContent() {
   const queryDomain = searchParams.get("domain");
 
   const [domainInput, setDomainInput] = useState(
-    queryDomain ? queryDomain.trim().toLowerCase() : "shopify.com"
+    queryDomain ? queryDomain.trim().toLowerCase() : ""
   );
   const [customSelectors, setCustomSelectors] = useState("shopify, google, k1");
   const [activeTab, setActiveTab] = useState<"generator" | "inspector" | "spf-merge">("generator");
@@ -106,7 +106,7 @@ function DNSInspectorContent() {
   const [includeSendgrid, setIncludeSendgrid] = useState(false);
   const [dmarcPolicy, setDmarcPolicy] = useState<"quarantine" | "reject" | "none">("reject");
   const [dmarcReportEmail, setDmarcReportEmail] = useState(
-    queryDomain ? `dmarc-aggregate@${queryDomain.trim().toLowerCase()}` : "dmarc-aggregate@shopify.com"
+    queryDomain ? `dmarc-aggregate@${queryDomain.trim().toLowerCase()}` : ""
   );
   const [generatedRecords, setGeneratedRecords] = useState<GeneratedFix[]>([]);
 
@@ -128,12 +128,42 @@ function DNSInspectorContent() {
 
   // Initial load and URL param deep-link reactivity
   useEffect(() => {
-    const target = (queryDomain || "shopify.com").trim().toLowerCase();
-    setDomainInput(target);
-    const targetEmail = `dmarc-aggregate@${target}`;
-    setDmarcReportEmail(targetEmail);
-    handleRunAudit(target);
-    handleGenerateRecords(target, targetEmail);
+    async function initTargetDomain() {
+      let target = (queryDomain || "").trim().toLowerCase();
+
+      if (!target) {
+        try {
+          const res = await apiFetch("/api/v1/domains");
+          if (res.ok) {
+            const data = await res.json();
+            const list = Array.isArray(data)
+              ? data
+              : Array.isArray(data?.domains)
+              ? data.domains
+              : [];
+            if (list.length > 0 && list[0]?.domain_name) {
+              target = list[0].domain_name.trim().toLowerCase();
+            }
+          }
+        } catch {
+          // Fallback gracefully in offline / dev mode
+        }
+      }
+
+      setDomainInput(target);
+      if (target) {
+        const targetEmail = `dmarc-aggregate@${target}`;
+        setDmarcReportEmail(targetEmail);
+        handleRunAudit(target);
+        handleGenerateRecords(target, targetEmail);
+      } else {
+        setDmarcReportEmail("");
+        setGeneratedRecords([]);
+        setAuditData(null);
+      }
+    }
+
+    initTargetDomain();
   }, [queryDomain]);
 
   const handleRunAudit = async (targetDomain?: string) => {
@@ -183,7 +213,11 @@ function DNSInspectorContent() {
   };
 
   const handleGenerateRecords = async (targetDomain?: string, targetEmail?: string) => {
-    const d = (targetDomain || domainInput).trim().toLowerCase() || "shopify.com";
+    const d = (targetDomain || domainInput).trim().toLowerCase();
+    if (!d) {
+      setGeneratedRecords([]);
+      return;
+    }
     const reportEmail = targetEmail || dmarcReportEmail || `dmarc-aggregate@${d}`;
     try {
       const res = await apiFetch("/api/v1/dns/generate-records", {
@@ -364,7 +398,7 @@ function DNSInspectorContent() {
               type="text"
               value={domainInput}
               onChange={(e) => setDomainInput(e.target.value)}
-              placeholder="e.g. store.com"
+              placeholder="Select or enter your store domain (e.g. store.com)"
               className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs"
             />
           </div>
