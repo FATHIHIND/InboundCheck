@@ -592,7 +592,7 @@ export default function BillingPortalPage() {
       {/* 3. Reconciled Receipts & Invoicing Info */}
       <GlassEmeraldCard
         title="Automated Stripe Webhook Reconciliation"
-        subtitle="Cryptographically verified via timestamped HMAC-SHA256 signatures with 24h cleaned record rules"
+        subtitle="Bank-grade encrypted billing synchronized directly with Stripe"
         badgeText="Webhook Active"
         badgeVariant="emerald"
         icon={<Clock className="w-5 h-5 text-emerald-400" />}
@@ -602,7 +602,7 @@ export default function BillingPortalPage() {
             <span className="text-zinc-400">Webhook Endpoint Status:</span>
             <span className="text-emerald-400 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Listening on /api/v1/billing/webhook (±300s replay tolerance)
+              Instant real-time payment confirmation and invoice synchronization
             </span>
           </div>
           <div className="flex items-center justify-between flex-wrap gap-2">

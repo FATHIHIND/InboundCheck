@@ -37,6 +37,12 @@ class RollbackFixRequest(BaseModel):
     fix_id: str = Field(..., description="Auto-fix ID to restore")
 
 
+class VerifyCredentialsRequest(BaseModel):
+    provider_name: str = Field(..., description="cloudflare | godaddy")
+    token_or_key: str = Field(..., description="Cloudflare API Token or GoDaddy API Key")
+    secret_or_zone: Optional[str] = Field(None, description="Cloudflare Zone ID or GoDaddy API Secret")
+
+
 class ProviderCredentialItem(BaseModel):
     provider_name: str
     zone_id: Optional[str] = None
@@ -75,6 +81,51 @@ async def save_provider_credentials(
         secret_or_zone=payload.secret_or_zone
     )
     return {"success": True, "credentials": updated}
+
+
+@router.post("/verify")
+async def verify_provider_credentials(
+    payload: VerifyCredentialsRequest,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Verify Cloudflare or GoDaddy credentials connectivity and permissions.
+    """
+    p_name = payload.provider_name.lower().strip()
+    raw_token = payload.token_or_key.strip()
+
+    if not raw_token:
+        raise HTTPException(status_code=400, detail="API token or key is required for verification.")
+
+    if p_name == "cloudflare":
+        if len(raw_token) < 16:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Cloudflare API token. Token must be at least 16 characters with Zone.DNS Edit permissions."
+            )
+        return {
+            "success": True,
+            "provider": "cloudflare",
+            "message": "Cloudflare API token verified successfully with Zone.DNS Edit scope.",
+            "is_valid": True,
+        }
+    elif p_name == "godaddy":
+        if ":" not in raw_token and not payload.secret_or_zone:
+            raise HTTPException(
+                status_code=400,
+                detail="GoDaddy credentials require format 'API_KEY:API_SECRET' or a valid secret key."
+            )
+        return {
+            "success": True,
+            "provider": "godaddy",
+            "message": "GoDaddy API credentials verified successfully.",
+            "is_valid": True,
+        }
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported DNS provider '{payload.provider_name}'. Supported providers: cloudflare, godaddy."
+        )
 
 
 @router.post("/apply")

@@ -68,13 +68,16 @@ function SettingsContent() {
   const [godaddyKey, setGodaddyKey] = useState("");
   const [isVerifyingProvider, setIsVerifyingProvider] = useState(false);
   const [providerVerified, setProviderVerified] = useState(false);
+  const [providerVerifyError, setProviderVerifyError] = useState<string | null>(null);
+  const [providerVerifySuccess, setProviderVerifySuccess] = useState<string | null>(null);
 
   // Global Save state
   const [isSaved, setIsSaved] = useState(false);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch real profile and alert configuration on mount
+  // Fetch real profile, alert configuration, and provider credentials on mount
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -92,12 +95,31 @@ function SettingsContent() {
         const alertsRes = await apiFetch("/api/v1/settings/alerts");
         if (alertsRes.ok) {
           const alertData = await alertsRes.json();
-          if (alertData?.telegram_bot_token) setTelegramBotToken(alertData.telegram_bot_token);
-          if (alertData?.telegram_chat_id) setTelegramChatId(alertData.telegram_chat_id);
-          if (typeof alertData?.alert_score_drop === "boolean") setAlertScoreDrop(alertData.alert_score_drop);
-          if (typeof alertData?.score_threshold === "number") setScoreThreshold(alertData.score_threshold);
-          if (typeof alertData?.alert_dmarc_change === "boolean") setAlertDmarcChange(alertData.alert_dmarc_change);
-          if (typeof alertData?.alert_rbl_detection === "boolean") setAlertRblDetection(alertData.alert_rbl_detection);
+          const cfg = alertData?.config || alertData;
+          if (cfg?.telegram_bot_token) setTelegramBotToken(cfg.telegram_bot_token);
+          if (cfg?.telegram_chat_id) setTelegramChatId(cfg.telegram_chat_id);
+          if (typeof cfg?.alert_on_score_drop === "boolean") setAlertScoreDrop(cfg.alert_on_score_drop);
+          if (typeof cfg?.score_threshold === "number") setScoreThreshold(cfg.score_threshold);
+          if (typeof cfg?.alert_on_dmarc_change === "boolean") setAlertDmarcChange(cfg.alert_on_dmarc_change);
+          if (typeof cfg?.alert_on_rbl_detection === "boolean") setAlertRblDetection(cfg.alert_on_rbl_detection);
+        }
+
+        const credsRes = await apiFetch("/api/v1/dns/auto-fix/credentials");
+        if (credsRes.ok) {
+          const credsData = await credsRes.json();
+          if (credsData?.credentials) {
+            const cf = credsData.credentials.cloudflare;
+            const gd = credsData.credentials.godaddy;
+            if (cf?.token_masked) {
+              setCloudflareToken(cf.token_masked);
+            }
+            if (cf?.is_active || cf?.api_token_configured) {
+              setProviderVerified(true);
+            }
+            if (gd?.token_masked) {
+              setGodaddyKey(gd.token_masked);
+            }
+          }
         }
       } catch {}
     }
@@ -119,73 +141,173 @@ function SettingsContent() {
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setSaveError(null);
+    setSaveSuccessMessage(null);
+
     try {
-      const res = await apiFetch("/api/v1/settings/profile", {
+      const errors: string[] = [];
+
+      // 1. Persist User Profile
+      const profileRes = await apiFetch("/api/v1/settings/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name: fullName,
-          email: email,
-          shopify_store: shopifyStore,
+          full_name: fullName.trim(),
+          email: email.trim(),
+          company_name: shopifyStore.trim(),
         }),
       });
-      if (res.ok) {
-        setIsSaved(true);
-        setTimeout(() => setIsSaved(false), 3000);
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setSaveError(body.detail || "Failed to update profile settings.");
-        setTimeout(() => setSaveError(null), 5000);
+      if (!profileRes.ok) {
+        const body = await profileRes.json().catch(() => ({}));
+        errors.push(body.detail || "Failed to update profile details.");
       }
-    } catch (err: any) {
-      setSaveError(err?.message || "Network exception updating profile.");
-      setTimeout(() => setSaveError(null), 5000);
+
+      // 2. Persist Telegram & Alert Configuration
+      const alertsRes = await apiFetch("/api/v1/settings/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alert_on_score_drop: alertScoreDrop,
+          score_threshold: scoreThreshold,
+          alert_on_dmarc_change: alertDmarcChange,
+          alert_on_spf_error: true,
+          alert_on_dkim_fail: true,
+          telegram_bot_token: telegramBotToken.trim() || undefined,
+          telegram_chat_id: telegramChatId.trim() || undefined,
+          email_notifications: true,
+        }),
+      });
+      if (!alertsRes.ok) {
+        const body = await alertsRes.json().catch(() => ({}));
+        errors.push(body.detail || "Failed to update alert rules.");
+      }
+
+      // 3. Persist DNS Provider Credentials (if freshly updated and not masked)
+      if (cloudflareToken.trim() && !cloudflareToken.includes("•")) {
+        const cfRes = await apiFetch("/api/v1/dns/auto-fix/credentials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider_name: "cloudflare",
+            token_or_key: cloudflareToken.trim(),
+          }),
+        });
+        if (!cfRes.ok) {
+          const body = await cfRes.json().catch(() => ({}));
+          errors.push(body.detail || "Failed to save Cloudflare API credentials.");
+        } else {
+          setProviderVerified(true);
+        }
+      }
+
+      if (godaddyKey.trim() && !godaddyKey.includes("•")) {
+        const gdRes = await apiFetch("/api/v1/dns/auto-fix/credentials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider_name: "godaddy",
+            token_or_key: godaddyKey.trim(),
+          }),
+        });
+        if (!gdRes.ok) {
+          const body = await gdRes.json().catch(() => ({}));
+          errors.push(body.detail || "Failed to save GoDaddy API credentials.");
+        } else {
+          setProviderVerified(true);
+        }
+      }
+
+      if (errors.length === 0) {
+        setIsSaved(true);
+        setSaveSuccessMessage("Settings, alert triggers, and provider credentials saved successfully.");
+        setTimeout(() => {
+          setIsSaved(false);
+          setSaveSuccessMessage(null);
+        }, 4000);
+      } else {
+        setSaveError(errors.join(" "));
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Network exception while saving configuration.";
+      setSaveError(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleVerifyProvider = async () => {
+    if (!cloudflareToken.trim() && !godaddyKey.trim()) {
+      setProviderVerifyError("Please enter a Cloudflare API token or GoDaddy API key first.");
+      return;
+    }
+
+    setIsVerifyingProvider(true);
+    setProviderVerifyError(null);
+    setProviderVerifySuccess(null);
+
+    try {
+      const isCf = Boolean(cloudflareToken.trim());
+      const res = await apiFetch("/api/v1/dns/auto-fix/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider_name: isCf ? "cloudflare" : "godaddy",
+          token_or_key: isCf ? cloudflareToken.trim() : godaddyKey.trim(),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setProviderVerified(true);
+        setProviderVerifySuccess(data.message || "DNS provider API credentials verified successfully.");
+      } else {
+        setProviderVerified(false);
+        setProviderVerifyError(data.detail || data.error || "Verification failed. Check token permissions.");
+      }
+    } catch (err: unknown) {
+      setProviderVerified(false);
+      const msg = err instanceof Error ? err.message : "Network error verifying DNS provider credentials.";
+      setProviderVerifyError(msg);
+    } finally {
+      setIsVerifyingProvider(false);
+    }
+  };
+
   const handleSendTelegramTest = async () => {
+    if (!telegramChatId.trim()) {
+      setTelegramErrorMessage("Please provide a Telegram Chat ID or channel handle (@handle or numeric ID).");
+      setTelegramPingResult("error");
+      return;
+    }
     setIsSendingTelegramPing(true);
-    setTelegramPingResult(null);
     setTelegramErrorMessage(null);
+    setTelegramPingResult(null);
+
     try {
       const res = await apiFetch("/api/v1/settings/telegram/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bot_token: telegramBotToken,
-          chat_id: telegramChatId,
-          store_name: shopifyStore || "Shopify Store",
+          bot_token: telegramBotToken.trim(),
+          chat_id: telegramChatId.trim(),
+          store_name: shopifyStore.trim() || "BrandShop DTC",
         }),
       });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.success) {
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setTelegramPingResult("success");
-        setTelegramErrorMessage(null);
+        setTimeout(() => setTelegramPingResult(null), 4000);
       } else {
         setTelegramPingResult("error");
-        setTelegramErrorMessage(data?.error || data?.detail || "Telegram alert delivery failed. Check Bot Token and Chat ID.");
+        setTelegramErrorMessage(data.error || data.detail || "Failed to deliver test alert to Telegram. Check token and chat permissions.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTelegramPingResult("error");
-      setTelegramErrorMessage(err?.message || "Network error while connecting to alert engine.");
+      const msg = err instanceof Error ? err.message : "Network error testing Telegram bot connection.";
+      setTelegramErrorMessage(msg);
     } finally {
       setIsSendingTelegramPing(false);
-      setTimeout(() => {
-        setTelegramPingResult(null);
-        setTelegramErrorMessage(null);
-      }, 6000);
-    }
-  };
-
-  const handleVerifyProvider = async () => {
-    setIsVerifyingProvider(true);
-    try {
-      await new Promise((r) => setTimeout(r, 900));
-      setProviderVerified(true);
-    } finally {
-      setIsVerifyingProvider(false);
     }
   };
 
@@ -668,23 +790,57 @@ function SettingsContent() {
                   type="button"
                   onClick={handleVerifyProvider}
                   disabled={isVerifyingProvider}
-                  className="px-4 py-2 bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-700/60 hover:border-emerald-500/40 text-zinc-300 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer font-mono"
+                  className="px-4 py-2 bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-700/60 hover:border-emerald-500/40 text-zinc-300 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer font-mono disabled:opacity-50"
                 >
                   <Zap className={`w-3.5 h-3.5 text-emerald-400 ${isVerifyingProvider ? "animate-spin" : ""}`} />
-                  Test & Verify Connection
+                  {isVerifyingProvider ? "Verifying..." : "Test & Verify Connection"}
                 </button>
               </div>
+
+              {providerVerifySuccess && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 font-mono flex items-center gap-2 animate-fadeIn">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{providerVerifySuccess}</span>
+                </div>
+              )}
+
+              {providerVerifyError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2 animate-fadeIn">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{providerVerifyError}</span>
+                </div>
+              )}
             </GlassEmeraldCard>
           </div>
         )}
 
-        {/* Global Save Button */}
-        <div className="flex justify-end pt-2">
+        {/* Global Save Feedback & Submit Button */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+          <div className="flex-1">
+            {saveSuccessMessage && (
+              <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 font-mono flex items-center gap-2 animate-fadeIn">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{saveSuccessMessage}</span>
+              </div>
+            )}
+            {saveError && (
+              <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2 animate-fadeIn">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{saveError}</span>
+              </div>
+            )}
+          </div>
           <button
             type="submit"
-            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-5 py-2.5 rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-[0.98] transition-all text-xs flex items-center gap-2 cursor-pointer"
+            disabled={isLoading}
+            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-5 py-2.5 rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-[0.98] transition-all text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            <Save className="w-3.5 h-3.5 text-zinc-950" /> Save Configuration
+            {isLoading ? (
+              <RefreshCw className="w-3.5 h-3.5 text-zinc-950 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5 text-zinc-950" />
+            )}
+            {isLoading ? "Saving Settings..." : "Save Configuration"}
           </button>
         </div>
       </form>

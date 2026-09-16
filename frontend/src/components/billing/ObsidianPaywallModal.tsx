@@ -45,7 +45,7 @@ const TIERS: TierDefinition[] = [
     isPopular: true,
     features: [
       "3 Monitored Apex Domains Cap",
-      "RFC 7208 SPF Merge Engine (10-Lookup Cap)",
+      "Smart SPF Record Consolidation (Bypasses Google 10-Lookup Limit)",
       "1-Click DNS Auto-Fix (Cloudflare / GoDaddy)",
       "48-72h Predictive Risk Forecast",
       "Real-Time Multi-channel Failover Alerts",

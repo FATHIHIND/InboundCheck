@@ -686,7 +686,7 @@ function DNSInspectorContent() {
 
               {/* RUA Reporting Email */}
               <div className="space-y-1.5 mt-5">
-                <label className="text-xs font-bold text-white uppercase block font-mono">DMARC Report Inbox (RUA)</label>
+                <label className="text-xs font-bold text-white uppercase block font-mono">Email Fraud &amp; Abuse Report Inbox (DMARC RUA)</label>
                 <input
                   type="email"
                   value={dmarcReportEmail}
@@ -862,7 +862,7 @@ function DNSInspectorContent() {
                           </div>
 
                           <div className="p-3 bg-[#08080A] rounded-lg border border-zinc-800/80 space-y-1">
-                            <span className="text-[10px] text-zinc-500 uppercase block font-mono">Authoritative Target Node</span>
+                            <span className="text-[10px] text-zinc-500 uppercase block font-mono">Destination DNS Provider / Target Server</span>
                             <code className="text-zinc-300 font-mono text-xs block">{fix.authoritative_target}</code>
                             <p className="text-xs text-zinc-400 font-sans mt-1">{fix.explanation}</p>
                           </div>

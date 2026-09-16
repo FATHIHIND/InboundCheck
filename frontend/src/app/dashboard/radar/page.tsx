@@ -109,6 +109,13 @@ export default function BlacklistRadarPage() {
   const [rateLimitCountdown, setRateLimitCountdown] = useState<number | null>(null);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
+  const formatRblListing = (codes: string[]) => {
+    if (!codes || codes.length === 0) return "LISTED";
+    return codes
+      .map((c) => (c === "127.0.0.2" ? "Listed as Spam Trap Origin: 127.0.0.2" : c.startsWith("127.0.0.") ? `Listed: ${c}` : c))
+      .join(", ");
+  };
+
   // Countdown timer for rate limiting
   useEffect(() => {
     if (rateLimitCountdown === null || rateLimitCountdown <= 0) return;
@@ -343,7 +350,7 @@ export default function BlacklistRadarPage() {
             <>
               <span className="text-zinc-700">•</span>
               <span>
-                Public A-Records:{" "}
+                Store Sending IP Addresses:{" "}
                 <strong className="text-cyan-400 font-mono text-xs">
                   {scan.resolved_ips.join(", ")}
                 </strong>
@@ -389,7 +396,7 @@ export default function BlacklistRadarPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-mono border border-rose-500/40 transition"
                     >
                       <span>{r.provider_name}</span>
-                      <span className="text-rose-400 font-bold">[{r.response_codes.join(", ") || "LISTED"}]</span>
+                      <span className="text-rose-400 font-bold">[{formatRblListing(r.response_codes)}]</span>
                       <ExternalLink className="w-3 h-3 ml-1 text-rose-300" />
                     </a>
                   ))}
@@ -679,7 +686,7 @@ export default function BlacklistRadarPage() {
                                   <span className="text-[10px] text-zinc-500 uppercase block">Response Classification</span>
                                   <span className="text-xs text-emerald-400 font-bold block mt-0.5">
                                     {rbl.response_codes.length > 0
-                                      ? rbl.response_codes.join(", ")
+                                      ? formatRblListing(rbl.response_codes)
                                       : "Clean (No Blacklist Entry)"}
                                   </span>
                                   <span className="text-[10px] text-zinc-400 block mt-0.5">

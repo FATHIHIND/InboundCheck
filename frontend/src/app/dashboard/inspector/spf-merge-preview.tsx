@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import Link from "next/link";
 
 export interface SpfMechanism {
   raw: string;
@@ -74,6 +75,26 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
   const [applySuccess, setApplySuccess] = useState<boolean>(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [isTierLocked, setIsTierLocked] = useState<boolean>(false);
+  const [configuredProvider, setConfiguredProvider] = useState<"cloudflare" | "godaddy">("cloudflare");
+
+  useEffect(() => {
+    async function checkProvider() {
+      try {
+        const res = await apiFetch("/api/v1/dns/auto-fix/credentials");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.credentials?.godaddy?.api_token_configured && !data?.credentials?.cloudflare?.api_token_configured) {
+            setConfiguredProvider("godaddy");
+          } else {
+            setConfiguredProvider("cloudflare");
+          }
+        }
+      } catch {}
+    }
+    checkProvider();
+  }, []);
 
   const generatePlan = useCallback(
     async (qualifier: "~all" | "-all" = preferredQualifier) => {
@@ -99,9 +120,10 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
 
         const data: SpfMergePlanResponse = await res.json();
         setPlan(data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("SPF Merge Plan Error:", err);
-        setError(err?.message || "Failed to generate SPF merge plan");
+        const msg = err instanceof Error ? err.message : "Failed to generate SPF merge plan";
+        setError(msg);
       } finally {
         setIsLoading(false);
       }
@@ -120,13 +142,43 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
   };
 
   const handleApply = async () => {
-    if (!plan || !plan.safe_to_apply || plan.requires_manual_review) return;
+    if (!plan || !plan.proposed_record || !plan.safe_to_apply || plan.requires_manual_review) return;
     setIsApplying(true);
+    setApplyError(null);
+    setIsTierLocked(false);
+    setApplySuccess(false);
+
     try {
-      // Simulate/trigger auto-fix apply
-      await new Promise((r) => setTimeout(r, 600));
+      const res = await apiFetch("/api/v1/dns/auto-fix/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain_name: domain.trim(),
+          provider_name: configuredProvider,
+          record_type: "TXT",
+          host: "@",
+          record_value: plan.proposed_record,
+          ttl: 3600,
+        }),
+      });
+
+      if (res.status === 403) {
+        setIsTierLocked(true);
+        const data = await res.json().catch(() => ({}));
+        setApplyError(data.detail || "1-Click DNS Auto-Fix is reserved for Growth & Agency tiers.");
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Failed to inject record (HTTP ${res.status})`);
+      }
+
       setApplySuccess(true);
       if (onApplied) onApplied();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to apply consolidated SPF record.";
+      setApplyError(msg);
     } finally {
       setIsApplying(false);
     }
@@ -163,43 +215,53 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Qualifier Switcher */}
-          <div className="flex items-center rounded-lg bg-black/60 border border-white/10 p-0.5 text-xs font-mono">
-            <button
-              onClick={() => {
-                setPreferredQualifier("~all");
-                generatePlan("~all");
-              }}
-              className={`px-2.5 py-1 rounded transition ${
-                preferredQualifier === "~all"
-                  ? "bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-              title="SoftFail (Recommended for transactional deliverability)"
-            >
-              ~all (SoftFail)
-            </button>
-            <button
-              onClick={() => {
-                setPreferredQualifier("-all");
-                generatePlan("-all");
-              }}
-              className={`px-2.5 py-1 rounded transition ${
-                preferredQualifier === "-all"
-                  ? "bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-              title="HardFail (Strict rejection)"
-            >
-              -all (HardFail)
-            </button>
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+          <div className="flex flex-col items-end gap-1">
+            {/* Qualifier Switcher */}
+            <div className="flex items-center rounded-lg bg-black/60 border border-white/10 p-0.5 text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreferredQualifier("~all");
+                  generatePlan("~all");
+                }}
+                className={`px-3 py-1.5 rounded-md transition cursor-pointer ${
+                  preferredQualifier === "~all"
+                    ? "bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+                title="Flexible Delivery Mode: Permits legitimate forwarders while tagging unlisted IPs"
+              >
+                Flexible Delivery Mode (~all)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreferredQualifier("-all");
+                  generatePlan("-all");
+                }}
+                className={`px-3 py-1.5 rounded-md transition cursor-pointer ${
+                  preferredQualifier === "-all"
+                    ? "bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+                title="Strict Blocking Mode: Commands mailbox providers to immediately reject unauthorized IPs"
+              >
+                Strict Blocking Mode (-all)
+              </button>
+            </div>
+            <span className="text-[10px] text-zinc-500 font-sans text-right">
+              {preferredQualifier === "~all"
+                ? "Recommended: SoftFail lets legitimate automated receipts pass safely without bounce risks."
+                : "Strict: HardFail requests mailboxes immediately drop unlisted sending IPs."}
+            </span>
           </div>
 
           <button
+            type="button"
             onClick={() => generatePlan()}
             disabled={isLoading}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition disabled:opacity-50"
+            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition disabled:opacity-50 cursor-pointer self-start sm:self-center"
             title="Recalculate Merge Plan"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-emerald-400" : ""}`} />
@@ -395,30 +457,56 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           )}
 
           {/* 6. Action Footer */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-            <span className="text-[11px] text-zinc-500 font-mono">
-              Plan ID: {plan.plan_id.slice(0, 8)}... • Valid for 24h
-            </span>
-
-            {applySuccess ? (
-              <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Consolidated SPF plan staged for DNS injection!</span>
+          <div className="space-y-3 pt-2">
+            {applyError && (
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-300 font-mono flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-rose-300 block">{applyError}</span>
+                    {isTierLocked && (
+                      <span className="text-[11px] text-zinc-400 block mt-0.5 font-sans">
+                        Upgrade your plan to unlock automated 1-click zone remediation without manual DNS editing.
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {isTierLocked && (
+                  <Link
+                    href="/dashboard/billing"
+                    className="shrink-0 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1 transition"
+                  >
+                    Upgrade Plan <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                )}
               </div>
-            ) : (
-              <EmeraldHoverButton
-                size="sm"
-                variant={plan.safe_to_apply && !plan.requires_manual_review ? "primary" : "secondary"}
-                disabled={!plan.safe_to_apply || plan.requires_manual_review || isApplying}
-                onClick={handleApply}
-                isLoading={isApplying}
-                icon={<Zap className="w-3.5 h-3.5" />}
-              >
-                {plan.safe_to_apply && !plan.requires_manual_review
-                  ? "Fix Domain Configuration"
-                  : "Review DNS Records (Manual Action Required)"}
-              </EmeraldHoverButton>
             )}
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-[11px] text-zinc-500 font-mono">
+                Plan ID: {plan.plan_id.slice(0, 8)}... • Valid for 24h
+              </span>
+
+              {applySuccess ? (
+                <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-mono font-bold animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>✓ Injected to Zone</span>
+                </div>
+              ) : (
+                <EmeraldHoverButton
+                  size="sm"
+                  variant={plan.safe_to_apply && !plan.requires_manual_review ? "primary" : "secondary"}
+                  disabled={!plan.safe_to_apply || plan.requires_manual_review || isApplying}
+                  onClick={handleApply}
+                  isLoading={isApplying}
+                  icon={<Zap className="w-3.5 h-3.5" />}
+                >
+                  {plan.safe_to_apply && !plan.requires_manual_review
+                    ? "Fix Domain Configuration"
+                    : "Review DNS Records (Manual Action Required)"}
+                </EmeraldHoverButton>
+              )}
+            </div>
           </div>
         </>
       ) : null}

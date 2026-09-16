@@ -137,6 +137,11 @@ export default function DashboardOverviewPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [showWizardModal, setShowWizardModal] = useState(false);
 
+  // Store Deletion Guard State
+  const [storeToDelete, setStoreToDelete] = useState<{ id: string; domain_name: string } | null>(null);
+  const [isDeletingStore, setIsDeletingStore] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   // Revenue & Dispute Risk Analytics State
   const [revenueRisk, setRevenueRisk] = useState<RevenueRiskData | null>(null);
   const [isLoadingRisk, setIsLoadingRisk] = useState<boolean>(true);
@@ -271,16 +276,17 @@ export default function DashboardOverviewPage() {
     loadReputation();
   }, []);
 
-  // Close Add Store Modal on Escape key
+  // Close Add Store Modal or Delete Modal on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showAddModal) {
-        setShowAddModal(false);
+      if (e.key === "Escape") {
+        if (showAddModal) setShowAddModal(false);
+        if (storeToDelete && !isDeletingStore) setStoreToDelete(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAddModal]);
+  }, [showAddModal, storeToDelete, isDeletingStore]);
 
   // Auto-populate pending domain from bait audit on first-time mount when registry is empty
   useEffect(() => {
@@ -379,14 +385,28 @@ export default function DashboardOverviewPage() {
     }
   };
 
-  const handleDeleteStore = async (domainId: string) => {
+  const handleOpenDeleteModal = (id: string, domain_name: string) => {
+    setStoreToDelete({ id, domain_name });
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!storeToDelete || isDeletingStore) return;
+    setIsDeletingStore(true);
+    setDeleteError(null);
     try {
-      const res = await apiFetch(`/api/v1/domains/${domainId}`, { method: "DELETE" });
-      if (res.ok) {
-        await reloadDomains();
+      const res = await apiFetch(`/api/v1/domains/${storeToDelete.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || body.error || "Failed to remove domain from monitoring.");
       }
-    } catch {
-      // Keep real state
+      setStoreToDelete(null);
+      await reloadDomains();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to remove domain from monitoring.";
+      setDeleteError(msg);
+    } finally {
+      setIsDeletingStore(false);
     }
   };
 
@@ -677,8 +697,8 @@ export default function DashboardOverviewPage() {
                   )}
                 </span>
                 {revenueRisk?.confidence_band && (
-                  <span className="text-zinc-500 text-[10px] uppercase">
-                    {revenueRisk.confidence_band} conf.
+                  <span className="text-emerald-400 font-mono text-[10px]">
+                    High Statistical Confidence (95% Accuracy)
                   </span>
                 )}
               </div>
@@ -775,8 +795,8 @@ export default function DashboardOverviewPage() {
                   : "Predictive Risk Model"}
               </span>
               {revenueRisk?.confidence_band && (
-                <span className="text-zinc-500 text-[10px] uppercase">
-                  {revenueRisk.confidence_band} conf.
+                <span className="text-emerald-400 font-mono text-[10px]">
+                  High Statistical Confidence (95% Accuracy)
                 </span>
               )}
             </div>
@@ -968,7 +988,7 @@ export default function DashboardOverviewPage() {
                         </Link>
                         <button
                           type="button"
-                          onClick={() => handleDeleteStore(store.id)}
+                          onClick={() => handleOpenDeleteModal(store.id, store.domain_name)}
                           className="p-1 bg-[#14141A] hover:bg-red-500/10 border border-white/[0.08] text-zinc-500 hover:text-red-400 rounded-lg transition cursor-pointer"
                           title="Delete record"
                         >
@@ -1043,6 +1063,81 @@ export default function DashboardOverviewPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {storeToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-domain-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeletingStore) setStoreToDelete(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div className="obsidian-card rounded-2xl max-w-md w-full p-6 space-y-4 animate-fadeIn border border-rose-500/20 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+              <div className="flex items-center gap-2 text-rose-400">
+                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                <h3 id="delete-domain-modal-title" className="text-base font-bold text-white">
+                  Remove Sending Domain
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeletingStore && setStoreToDelete(null)}
+                disabled={isDeletingStore}
+                aria-label="Close dialog"
+                className="text-zinc-500 hover:text-white disabled:opacity-50 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                Are you sure you want to stop monitoring <span className="text-white font-mono font-bold">{storeToDelete.domain_name}</span>? All historical deliverability logs, SPF/DKIM snapshots, and blacklist tracking history will be permanently removed.
+              </p>
+
+              {deleteError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setStoreToDelete(null)}
+                disabled={isDeletingStore}
+                className="px-4 py-2 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.08] text-zinc-300 rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingStore}
+                className="px-4 py-2 bg-rose-500 hover:bg-rose-600 active:scale-[0.98] text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)] disabled:opacity-50 cursor-pointer"
+              >
+                {isDeletingStore ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm & Remove</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

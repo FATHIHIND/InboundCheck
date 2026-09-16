@@ -19,13 +19,21 @@ router = APIRouter(prefix="/ai", tags=["AI Content Lab"])
 
 class TemplateAnalyzeRequest(BaseModel):
     subject: str = Field(..., description="Email subject line")
-    body_content: str = Field(..., description="Email body text or HTML template")
+    body_content: Optional[str] = Field(None, description="Email body text or HTML template")
+    body: Optional[str] = Field(None, description="Alternative key for email body text or HTML template")
     template_name: Optional[str] = "Shopify Order Template"
+
+    def get_content(self) -> str:
+        return (self.body_content or self.body or "").strip()
 
 
 class PolymorphicGenerateRequest(BaseModel):
     subject: str = Field(..., description="Original subject line")
-    body_content: str = Field(..., description="Original HTML/text content")
+    body_content: Optional[str] = Field(None, description="Original HTML/text content")
+    body: Optional[str] = Field(None, description="Alternative key for original HTML/text content")
+
+    def get_content(self) -> str:
+        return (self.body_content or self.body or "").strip()
 
 
 @router.get("/sample-templates")
@@ -37,6 +45,7 @@ async def get_sample_templates(user_id: str = Depends(get_current_user_id)):
 
 
 @router.post("/analyze-template")
+@router.post("/audit-template")
 async def analyze_email_template(
     payload: TemplateAnalyzeRequest,
     user_id: str = Depends(get_current_user_id)
@@ -45,14 +54,19 @@ async def analyze_email_template(
     Audit template content for spam trigger density, formatting anomalies, and risk score.
     """
     try:
+        content = payload.get_content()
         result = await ai_content_service.analyze_template(
             subject=payload.subject,
-            body_content=payload.body_content
+            body_content=content
         )
         return {
             "success": True,
             "template_name": payload.template_name,
-            "audit": result
+            "audit": result,
+            "spam_score": result.get("spam_score", 0),
+            "risk_level": result.get("risk_level", "low"),
+            "flagged_triggers": result.get("flagged_triggers", []),
+            "recommendations": result.get("recommendations", [])
         }
     except Exception as e:
         logger.error(f"Error analyzing template: {e}")
@@ -60,6 +74,7 @@ async def analyze_email_template(
 
 
 @router.post("/generate-polymorphic-variants")
+@router.post("/generate-variants")
 async def generate_polymorphic_variants(
     payload: PolymorphicGenerateRequest,
     user_id: str = Depends(get_current_user_id)
@@ -68,9 +83,10 @@ async def generate_polymorphic_variants(
     Generate 3 deliverability-optimized polymorphic variations of the email copy.
     """
     try:
+        content = payload.get_content()
         variants = await ai_content_service.generate_polymorphic_variants(
             subject=payload.subject,
-            body_content=payload.body_content
+            body_content=content
         )
         return {
             "success": True,

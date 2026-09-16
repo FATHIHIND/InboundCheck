@@ -402,18 +402,18 @@ export default function ShopifyHubPage() {
               <span className="text-zinc-400 text-xs font-semibold block mb-1">Shopify DKIM Signing</span>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span className="text-white font-mono text-xs font-bold">shopify._domainkey</span>
+                <span className="text-white font-mono text-xs font-bold">Shopify Sender Authentication</span>
               </div>
-              <span className="text-[10px] text-zinc-500 mt-1 block font-mono">CNAMEs Active</span>
+              <span className="text-[10px] text-emerald-400 mt-1 block font-mono">Connected</span>
             </div>
 
             <div className="p-3.5 bg-[#08080A] rounded-lg border border-zinc-800">
               <span className="text-zinc-400 text-xs font-semibold block mb-1">DMARC Policy</span>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span className="text-white font-mono text-xs font-bold">p=quarantine</span>
+                <span className="text-white font-mono text-xs font-bold">Email Spoofing Protection</span>
               </div>
-              <span className="text-[10px] text-zinc-500 mt-1 block font-mono">Aligned with from: domain</span>
+              <span className="text-[10px] text-emerald-400 mt-1 block font-mono">Active (Quarantine)</span>
             </div>
           </div>
 
