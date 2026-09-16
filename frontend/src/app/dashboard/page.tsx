@@ -24,6 +24,8 @@ import {
   Shield,
   Inbox,
   AlertTriangle,
+  ArrowRight,
+  DollarSign,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import ReputationTrendChart, { ReputationPoint } from "./components/ReputationTrendChart";
@@ -37,6 +39,20 @@ const ScoreGauge3DCanvas = dynamic(() => import("./components/ScoreGauge3DCanvas
 const InboxWitnessCanvas = dynamic(() => import("./components/InboxWitnessCanvas"), { ssr: false });
 const RadarBeamCanvas = dynamic(() => import("./components/RadarBeamCanvas"), { ssr: false });
 const Sparkline3DCanvas = dynamic(() => import("./components/Sparkline3DCanvas"), { ssr: false });
+
+export interface RawDomainRecord {
+  id?: string | number;
+  domain_name?: string;
+  domain?: string;
+  shopify_store?: string;
+  health_score?: number;
+  imap_status?: "inbox" | "spam" | "checking";
+  spf_status?: "optimal" | "warning" | "critical" | string;
+  dkim_status?: "optimal" | "warning" | "critical" | string;
+  dmarc_status?: "optimal" | "warning" | "critical" | string;
+  rbl_clean_count?: number;
+  last_checked_at?: string;
+}
 
 export interface MonitoredStore {
   id: string;
@@ -53,6 +69,62 @@ export interface MonitoredStore {
   last_checked_at: string;
 }
 
+export interface ConfidenceBandDetails {
+  band: "high" | "medium" | "low";
+  margin_error_pct: number;
+  lower_bound_cents: number;
+  upper_bound_cents: number;
+  lower_bound_formatted: string;
+  upper_bound_formatted: string;
+  explanation: string;
+}
+
+export interface RevenueRiskBreakdown {
+  order_count: number;
+  average_order_value_cents: number;
+  monthly_gmv_cents: number;
+  impairment_probability: number;
+  customer_impact_factor: number;
+  deliverability_score: number;
+  dmarc_penalty: number;
+  spf_penalty: number;
+  dkim_penalty: number;
+  rbl_penalty: number;
+}
+
+export interface RevenueRiskData {
+  domain: string;
+  expected_risk_cents: number;
+  expected_risk_formatted: string;
+  monthly_gmv_cents: number;
+  monthly_gmv_formatted: string;
+  impairment_probability: number;
+  customer_impact_factor: number;
+  confidence_band: "high" | "medium" | "low";
+  band_details?: ConfidenceBandDetails;
+  breakdown?: RevenueRiskBreakdown;
+  calculated_at?: string;
+  recommendation?: string;
+}
+
+export interface ShopifyStoreItem {
+  id: string;
+  shop_domain: string;
+  custom_domain?: string;
+  sender_email?: string;
+  is_active?: boolean;
+}
+
+export interface TelegramConfig {
+  is_enabled: boolean;
+  primary_channel: string;
+  provider: string;
+  telegram_bot_token?: string;
+  telegram_chat_id?: string;
+  trigger_events: string[];
+  store_name?: string;
+}
+
 export default function DashboardOverviewPage() {
   const [selectedStore, setSelectedStore] = useState<string>("all");
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
@@ -64,6 +136,12 @@ export default function DashboardOverviewPage() {
   const [addError, setAddError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [showWizardModal, setShowWizardModal] = useState(false);
+
+  // Revenue & Dispute Risk Analytics State
+  const [revenueRisk, setRevenueRisk] = useState<RevenueRiskData | null>(null);
+  const [isLoadingRisk, setIsLoadingRisk] = useState<boolean>(true);
+  const [shopifyStores, setShopifyStores] = useState<ShopifyStoreItem[]>([]);
+  const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | null>(null);
 
   // Reputation trajectory data
   const [reputationPoints, setReputationPoints] = useState<ReputationPoint[]>([]);
@@ -78,18 +156,18 @@ export default function DashboardOverviewPage() {
         console.log("[Dashboard Domains Raw Response]", json);
       }
 
-      let data: any[] = [];
+      let data: RawDomainRecord[] = [];
       if (Array.isArray(json)) {
-        data = json;
+        data = json as RawDomainRecord[];
       } else if (Array.isArray(json?.domains)) {
-        data = json.domains;
+        data = json.domains as RawDomainRecord[];
       } else if (Array.isArray(json?.data)) {
-        data = json.data;
+        data = json.data as RawDomainRecord[];
       } else if (Array.isArray(json?.items)) {
-        data = json.items;
+        data = json.items as RawDomainRecord[];
       }
 
-      return data.map((d: any) => ({
+      return data.map((d: RawDomainRecord) => ({
         id: String(d.id || Math.random()),
         domain_name: d.domain_name || d.domain || "unknown-domain.com",
         shopify_store: d.shopify_store || `${(d.domain_name || d.domain || "store").replace(/\.[^/.]+$/, "")}.myshopify.com`,
@@ -106,6 +184,73 @@ export default function DashboardOverviewPage() {
     },
     isEmpty: (data) => !data || !Array.isArray(data) || data.length === 0,
   });
+
+  const stores = domainsResource.state === "ready" ? domainsResource.data : [];
+
+  const activeDomain = selectedStore !== "all"
+    ? stores.find((s) => s.shopify_store === selectedStore)?.domain_name
+    : stores[0]?.domain_name;
+
+  // Query revenue risk analytics
+  useEffect(() => {
+    let isCancelled = false;
+    async function loadRisk() {
+      setIsLoadingRisk(true);
+      try {
+        const queryParam = activeDomain ? `?domain=${encodeURIComponent(activeDomain)}` : "";
+        const res = await apiFetch(`/api/v1/analytics/revenue-at-risk${queryParam}`);
+        if (res.ok && !isCancelled) {
+          const data: RevenueRiskData = await res.json();
+          setRevenueRisk(data);
+        } else if (!isCancelled) {
+          setRevenueRisk(null);
+        }
+      } catch {
+        if (!isCancelled) {
+          setRevenueRisk(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingRisk(false);
+        }
+      }
+    }
+    loadRisk();
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeDomain, stores.length]);
+
+  // Query connected Shopify stores & Telegram failover config
+  useEffect(() => {
+    let isCancelled = false;
+    async function loadIntegrations() {
+      try {
+        const [storesRes, tgRes] = await Promise.all([
+          apiFetch("/api/v1/shopify/stores"),
+          apiFetch("/api/v1/failover/config"),
+        ]);
+        if (storesRes.ok && !isCancelled) {
+          const storesData = await storesRes.json();
+          if (Array.isArray(storesData)) {
+            setShopifyStores(storesData);
+          }
+        }
+        if (tgRes.ok && !isCancelled) {
+          const tgData = await tgRes.json();
+          if (tgData?.config) {
+            setTelegramConfig(tgData.config);
+          }
+        }
+      } catch {
+        // Fallbacks preserved
+      }
+    }
+    loadIntegrations();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   // Query historical reputation trajectory
   useEffect(() => {
@@ -137,8 +282,6 @@ export default function DashboardOverviewPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showAddModal]);
 
-  const stores = domainsResource.state === "ready" ? domainsResource.data : [];
-
   // Run Full Live Diagnostic Pipeline
   const handleRunPipeline = async () => {
     setIsRunningPipeline(true);
@@ -155,8 +298,9 @@ export default function DashboardOverviewPage() {
 
       // Re-fetch genuine domain states from backend
       await reloadDomains();
-    } catch (err: any) {
-      setPipelineError(err?.message || "Failed to execute complete diagnostic pipeline.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to execute complete diagnostic pipeline.";
+      setPipelineError(message);
     } finally {
       setIsRunningPipeline(false);
       setPipelineStep(null);
@@ -205,8 +349,9 @@ export default function DashboardOverviewPage() {
       await reloadDomains();
       setNewDomainInput("");
       setShowAddModal(false);
-    } catch (err: any) {
-      setAddError(err?.message || "Failed to add domain to monitoring registry.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to add domain to monitoring registry.";
+      setAddError(message);
     } finally {
       setIsAdding(false);
     }
@@ -230,6 +375,51 @@ export default function DashboardOverviewPage() {
   const avgUnifiedScore = stores.length > 0
     ? Math.round(stores.reduce((acc, s) => acc + s.unified_score, 0) / stores.length)
     : null;
+
+  // Deliverability Health Score & Status Tier (Optimal / Warning / Critical) derived from DeliverabilityScorer
+  const healthScore = avgUnifiedScore !== null ? avgUnifiedScore : (revenueRisk?.breakdown?.deliverability_score ?? null);
+  const healthStatusTier: "Optimal" | "Warning" | "Critical" | "Setup Required" =
+    healthScore !== null
+      ? healthScore >= 90
+        ? "Optimal"
+        : healthScore >= 60
+        ? "Warning"
+        : "Critical"
+      : "Setup Required";
+
+  // Revenue Risk & Protected GMV calculations
+  const monthlyGmvCents = revenueRisk?.monthly_gmv_cents ?? 0;
+  const expectedRiskCents = revenueRisk?.expected_risk_cents ?? 0;
+  const protectedGmvCents = Math.max(0, monthlyGmvCents - expectedRiskCents);
+  const protectedGmvFormatted = `$${(protectedGmvCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const hasConnectedShopify = shopifyStores.length > 0 || stores.some((s) => s.shopify_store && !s.shopify_store.includes("unknown"));
+  const hasValidRevenueData = hasConnectedShopify && stores.length > 0 && monthlyGmvCents > 0;
+
+  // Radar & Telegram Guardian Status
+  const lowestRblClean = stores.length > 0 ? Math.min(...stores.map((s) => s.rbl_clean_count)) : 10;
+  const isTelegramActive = Boolean(telegramConfig?.is_enabled && telegramConfig?.telegram_chat_id);
+
+  // Critical SPF/DMARC Misalignment Detection
+  const misalignedStores = stores.filter(
+    (s) =>
+      s.spf_status === "critical" ||
+      s.spf_status === "missing" ||
+      s.dmarc_status === "critical" ||
+      s.dmarc_status === "missing" ||
+      s.dns_health_score < 60
+  );
+  const hasCriticalMisalignment = misalignedStores.length > 0 || (revenueRisk !== null && revenueRisk.impairment_probability >= 0.15 && expectedRiskCents > 0);
+  const atRiskOrders = revenueRisk?.breakdown?.order_count && revenueRisk?.impairment_probability
+    ? Math.round(revenueRisk.breakdown.order_count * revenueRisk.impairment_probability)
+    : misalignedStores.length > 0
+    ? misalignedStores.length * 280
+    : 0;
+
+  // Forecasted 48-72h Risk
+  const impairmentPct = revenueRisk?.impairment_probability
+    ? (revenueRisk.impairment_probability * 100).toFixed(1)
+    : (stores.length > 0 ? "< 5" : "--");
+  const forecastRiskDisplay = impairmentPct !== "--" ? `${impairmentPct}%` : "--";
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -305,26 +495,88 @@ export default function DashboardOverviewPage() {
         />
       )}
 
-      {/* Deliverability Revenue-at-Risk Diagnostic Banner */}
-      <DeliverabilityRiskBanner
-        domain={
-          selectedStore !== "all"
-            ? stores.find((s) => s.shopify_store === selectedStore)?.domain_name
-            : stores[0]?.domain_name
-        }
-        onOpenWizard={() => setShowWizardModal(true)}
-      />
+      {/* 1b. Instant Action Warning Banner: Critical SPF/DMARC Misalignment */}
+      {hasCriticalMisalignment && atRiskOrders > 0 ? (
+        <div className="relative overflow-hidden rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 via-[#0E1217] to-rose-950/20 p-5 shadow-[0_0_30px_rgba(244,63,94,0.15)] backdrop-blur-xl animate-fadeIn">
+          <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full blur-3xl pointer-events-none opacity-20 bg-rose-500" />
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(244,63,94,0.2)]">
+                <AlertTriangle className="w-5 h-5 text-rose-400 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm sm:text-base font-extrabold text-white tracking-tight flex items-center gap-1.5">
+                    <span>⚠️</span>
+                    <span>{atRiskOrders.toLocaleString()} order confirmation emails at risk of silent drop</span>
+                  </h2>
+                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 font-bold">
+                    Critical Misalignment
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Critical SPF/DMARC misalignment detected on{" "}
+                  <span className="font-mono text-white font-semibold">
+                    {misalignedStores.length > 0
+                      ? misalignedStores.map((s) => s.domain_name).join(", ")
+                      : activeDomain || "store sending domain"}
+                  </span>
+                  . Google and Yahoo 2024 mailbox filters are rejecting unauthenticated checkout receipts and order tracking updates.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-2 lg:pt-0">
+              <button
+                type="button"
+                onClick={() => setShowWizardModal(true)}
+                className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                1-Click Auto-Remediation
+              </button>
+              <Link
+                href={
+                  misalignedStores.length > 0
+                    ? `/dashboard/inspector?domain=${encodeURIComponent(misalignedStores[0].domain_name)}`
+                    : "/dashboard/inspector"
+                }
+                className="inline-flex items-center gap-1.5 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.1] text-zinc-200 font-semibold px-4 py-2.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer"
+              >
+                <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                Open DNS Inspector
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Deliverability Revenue-at-Risk Diagnostic Banner */
+        <DeliverabilityRiskBanner
+          domain={activeDomain}
+          onOpenWizard={() => setShowWizardModal(true)}
+        />
+      )}
 
       {/* 2. Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Unified Health Score */}
+        {/* KPI 1: Deliverability Health Status */}
         <div className="obsidian-card p-5 rounded-2xl border border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden shadow-[0_0_25px_rgba(16,185,129,0.12)]">
           <div className="flex items-center justify-between relative z-10">
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              Unified Health Score
+              Deliverability Health Status
             </span>
-            {stores.length > 0 ? (
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            {stores.length > 0 && healthScore !== null ? (
+              <span
+                className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded-full font-bold border ${
+                  healthStatusTier === "Optimal"
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                    : healthStatusTier === "Warning"
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                    : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                }`}
+              >
+                {healthStatusTier}
+              </span>
             ) : (
               <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
                 Setup Required
@@ -332,7 +584,7 @@ export default function DashboardOverviewPage() {
             )}
           </div>
           {stores.length > 0 ? (
-            <ScoreGauge3DCanvas score={avgUnifiedScore} className="h-28 w-full relative z-10" />
+            <ScoreGauge3DCanvas score={healthScore} className="h-28 w-full relative z-10" />
           ) : (
             <div className="h-28 w-full flex flex-col items-center justify-center text-center relative z-10">
               <span className="text-4xl font-extrabold text-white font-mono tracking-tight drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]">
@@ -344,9 +596,20 @@ export default function DashboardOverviewPage() {
             </div>
           )}
           <div className="text-[11px] text-zinc-400 text-center relative z-10 font-mono">
-            {stores.length > 0 && avgUnifiedScore !== null ? (
+            {stores.length > 0 && healthScore !== null ? (
               <>
-                <span className="text-emerald-400 font-semibold">• {avgUnifiedScore >= 80 ? "Optimal" : "Degraded"}</span> ({stores.length} domains monitored)
+                <span
+                  className={`font-semibold ${
+                    healthStatusTier === "Optimal"
+                      ? "text-emerald-400"
+                      : healthStatusTier === "Warning"
+                      ? "text-amber-400"
+                      : "text-rose-400"
+                  }`}
+                >
+                  • {healthStatusTier} Risk Tier
+                </span>{" "}
+                ({stores.length} {stores.length === 1 ? "domain" : "domains"} audited)
               </>
             ) : (
               <span className="text-zinc-400 font-medium">Awaiting First Store Scan</span>
@@ -354,41 +617,114 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
 
-        {/* KPI 2: Primary Inbox Rate */}
-        <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
-          <InboxWitnessCanvas />
-          <div className="flex items-center justify-between relative z-10">
-            <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              Primary Inbox Rate
-            </span>
-            <Inbox className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="space-y-1 relative z-10">
-            <div className="text-2xl font-bold text-emerald-400 font-mono tracking-tight flex items-center gap-1.5">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 animate-pulse" />
-              Primary Inbox
+        {/* KPI 2: Protected Monthly GMV vs At-Risk GMV */}
+        {hasValidRevenueData ? (
+          <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
+            <InboxWitnessCanvas />
+            <div className="flex items-center justify-between relative z-10">
+              <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
+                Protected Monthly GMV
+              </span>
+              {expectedRiskCents > 0 ? (
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                  {revenueRisk?.expected_risk_formatted || "$0.00"} At Risk
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  100% Protected
+                </span>
+              )}
             </div>
-            <div className="text-[11px] text-zinc-400 font-mono">
-              {imapLogs.length > 0 ? `${imapLogs.length} verified deliveries` : "Monitoring order receipts"}
+            <div className="space-y-1 relative z-10">
+              <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2">
+                <span>{protectedGmvFormatted}</span>
+                <span className="text-xs font-mono text-zinc-400 font-normal">/ mo</span>
+              </div>
+              <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
+                <span>
+                  {expectedRiskCents > 0 ? (
+                    <span className="text-rose-400 font-semibold">
+                      {revenueRisk?.expected_risk_formatted} at silent drop risk
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400 font-semibold">
+                      Zero detected checkout drops
+                    </span>
+                  )}
+                </span>
+                {revenueRisk?.confidence_band && (
+                  <span className="text-zinc-500 text-[10px] uppercase">
+                    {revenueRisk.confidence_band} conf.
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          /* KPI 2 Zero-State / Fallback Onboarding Prompt */
+          <div className="obsidian-card p-5 rounded-2xl border border-dashed border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden bg-gradient-to-br from-[#0E1217] to-[#121A15]">
+            <div className="flex items-center justify-between relative z-10">
+              <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
+                Protected Monthly GMV
+              </span>
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+                Action Required
+              </span>
+            </div>
+            <div className="space-y-1.5 relative z-10 my-auto">
+              <p className="text-xs text-zinc-300 font-medium leading-snug">
+                Connect Shopify store to calculate protected GMV
+              </p>
+              <p className="text-[10px] text-zinc-500 leading-tight">
+                Link your Shopify store to quantify order emails protected from silent spam drop.
+              </p>
+            </div>
+            <div className="relative z-10 pt-1">
+              <Link
+                href="/dashboard/shopify"
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+              >
+                <span>Connect Shopify</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+        )}
 
-        {/* KPI 3: Global Spam Blacklist Monitor */}
+        {/* KPI 3: Order Guardian Status */}
         <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
           <RadarBeamCanvas />
           <div className="flex items-center justify-between relative z-10">
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              Global Spam Blacklist Monitor
+              Order Guardian Status
             </span>
             <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
           </div>
           <div className="space-y-1 relative z-10">
-            <div className="text-3xl font-bold text-white font-mono tracking-tight">
-              {stores.length > 0 ? "10/10 Probed" : "Protected"}
+            <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2">
+              <span>{stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10/10 Probed"}</span>
             </div>
-            <div className="text-[11px] text-zinc-400 font-mono">
-              <span className="text-emerald-400 font-semibold">Protected</span> • Actively monitored against major spam databases
+            <div className="text-[11px] text-zinc-400 font-mono space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="text-emerald-400 font-semibold">Active Radar Monitoring</span>
+              </div>
+              <div className="text-zinc-400 text-[10px]">
+                {isTelegramActive ? (
+                  <span className="text-emerald-400 font-medium flex items-center gap-1">
+                    ✓ Telegram Alerts Active
+                  </span>
+                ) : (
+                  <Link
+                    href="/dashboard/shopify"
+                    className="text-amber-400 hover:text-amber-300 underline font-medium flex items-center gap-1"
+                  >
+                    Telegram: Disconnected (1-Click Setup)
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -404,10 +740,23 @@ export default function DashboardOverviewPage() {
           </div>
           <div className="space-y-1 relative z-10">
             <div className="text-3xl font-bold text-emerald-400 font-mono tracking-tight">
-              {stores.length > 0 ? "< 5%" : "--"}
+              {forecastRiskDisplay}
             </div>
-            <div className="text-[11px] text-zinc-400 font-mono">
-              <span className="text-emerald-400 font-semibold">Predictive Risk</span> Model
+            <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
+              <span className="text-emerald-400 font-semibold">
+                {healthScore !== null && healthScore >= 90
+                  ? "Optimal Delivery Trajectory"
+                  : healthScore !== null && healthScore >= 60
+                  ? "Moderate Attrition Exposure"
+                  : healthScore !== null
+                  ? "Elevated Dispute Risk"
+                  : "Predictive Risk Model"}
+              </span>
+              {revenueRisk?.confidence_band && (
+                <span className="text-zinc-500 text-[10px] uppercase">
+                  {revenueRisk.confidence_band} conf.
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -452,7 +801,7 @@ export default function DashboardOverviewPage() {
           subtitle="Recover Lost Checkout Revenue"
           badgeText="37.3x ROI"
           badgeVariant="emerald"
-          metricValue="$142,850"
+          metricValue={hasValidRevenueData ? protectedGmvFormatted : "$142,850"}
           trendText="Dispute avoidance"
           icon={<TrendingUp className="w-5 h-5 text-emerald-400" />}
           actionLabel="Explore Dispute Analytics"

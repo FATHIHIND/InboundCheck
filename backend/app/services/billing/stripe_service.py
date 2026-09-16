@@ -21,6 +21,7 @@ logger = logging.getLogger("StripeService")
 TIER_LIMITS = {
     "starter": 1,
     "growth": 3,
+    "agency": 20,
     "enterprise": 999,
 }
 
@@ -28,33 +29,48 @@ PLAN_PRICING: Dict[str, Dict[str, Any]] = {
     "starter": {
         "id": "starter",
         "name": "Starter Plan",
-        "price": 29,
-        "amount": 2900,
+        "price": 9,
+        "amount": 900,
         "currency": "usd",
         "interval": "month",
         "domain_limit": 1,
         "features": [
-            "1 Monitored Apex Domain",
-            "Manual DNS Record Snippets",
-            "Basic Telegram Alerts",
-            "Daily Deliverability Diagnostics",
+            "1 Monitored Domain",
+            "24/7 Continuous DNS & 10-RBL Blacklist Radar",
+            "Instant Telegram Failure Alerts",
+            "3-Day Free Trial",
         ],
     },
     "growth": {
         "id": "growth",
         "name": "Growth Plan",
-        "price": 79,
-        "amount": 7900,
+        "price": 29,
+        "amount": 2900,
         "currency": "usd",
         "interval": "month",
         "domain_limit": 3,
         "is_popular": True,
         "features": [
-            "3 Monitored Apex Domains",
-            "SPF Merge Engine & Lookup Consolidation",
-            "1-Click DNS Auto-Fix (Cloudflare / GoDaddy)",
-            "48-72h Predictive Risk Forecast & Radar",
-            "Real-Time Telegram & Multi-channel Alerts",
+            "Up to 3 Monitored Domains",
+            "Shopify Store OAuth Sync & Alignment",
+            "1-Click DNS Auto-Remediation (Cloudflare & GoDaddy APIs)",
+            "Revenue & Dispute Risk Analytics (Protected GMV / At-Risk GMV)",
+            "3-Day Free Trial",
+        ],
+    },
+    "agency": {
+        "id": "agency",
+        "name": "Agency Plan",
+        "price": 79,
+        "amount": 7900,
+        "currency": "usd",
+        "interval": "month",
+        "domain_limit": 20,
+        "features": [
+            "Up to 20 Monitored Domains",
+            "Multi-Store Management",
+            "Priority Audit Queue & White-Label Reporting Exports",
+            "3-Day Free Trial",
         ],
     },
     "enterprise": {
@@ -132,6 +148,8 @@ class StripeService:
         raw = (price_or_tier or "growth").strip().lower()
         if raw == (settings.STRIPE_PRICE_ENTERPRISE or "").lower() or "enterprise" in raw:
             return "enterprise"
+        if raw == (getattr(settings, "STRIPE_PRICE_AGENCY", "price_agency_monthly") or "").lower() or "agency" in raw:
+            return "agency"
         if raw == (settings.STRIPE_PRICE_STARTER or "").lower() or "starter" in raw:
             return "starter"
         if raw == (settings.STRIPE_PRICE_GROWTH or "").lower() or "growth" in raw:
@@ -201,8 +219,9 @@ class StripeService:
     ) -> Dict[str, Any]:
         """
         Create a Stripe Checkout Session for subscription upgrade supporting:
-        - Starter: $29/mo (1 Domain cap)
-        - Growth: $79/mo (3 Domains cap)
+        - Starter: $9/mo (1 Domain cap)
+        - Growth: $29/mo (3 Domains cap)
+        - Agency: $79/mo (20 Domains cap)
         - Enterprise: $199/mo (Unlimited domains)
         """
         tier = self.resolve_tier(plan_tier or price_id)
@@ -216,12 +235,15 @@ class StripeService:
         if self.secret_key:
             try:
                 configured_price_id = None
+                agency_price = getattr(settings, "STRIPE_PRICE_AGENCY", "price_agency_monthly")
                 if price_id and price_id.startswith("price_") and not price_id.endswith("_monthly"):
                     configured_price_id = price_id
                 elif tier == "starter" and settings.STRIPE_PRICE_STARTER and settings.STRIPE_PRICE_STARTER.startswith("price_") and not settings.STRIPE_PRICE_STARTER.endswith("_monthly"):
                     configured_price_id = settings.STRIPE_PRICE_STARTER
                 elif tier == "growth" and settings.STRIPE_PRICE_GROWTH and settings.STRIPE_PRICE_GROWTH.startswith("price_") and not settings.STRIPE_PRICE_GROWTH.endswith("_monthly"):
                     configured_price_id = settings.STRIPE_PRICE_GROWTH
+                elif tier == "agency" and agency_price and agency_price.startswith("price_") and not agency_price.endswith("_monthly"):
+                    configured_price_id = agency_price
                 elif tier == "enterprise" and settings.STRIPE_PRICE_ENTERPRISE and settings.STRIPE_PRICE_ENTERPRISE.startswith("price_") and not settings.STRIPE_PRICE_ENTERPRISE.endswith("_monthly"):
                     configured_price_id = settings.STRIPE_PRICE_ENTERPRISE
 

@@ -57,7 +57,7 @@ async def test_billing_endpoints():
         # 1. Get plans (authenticated)
         plans_res = await ac.get("/api/v1/billing/plans")
         assert plans_res.status_code == 200
-        assert len(plans_res.json()["plans"]) == 3
+        assert len(plans_res.json()["plans"]) == 4
 
         # 2. Create checkout session (user_id strictly derived from JWT, not body)
         checkout_res = await ac.post("/api/v1/billing/checkout-session", json={
@@ -66,7 +66,7 @@ async def test_billing_endpoints():
         })
         assert checkout_res.status_code == 200
         assert checkout_res.json()["plan_tier"] == "growth"
-        assert checkout_res.json()["amount"] == 79.0
+        assert checkout_res.json()["amount"] == 29.0
 
         # 3. Create customer portal session (user_id strictly derived from JWT, not body)
         portal_res = await ac.post("/api/v1/billing/customer-portal", json={})

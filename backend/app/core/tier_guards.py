@@ -20,6 +20,7 @@ logger = logging.getLogger("TierGuards")
 TIER_DOMAIN_LIMITS = {
     "starter": 1,
     "growth": 3,
+    "agency": 20,
     "enterprise": 999,
 }
 

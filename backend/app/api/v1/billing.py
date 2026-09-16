@@ -83,6 +83,7 @@ async def get_subscription_plans(user_id: str = Depends(get_current_user_id)):
     price_map = {
         "starter": settings.STRIPE_PRICE_STARTER,
         "growth": settings.STRIPE_PRICE_GROWTH,
+        "agency": getattr(settings, "STRIPE_PRICE_AGENCY", "price_agency_monthly"),
         "enterprise": settings.STRIPE_PRICE_ENTERPRISE,
     }
     enriched = []

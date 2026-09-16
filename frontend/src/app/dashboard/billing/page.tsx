@@ -33,7 +33,7 @@ interface SubscriptionInfo {
 }
 
 interface PlanTier {
-  id: "starter" | "growth" | "enterprise";
+  id: "starter" | "growth" | "agency" | "enterprise";
   name: string;
   price: string;
   period: string;
@@ -48,49 +48,47 @@ const PLAN_TIERS: PlanTier[] = [
   {
     id: "starter",
     name: "Starter",
-    price: "$29",
+    price: "$9",
     period: "/ month",
-    tagline: "Essential deliverability surveillance for single-store DTC brands.",
-    domainLimitText: "1 Monitored Apex Domain Cap",
+    tagline: "Continuous DNS monitoring and instant failure alerts for single-store DTC brands.",
+    domainLimitText: "1 Monitored Domain Cap",
     features: [
-      "1 Monitored Apex Domain Cap",
-      "Manual DNS Record Snippets",
-      "Basic Telegram Bot Alerts",
-      "Daily Multi-Resolver Diagnostics",
-      "Weekly Health Digest",
+      "1 Monitored Domain",
+      "24/7 Continuous DNS & 10-RBL Blacklist Radar",
+      "Instant Telegram Failure Alerts",
+      "3-Day Free Trial",
     ],
   },
   {
     id: "growth",
     name: "Growth",
-    price: "$79",
+    price: "$29",
     period: "/ month",
     badge: "Most Popular",
     isPopular: true,
-    tagline: "High-precision governance for expanding DTC brands & multi-brand setups.",
-    domainLimitText: "3 Monitored Apex Domains Cap",
+    tagline: "Multi-domain governance, automated DNS repair, and store order sync.",
+    domainLimitText: "Up to 3 Monitored Domains",
     features: [
-      "3 Monitored Apex Domains Cap",
-      "RFC 7208 SPF Merge Engine (10-Lookup Cap)",
-      "1-Click DNS Auto-Fix (Cloudflare / GoDaddy)",
-      "48-72h Predictive Risk Forecast & Blacklist Radar",
-      "Real-Time Multi-channel Alerts",
+      "Up to 3 Monitored Domains",
+      "Shopify Store OAuth Sync & Alignment",
+      "1-Click DNS Auto-Remediation (Cloudflare & GoDaddy APIs)",
+      "Revenue & Dispute Risk Analytics (Protected GMV / At-Risk GMV)",
+      "3-Day Free Trial",
     ],
   },
   {
-    id: "enterprise",
-    name: "Enterprise",
-    price: "$199",
+    id: "agency",
+    name: "Agency",
+    price: "$79",
     period: "/ month",
-    badge: "Maximum Governance",
-    tagline: "Uncompromised deliverability SLA for enterprise brands & DTC conglomerates.",
-    domainLimitText: "Unlimited Monitored Domains",
+    badge: "High-Volume Scaling",
+    tagline: "Expanded capacity and white-label reporting for agencies & high-volume merchants.",
+    domainLimitText: "Up to 20 Monitored Domains",
     features: [
-      "Unlimited Monitored Apex Domains",
-      "Developer API Keys & Custom Webhooks",
-      "Real-Time Worker Priority & 15m Sweeps",
-      "AI Content Lab & Cryptographic Optimizer",
-      "Dedicated Deliverability Architect SLA",
+      "Up to 20 Monitored Domains",
+      "Multi-Store Management",
+      "Priority Audit Queue & White-Label Reporting Exports",
+      "3-Day Free Trial",
     ],
   },
 ];
@@ -411,9 +409,11 @@ export default function BillingPortalPage() {
         metricValue={
           currentTierNormalized === "enterprise"
             ? "$199.00 / mo"
-            : currentTierNormalized === "growth"
+            : currentTierNormalized === "agency"
             ? "$79.00 / mo"
-            : "$29.00 / mo"
+            : currentTierNormalized === "growth"
+            ? "$29.00 / mo"
+            : "$9.00 / mo"
         }
         trendText={
           subInfo.current_period_end
@@ -455,18 +455,20 @@ export default function BillingPortalPage() {
             <span className="text-white font-bold block">
               {currentTierNormalized === "enterprise"
                 ? "15-Minute Critical Sweeps"
+                : currentTierNormalized === "agency"
+                ? "30-Minute Priority Sweeps"
                 : currentTierNormalized === "growth"
                 ? "Hourly Automated Audits"
-                : "Daily Proactive Audits"}
+                : "Continuous DNS & RBL Radar"}
             </span>
             <span className="text-[10px] text-emerald-400 block">Google & Yahoo 2024 Compliant</span>
           </div>
 
           {/* Meter 3 */}
           <div className="p-3 bg-[#08080A] rounded-xl border border-white/[0.04] space-y-1">
-            <span className="text-[10px] text-zinc-500 uppercase block">Failover Protection</span>
+            <span className="text-[10px] text-zinc-500 uppercase block">Incident Monitoring</span>
             <span className="text-white font-bold block">
-              {currentTierNormalized === "starter" ? "Standard Alerts" : "Omnichannel WhatsApp / SMS"}
+              {currentTierNormalized === "starter" ? "Instant Telegram Alerts" : "Multi-Channel & Telegram Alerts"}
             </span>
             <span className="text-[10px] text-emerald-400 block">Zero Transactional Receipt Loss</span>
           </div>
@@ -481,16 +483,17 @@ export default function BillingPortalPage() {
             Available Subscription Tiers
           </h2>
           <p className="text-xs text-zinc-400 font-mono">
-            Upgrade or switch your tier anytime with immediate pro-rata billing reconciliation.
+            Upgrade or switch your tier anytime with immediate pro-rata billing reconciliation. All plans include a 3-day free trial.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {PLAN_TIERS.map((tier) => {
             const isCurrent = currentTierNormalized === tier.id;
-            const isUpgrade =
-              (currentTierNormalized === "starter" && (tier.id === "growth" || tier.id === "enterprise")) ||
-              (currentTierNormalized === "growth" && tier.id === "enterprise");
+            const tierOrder: Record<string, number> = { starter: 1, growth: 2, agency: 3, enterprise: 4 };
+            const currentRank = tierOrder[currentTierNormalized] || 1;
+            const targetRank = tierOrder[tier.id] || 1;
+            const isUpgrade = targetRank > currentRank;
 
             return (
               <div

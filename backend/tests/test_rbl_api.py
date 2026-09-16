@@ -105,8 +105,10 @@ async def test_background_auditor_stores_actual_scanner_counts():
     """Verify that BackgroundAuditor records actual measured scanner counts rather than 10/10."""
     auditor = BackgroundAuditor()
 
-    # Prepopulate an active domain
+    # Prepopulate an active domain (clear any state from prior tests)
     user_id = "user_bg_audit_test"
+    supabase_service._in_memory_domains.clear()
+    supabase_service._in_memory_reputation.clear()
     supabase_service._in_memory_domains[user_id] = [{
         "id": "dom_bg_1",
         "domain_name": "bg-audit-test.com",

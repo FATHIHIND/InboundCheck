@@ -435,16 +435,16 @@ export default function LandingPage() {
           {/* Top Badge */}
           <FadeInUp delay={0.1}>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-emerald-400 mb-8 backdrop-blur-sm shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-              <span>✨ Announcing Google &amp; Yahoo 2024 Enforcement Defense</span>
+              <span>✨ Shopify Order Email Guardian • 2024 Enforcement Defense</span>
             </div>
           </FadeInUp>
 
           {/* Main Headline */}
           <FadeInUp delay={0.2}>
             <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white leading-[1.12] mb-6">
-              Your Order Confirmations Are Landing in Spam.{" "}
+              Know when your Shopify order emails stop reaching customers —{" "}
               <span className="font-serif italic font-normal text-emerald-400">
-                Don&apos;t Know It Yet.
+                before you lose sales.
               </span>
             </h1>
           </FadeInUp>
@@ -452,7 +452,7 @@ export default function LandingPage() {
           {/* Sub-text */}
           <FadeInUp delay={0.3}>
             <p className="text-[16px] text-gray-400 max-w-2xl text-center mb-8 leading-relaxed">
-              Google and Yahoo silently discard up to 28% of Shopify order receipts. InboundCheck continuously governs your DNS and alerts you before chargebacks occur.
+              Google and Yahoo 2024 DMARC &amp; SPF rules trigger silent rejections when merchants connect multiple apps. Unreceived order receipts cause dispute surges, customer support spikes, and lost GMV. InboundCheck protects your deliverability before revenue leaks.
             </p>
           </FadeInUp>
 
@@ -476,7 +476,7 @@ export default function LandingPage() {
                   className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 disabled:opacity-60"
                 >
                   <Zap size={14} className="fill-current" />
-                  <span>{isAuditing ? "Running Audit..." : "Check Inboxing Risk-Free"}</span>
+                  <span>{isAuditing ? "Analyzing Risk..." : "Analyze Revenue Risk"}</span>
                 </button>
               </form>
 
@@ -486,25 +486,25 @@ export default function LandingPage() {
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 border-b border-white/10 pb-2">
                     <span className="flex items-center gap-1.5">
                       <Terminal size={12} className="text-emerald-400" />
-                      LIVE DIAGNOSTIC PROBE: {domainInput}
+                      REVENUE &amp; DELIVERABILITY RISK PROBE: {domainInput}
                     </span>
-                    <span className="text-emerald-400 font-semibold">GOOGLE &amp; YAHOO 2024 VALIDATOR</span>
+                    <span className="text-emerald-400 font-semibold">2024 ENFORCEMENT AUDIT</span>
                   </div>
 
                   <div className="space-y-1.5 text-[11px]">
                     {auditStep >= 1 && (
                       <div className="flex items-center gap-2 text-zinc-300">
-                        <span className="text-emerald-400">✓</span> Resolving SPF records across 1.1.1.1 and 8.8.8.8...
+                        <span className="text-emerald-400">✓</span> Checking SPF mechanism limits &amp; multi-app lookup exhaustion...
                       </div>
                     )}
                     {auditStep >= 2 && (
                       <div className="flex items-center gap-2 text-zinc-300">
-                        <span className="text-emerald-400">✓</span> Probing 10 authoritative RBL Blacklists (Spamhaus, Barracuda)...
+                        <span className="text-emerald-400">✓</span> Scanning 10 authoritative RBLs for domain &amp; IP spam listings...
                       </div>
                     )}
                     {auditStep >= 3 && (
                       <div className="flex items-center gap-2 text-zinc-300">
-                        <span className="text-emerald-400">✓</span> Auditing DMARC enforcement &amp; DKIM CNAME selectors...
+                        <span className="text-emerald-400">✓</span> Evaluating DMARC policy enforcement &amp; DKIM alignment risks...
                       </div>
                     )}
                   </div>
@@ -519,23 +519,23 @@ export default function LandingPage() {
                         <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
                         <div className="space-y-1">
                           <div className="font-bold text-white text-xs">
-                            Deliverability Vulnerabilities Detected
+                            High Revenue &amp; Deliverability Risk Detected
                           </div>
                           <p className="text-[11px] text-zinc-300 font-sans leading-relaxed">
-                            Your domain shows <strong className="text-red-400">2 critical deliverability anomalies</strong>: SPF lookup count exceeds Google &amp; Yahoo 2024 limits and DMARC policy is currently set to <code className="text-amber-300 font-mono">p=none</code>.
+                            Your store exhibits <strong className="text-red-400">2 critical compliance breaches</strong>: SPF lookup count exceeds the 10-lookup barrier causing order receipts to drop, and DMARC is set to non-enforcing <code className="text-amber-300 font-mono">p=none</code> exposing your brand to spoofing and chargeback penalties.
                           </p>
                         </div>
                       </div>
 
                       <div className="mt-3 pt-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
                         <span className="text-[11px] text-zinc-400 font-sans">
-                          Full cryptographic report prepared.
+                          Complete Revenue &amp; Deliverability Risk Report ready.
                         </span>
                         <Link
                           href={`/auth/signup?domain=${encodeURIComponent(domainInput)}`}
                           className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                         >
-                          <span>Unlock Full Report Free</span>
+                          <span>Unlock Risk Analysis Free</span>
                           <ArrowRight size={13} />
                         </Link>
                       </div>

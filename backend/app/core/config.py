@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PRICE_STARTER: str = "price_starter_monthly"
     STRIPE_PRICE_GROWTH: str = "price_growth_monthly"
+    STRIPE_PRICE_AGENCY: str = "price_agency_monthly"
     STRIPE_PRICE_ENTERPRISE: str = "price_enterprise_monthly"
 
     # V3 Roadmap - Open-Weights LLM Adapter Configuration

@@ -22,10 +22,12 @@ class DeliverabilityScorer:
     @staticmethod
     def calculate_health_score(
         domain: str,
-        summary: DiagnosticSummary
+        summary: DiagnosticSummary,
+        seed_result: Optional[Any] = None
     ) -> Tuple[int, str, CategoryScoreBreakdown, List[DiagnosticIssue], List[DNSRecordFix]]:
         """
         Evaluate diagnostic summary and return total score, status grade, breakdown, issues, and fix suggestions.
+        Optionally incorporates seed inbox placement telemetry when available.
         """
         issues: List[DiagnosticIssue] = []
         fixes: List[DNSRecordFix] = []
@@ -35,6 +37,7 @@ class DeliverabilityScorer:
         dkim_score = 0
         mx_score = 0
         bimi_score = 0
+        seed_penalty = 0
 
         # 1. DMARC Evaluation (Max 35 pts)
         dmarc = summary.dmarc
@@ -257,9 +260,48 @@ class DeliverabilityScorer:
                 recommendation="Optional: Obtain a VMC certificate and publish a `default._bimi` record to earn bonus brand recognition."
             ))
 
-        # Total Calculation: Base score (DMARC 35 + SPF 25 + DKIM 25 + MX 15 = 100) + Optional BIMI bonus (+5)
+        # 6. Seed Placement Telemetry Integration (Optional)
+        if seed_result is not None:
+            spam_rate = getattr(seed_result, "spam_rate_pct", 0.0)
+            inbox_rate = getattr(seed_result, "inbox_rate_pct", 0.0)
+            promotions_rate = getattr(seed_result, "promotions_rate_pct", 0.0)
+
+            if spam_rate > 0:
+                seed_penalty = min(25, int((spam_rate / 100.0) * 20))
+                issues.append(DiagnosticIssue(
+                    id="seed-spam-detected",
+                    severity="critical",
+                    category="Inbox Placement",
+                    title=f"Seed Inbox Placement: Filtered to Spam ({spam_rate:.0f}% spam rate)",
+                    description="Real-world transactional order receipts routed to Spam/Junk at major mailbox providers.",
+                    impact="Customers miss critical order receipts and tracking updates, generating chargebacks and customer support friction.",
+                    recommendation="Review content spam signals, ensure full DKIM selector alignment, and verify sender IP reputation."
+                ))
+            elif inbox_rate == 100.0:
+                issues.append(DiagnosticIssue(
+                    id="seed-inbox-verified",
+                    severity="optimal",
+                    category="Inbox Placement",
+                    title="100% Primary Inbox Delivery Verified",
+                    description="Test order receipts landed directly in the primary inbox across Gmail, Yahoo, and Outlook seed mailboxes.",
+                    impact="Order confirmation and shipping update receipts reach customer primary inboxes reliably.",
+                    recommendation="Maintain verified authentication records."
+                ))
+            elif promotions_rate > 0:
+                issues.append(DiagnosticIssue(
+                    id="seed-promotions-tab",
+                    severity="warning",
+                    category="Inbox Placement",
+                    title=f"Receipt Filtered to Promotions Tab ({promotions_rate:.0f}%)",
+                    description="Mailbox provider categorized transactional order email as promotional marketing.",
+                    impact="Customers may overlook time-sensitive tracking numbers and order details.",
+                    recommendation="Remove marketing discount codes and promotional language from transactional email templates."
+                ))
+
+        # Total Calculation: Base score (DMARC 35 + SPF 25 + DKIM 25 + MX 15 = 100) + Optional BIMI bonus (+5) - Seed Penalty
         # Clamped strictly between 0 and 100.
-        total_score = min(100, max(0, dmarc_score + spf_score + dkim_score + mx_score + bimi_score))
+        base_score = min(100, max(0, dmarc_score + spf_score + dkim_score + mx_score + bimi_score))
+        total_score = min(100, max(0, base_score - seed_penalty))
 
         if total_score >= 90:
             overall_status = "optimal"

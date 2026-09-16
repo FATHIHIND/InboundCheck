@@ -133,6 +133,24 @@ async def test_domain_quota_limits():
         assert r4.status_code == 402
         assert "quota reached" in r4.json()["detail"].lower()
 
+    # 3. Agency Tier user: limit 20 domains
+    agency_user = "agency-quota-user"
+    supabase_service.update_user_profile(agency_user, {
+        "subscription_tier": "agency",
+        "subscription_status": "active",
+    })
+    supabase_service._in_memory_domains[agency_user] = []
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(agency_user)) as ac:
+        for i in range(1, 21):
+            res = await ac.post("/api/v1/domains", json={"domain": f"agency-domain-{i}.com"})
+            assert res.status_code == 200
+
+        # 21st domain -> Exceeds quota (20) -> 402
+        r21 = await ac.post("/api/v1/domains", json={"domain": "agency-domain-21.com"})
+        assert r21.status_code == 402
+        assert "quota reached" in r21.json()["detail"].lower()
+
 
 @pytest.mark.asyncio
 async def test_tier_gates_spf_merge_and_auto_fix():
@@ -176,27 +194,33 @@ async def test_tier_gates_spf_merge_and_auto_fix():
 
 @pytest.mark.asyncio
 async def test_checkout_session_creation():
-    """Verify Stripe checkout session creation for Starter ($29), Growth ($79), Enterprise ($199)."""
+    """Verify Stripe checkout session creation for Starter ($9), Growth ($29), Agency ($79), Enterprise ($199)."""
     transport = ASGITransport(app=app)
     user_id = "checkout-test-user"
 
     async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
-        # 1. Starter Checkout ($29)
+        # 1. Starter Checkout ($9)
         r_starter = await ac.post("/api/v1/billing/create-checkout-session", json={"plan_tier": "starter"})
         assert r_starter.status_code == 200
         d_starter = r_starter.json()
         assert d_starter["success"] is True
         assert d_starter["plan_tier"] == "starter"
-        assert d_starter["amount"] == 29.0
+        assert d_starter["amount"] == 9.0
         assert "checkout_url" in d_starter
 
-        # 2. Growth Checkout ($79)
+        # 2. Growth Checkout ($29)
         r_growth = await ac.post("/api/v1/billing/create-checkout-session", json={"plan_tier": "growth"})
         assert r_growth.status_code == 200
         d_growth = r_growth.json()
-        assert d_growth["amount"] == 79.0
+        assert d_growth["amount"] == 29.0
 
-        # 3. Enterprise Checkout ($199)
+        # 3. Agency Checkout ($79)
+        r_agency = await ac.post("/api/v1/billing/create-checkout-session", json={"plan_tier": "agency"})
+        assert r_agency.status_code == 200
+        d_agency = r_agency.json()
+        assert d_agency["amount"] == 79.0
+
+        # 4. Enterprise Checkout ($199)
         r_ent = await ac.post("/api/v1/billing/create-checkout-session", json={"plan_tier": "enterprise"})
         assert r_ent.status_code == 200
         d_ent = r_ent.json()
