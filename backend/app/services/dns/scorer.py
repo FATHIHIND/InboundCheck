@@ -5,7 +5,7 @@ Calculates weighted domain deliverability score (0-100%), extracts actionable is
 and categorizes compliance with modern 2024+ sender requirements (Google, Yahoo, Microsoft).
 """
 
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Optional
 from app.schemas.dns import (
     DiagnosticSummary,
     DiagnosticIssue,
