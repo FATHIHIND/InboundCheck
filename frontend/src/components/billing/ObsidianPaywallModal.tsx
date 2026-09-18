@@ -180,7 +180,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
               </>
             ) : (
               <>
-                Your trial period has concluded. Select an institutional tier below to maintain continuous inbox placement, unblock 1-click DNS remediation, and protect your store GMV.
+                Your free audit is complete. Choose a protection plan below to keep your store inbox-guaranteed and unlock 1-click DNS auto-repair.
               </>
             )}
           </p>
@@ -195,9 +195,10 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
               onClick={() => setBillingCycle((prev) => (prev === "monthly" ? "annual" : "monthly"))}
               className="relative w-12 h-6 rounded-full bg-[#1A1A22] border border-white/10 transition-colors p-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               aria-label="Toggle annual or monthly billing"
+              aria-pressed={billingCycle === "annual"}
             >
               <div
-                className={`w-4.5 h-4.5 rounded-full bg-emerald-400 transition-transform duration-200 ${
+                className={`w-[18px] h-[18px] rounded-full bg-emerald-400 transition-transform duration-200 ${
                   billingCycle === "annual" ? "translate-x-6" : "translate-x-0.5"
                 }`}
               />
@@ -213,7 +214,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
           </div>
 
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs text-center font-mono">
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center font-mono">
               {errorMessage}
             </div>
           )}

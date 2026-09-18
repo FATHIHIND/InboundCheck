@@ -154,6 +154,7 @@ export default function BlacklistRadarPage() {
   }, [target]);
 
   const runScan = async (domainOverride?: string) => {
+    setExpandedRows({});
     const domainToScan = (domainOverride || target).trim();
     if (!domainToScan) return;
 
@@ -171,7 +172,8 @@ export default function BlacklistRadarPage() {
         const retryHeader = response.headers.get("Retry-After");
         const seconds = retryHeader ? parseInt(retryHeader, 10) : 60;
         setRateLimitCountdown(isNaN(seconds) ? 60 : seconds);
-        throw await toApiError(response, "Rate limit reached. Please wait before scanning again.");
+        setError(null);
+        return;
       }
 
       if (!response.ok) {
@@ -181,7 +183,11 @@ export default function BlacklistRadarPage() {
       const data: RblScanResponse = await response.json();
       setScan(data);
     } catch (cause) {
-      setError(normalizeApiError(cause, "/api/v1/dns/rbl-scan"));
+      if (rateLimitCountdown !== null) {
+        setError(null);
+      } else {
+        setError(normalizeApiError(cause, "/api/v1/dns/rbl-scan"));
+      }
     } finally {
       setIsScanning(false);
     }
@@ -328,7 +334,7 @@ export default function BlacklistRadarPage() {
       )}
 
       {/* 2. Target Search & Control Bar */}
-      <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="bg-[#0E0E12]/80 backdrop-blur-md p-5 rounded-2xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-96">
           <Globe className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -520,8 +526,8 @@ export default function BlacklistRadarPage() {
         </GlassEmeraldCard>
 
         <GlassEmeraldCard
-          title="Verification Speed"
-          subtitle="Check Response Speed"
+          title="Avg. Resolution Latency"
+          subtitle="Multi-resolver DNS query speed per RBL zone"
           badgeText={scan ? `${scan.execution_time_ms.toFixed(0)}ms scan` : "Real-time"}
           badgeVariant="cyan"
           metricValue={avgLatency}
@@ -576,10 +582,11 @@ export default function BlacklistRadarPage() {
       {scan && (
         <GlassEmeraldCard
           title="Global Spam Blacklist Network"
-          subtitle="Real-time reputation monitoring and delisting gateway access"
+          subtitle="Live query results across 10 authoritative anti-spam databases"
           badgeText={`${scan.rbl_total_count} Lists Monitored`}
           badgeVariant="emerald"
           icon={<Activity className="w-5 h-5 text-emerald-400" />}
+          disableGrid
         >
           <div className="overflow-y-auto max-h-[360px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 rounded-lg">
             <table className="w-full text-left text-xs font-mono border-collapse">
@@ -589,7 +596,7 @@ export default function BlacklistRadarPage() {
                   <th className="py-3 px-4 font-semibold text-left">Reputation Network</th>
                   <th className="py-3 px-4 font-semibold text-left">Target Type</th>
                   <th className="py-3 px-4 font-semibold text-left">Measured Status</th>
-                  <th className="py-3 px-4 font-semibold text-left">Verification Speed</th>
+                  <th className="py-3 px-4 font-semibold text-left">Latency</th>
                   <th className="py-3 px-4 font-semibold text-right">Delisting Portal</th>
                 </tr>
               </thead>
@@ -664,7 +671,7 @@ export default function BlacklistRadarPage() {
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-xs font-mono text-zinc-300 tabular-nums">
-                          {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "--"}
+                          {rbl.latency_ms ?? "--"}ms
                         </td>
                         <td className="py-3.5 px-4 text-xs font-mono text-right" onClick={(e) => e.stopPropagation()}>
                           <a
@@ -717,13 +724,13 @@ export default function BlacklistRadarPage() {
                                     {rbl.message || "Reputation verified clean across database."}
                                   </span>
                                   <span className="text-[10px] text-zinc-400 block mt-0.5">
-                                    Verification Speed: {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "timeout"}
+                                    Query Latency: {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "timeout"}
                                   </span>
                                 </div>
                               </div>
 
                               <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80 flex items-center justify-between text-xs font-sans text-zinc-400">
-                                <span>Target: {rbl.queried_target} via {rbl.zone}</span>
+                                <span>Zone Route: {rbl.zone}</span>
                                 <span className="font-mono text-[10px] text-zinc-500">Checked: {new Date(rbl.checked_at).toISOString()}</span>
                               </div>
                             </div>

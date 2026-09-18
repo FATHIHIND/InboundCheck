@@ -213,7 +213,7 @@ export default function ShopifyHubPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-emerald-400" />
-            Shopify Store Sync &amp; Inbox Protection
+            Shopify Sync &amp; Inbox Protection
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
             Automated order delivery monitoring, transactional sender domain alignment, and real-time incident alerting.

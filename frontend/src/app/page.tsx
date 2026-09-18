@@ -40,7 +40,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How does InboundCheck differ from Klaviyo, Omnisend, or Mailchimp?",
-    a: "Klaviyo and Omnisend manage marketing newsletters. InboundCheck operates at the infrastructure & DNS root level. We continuously monitor your apex domain, query authoritative RBL blacklists (Spamhaus, Barracuda), and simulate real-time IMAP delivery receipts to maximize primary inbox placement for your highest-value transactional receipts.",
+    a: "Klaviyo and Omnisend manage marketing campaigns and email dispatch. InboundCheck operates at the infrastructure and DNS governance level. We continuously monitor your apex domain, ensure cryptographic SPF, DKIM, and DMARC alignment across all third-party senders without exceeding the 10-lookup limit, query 10 authoritative RBL blacklists, and guarantee that primary inbox delivery is protected for your critical Shopify transactional receipts.",
   },
   {
     q: "Will this fix my Google & Yahoo 2024 compliance warnings?",

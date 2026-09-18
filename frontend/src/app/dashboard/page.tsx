@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useApiResource } from "@/hooks/useApiResource";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
@@ -24,6 +25,7 @@ import {
   Shield,
   Inbox,
   AlertTriangle,
+  XCircle,
   ArrowRight,
   DollarSign,
   Sparkles,
@@ -221,6 +223,7 @@ const DEMO_REPUTATION_POINTS: ReputationPoint[] = [
 ];
 
 export default function DashboardOverviewPage() {
+  const router = useRouter();
   const [selectedStore, setSelectedStore] = useState<string>("all");
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
   const [pipelineStep, setPipelineStep] = useState<string | null>(null);
@@ -552,6 +555,7 @@ export default function DashboardOverviewPage() {
   // Radar & Telegram Guardian Status
   const lowestRblClean = stores.length > 0 ? Math.min(...stores.map((s) => s.rbl_clean_count)) : 10;
   const isTelegramActive = Boolean(telegramConfig?.is_enabled && telegramConfig?.telegram_chat_id);
+  const hasValidDomain = stores.some((s) => Boolean(s.domain_name && s.domain_name !== "yourstore.com" && s.domain_name.trim() !== ""));
 
   // Critical SPF/DMARC Misalignment Detection
   const misalignedStores = stores.filter(
@@ -715,7 +719,7 @@ export default function DashboardOverviewPage() {
       {/* 2. Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Deliverability Health Status */}
-        <div className="obsidian-card p-5 rounded-2xl border border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden shadow-[0_0_25px_rgba(16,185,129,0.12)]">
+        <div className="obsidian-card p-5 rounded-2xl border border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden shadow-[0_0_25px_rgba(16,185,129,0.12)] min-h-[160px] h-full">
           <div className="flex items-center justify-between relative z-10">
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
               Deliverability Health Status
@@ -774,7 +778,7 @@ export default function DashboardOverviewPage() {
 
         {/* KPI 2: Protected Monthly GMV vs At-Risk GMV */}
         {hasValidRevenueData ? (
-          <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
+          <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300 min-h-[160px] h-full">
             <InboxWitnessCanvas />
             <div className="flex items-center justify-between relative z-10">
               <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
@@ -819,7 +823,7 @@ export default function DashboardOverviewPage() {
           </div>
         ) : (
           /* KPI 2 Zero-State / Fallback Onboarding Prompt */
-          <div className="obsidian-card p-5 rounded-2xl border border-dashed border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden bg-gradient-to-br from-[#0E1217] to-[#121A15]">
+          <div className="obsidian-card p-5 rounded-2xl border border-dashed border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden bg-gradient-to-br from-[#0E1217] to-[#121A15] min-h-[160px] h-full">
             <div className="flex items-center justify-between relative z-10">
               <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
                 Protected Monthly GMV
@@ -848,23 +852,32 @@ export default function DashboardOverviewPage() {
           </div>
         )}
 
-        {/* KPI 3: Order Guardian Status */}
-        <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
+        {/* KPI 3: Blacklist Radar Coverage */}
+        <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300 min-h-[160px] h-full">
           <RadarBeamCanvas />
           <div className="flex items-center justify-between relative z-10">
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              Order Guardian Status
+              Blacklist Radar Coverage
             </span>
             <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
           </div>
           <div className="space-y-1 relative z-10">
             <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2 tabular-nums">
-              <span className="tabular-nums">{stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10/10 Probed"}</span>
+              <span className="tabular-nums">{stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10 RBL Feeds Monitored"}</span>
             </div>
             <div className="text-[11px] text-zinc-400 font-mono space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-emerald-400 font-semibold">Active Radar Monitoring</span>
+                {stores.length > 0 && hasValidDomain ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-emerald-400 font-semibold">Active Radar Monitoring</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                    <span className="text-zinc-400 font-semibold">Radar Feeds Configured</span>
+                  </>
+                )}
               </div>
               <div className="text-zinc-400 text-[10px]">
                 {isTelegramActive ? (
@@ -885,20 +898,46 @@ export default function DashboardOverviewPage() {
         </div>
 
         {/* KPI 4: 48–72h Risk Forecast */}
-        <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300">
+        <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300 min-h-[160px] h-full">
           <Sparkline3DCanvas />
           <div className="flex items-center justify-between relative z-10">
             <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
               48–72h Risk Forecast
             </span>
-            <Activity className="w-4 h-4 text-emerald-400" />
+            <Activity className={`w-4 h-4 ${
+              healthScore === null
+                ? "text-emerald-400"
+                : healthScore >= 90
+                ? "text-emerald-400"
+                : healthScore >= 60
+                ? "text-amber-400"
+                : "text-rose-400"
+            }`} />
           </div>
           <div className="space-y-1 relative z-10">
-            <div className="text-3xl font-bold text-emerald-400 font-mono tracking-tight tabular-nums">
+            <div className={`text-3xl font-bold font-mono tracking-tight tabular-nums ${
+              healthScore === null
+                ? "text-emerald-400"
+                : healthScore >= 90
+                ? "text-emerald-400"
+                : healthScore >= 60
+                ? "text-amber-400"
+                : "text-rose-400"
+            }`}>
               {forecastRiskDisplay}
             </div>
             <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
-              <span className="text-emerald-400 font-semibold">
+              <span
+                className={`font-semibold ${
+                  healthScore === null
+                    ? "text-zinc-400"
+                    : healthScore >= 90
+                    ? "text-emerald-400"
+                    : healthScore >= 60
+                    ? "text-amber-400"
+                    : "text-rose-400"
+                }`}
+              >
                 {healthScore !== null && healthScore >= 90
                   ? "Optimal Delivery Trajectory"
                   : healthScore !== null && healthScore >= 60
@@ -908,8 +947,8 @@ export default function DashboardOverviewPage() {
                   : "Predictive Risk Model"}
               </span>
               {effectiveRevenueRisk?.confidence_band && (
-                <span className="text-emerald-400 font-mono text-[10px]">
-                  High Statistical Confidence (95% Accuracy)
+                <span className="text-zinc-500 font-mono text-[10px]">
+                  95% Confidence
                 </span>
               )}
             </div>
@@ -928,7 +967,7 @@ export default function DashboardOverviewPage() {
           trendText="Automated alignment"
           icon={<Zap className="w-5 h-5 text-emerald-400" />}
           actionLabel="Launch Inspector"
-          onActionClick={() => window.location.href = "/dashboard/inspector"}
+          onActionClick={() => router.push("/dashboard/inspector")}
         >
           <p className="text-xs text-zinc-400 leading-relaxed">
             Automated CNAME selector discovery, SPF syntax validation, and DMARC enforcement aligned with Google &amp; Yahoo 2024 Bulk Sender Requirements (US &amp; EU).
@@ -938,13 +977,13 @@ export default function DashboardOverviewPage() {
         <GlassEmeraldCard
           title="Telegram Incident Guard"
           subtitle="Instant Alert Delivery"
-          badgeText="Active Failover"
-          badgeVariant="cyan"
-          metricValue="0 Missed"
-          trendText="100% receipt landing"
+          badgeText={imapLogs.length > 0 ? "Active Failover" : "Awaiting Data"}
+          badgeVariant={imapLogs.length > 0 ? "cyan" : "neutral"}
+          metricValue={imapLogs.length > 0 ? `${imapLogs.filter((l: IMAPCheckLog) => l.folder === "inbox").length} Delivered` : "No Logs Yet"}
+          trendText={imapLogs.length > 0 ? "Live receipt data" : "Connect store to activate"}
           icon={<Radio className="w-5 h-5 text-cyan-400" />}
           actionLabel="View Failover Logs"
-          onActionClick={() => window.location.href = "/dashboard/shopify"}
+          onActionClick={() => router.push("/dashboard/shopify")}
         >
           <p className="text-xs text-zinc-400 leading-relaxed">
             Live alerts sent to your Telegram whenever customer order receipts or tracking emails bounce.
@@ -960,7 +999,7 @@ export default function DashboardOverviewPage() {
           trendText="Dispute avoidance"
           icon={<TrendingUp className="w-5 h-5 text-emerald-400" />}
           actionLabel="Explore Dispute Analytics"
-          onActionClick={() => window.location.href = "/dashboard/shopify"}
+          onActionClick={() => router.push("/dashboard/shopify")}
         >
           <p className="text-xs text-zinc-400 leading-relaxed">
             Real-time correlation linking inbox deliverability health to Shopify weekly revenue protection and customer dispute prevention.
@@ -971,11 +1010,13 @@ export default function DashboardOverviewPage() {
       {/* 3. Middle Section: Telemetry Preview & Check History (Suppressed in empty state to eliminate stacked clutter) */}
       {(reputationPointsToRender.length > 0 || imapLogs.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className={imapLogs.length > 0 ? "lg:col-span-7" : "col-span-12"}>
-            <ReputationTrendChart data={reputationPointsToRender} />
-          </div>
+          {reputationPointsToRender.length > 0 && (
+            <div className={imapLogs.length > 0 ? "lg:col-span-7" : "lg:col-span-12"}>
+              <ReputationTrendChart data={reputationPointsToRender} />
+            </div>
+          )}
           {imapLogs.length > 0 && (
-            <div className="lg:col-span-5">
+            <div className={reputationPointsToRender.length > 0 ? "lg:col-span-5" : "lg:col-span-12"}>
               <CheckHistoryChart logs={imapLogs} />
             </div>
           )}
@@ -1104,7 +1145,7 @@ export default function DashboardOverviewPage() {
                     </span>
                   </div>
                   <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Demonstrating real-time DNS conflict diagnosis, $2,400/wk at-risk GMV radar, and 1-click repair tools.
+                    Simulating store DNS audit scenario: 3 misconfigured records, estimated $2,400/wk delivery risk, and 1-click repair triggers.
                   </p>
                 </div>
               </div>
@@ -1142,7 +1183,7 @@ export default function DashboardOverviewPage() {
             </span>
           </div>
 
-          <div className="overflow-x-auto max-h-[480px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
+          <div className="overflow-x-auto max-h-[560px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
             <table className="w-full text-left text-xs font-mono border-collapse">
               <thead className="sticky top-0 z-10 bg-[#0E1217]/95 backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                 <tr>
@@ -1160,7 +1201,11 @@ export default function DashboardOverviewPage() {
                 {filteredStores.map((store) => (
                   <tr
                     key={store.id}
-                    className="hover:bg-white/[0.02] transition-colors"
+                    className={`transition-colors ${
+                      auditingId === store.id
+                        ? "bg-emerald-500/5 border-l-2 border-l-emerald-500/40"
+                        : "hover:bg-white/[0.02]"
+                    }`}
                   >
                     <td className="py-3.5 px-4 text-xs font-mono font-bold text-white flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
@@ -1170,11 +1215,25 @@ export default function DashboardOverviewPage() {
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono text-zinc-400 text-[11px]">{store.shopify_store}</td>
                     <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 w-fit">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <Inbox className="w-3 h-3" />
-                        INBOX
-                      </span>
+                      {store.unified_score >= 85 ? (
+                        <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 w-fit">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <Inbox className="w-3 h-3" />
+                          INBOX
+                        </span>
+                      ) : store.unified_score >= 60 ? (
+                        <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 w-fit">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          <AlertTriangle className="w-3 h-3" />
+                          AT RISK
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 w-fit">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                          <XCircle className="w-3 h-3" />
+                          FAILING
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono">
                       <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
@@ -1187,19 +1246,52 @@ export default function DashboardOverviewPage() {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
+                        store.dkim_status === "optimal"
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                          : store.dkim_status === "missing" || store.dkim_status === "failed"
+                          ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+                          : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                          store.dkim_status === "optimal"
+                            ? "bg-emerald-400"
+                            : store.dkim_status === "missing" || store.dkim_status === "failed"
+                            ? "bg-rose-400"
+                            : "bg-amber-400"
+                        }`} />
                         {store.dkim_status.toUpperCase()}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
+                        store.dmarc_status === "optimal"
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                          : store.dmarc_status === "warn"
+                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                          : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                          store.dmarc_status === "optimal"
+                            ? "bg-emerald-400"
+                            : store.dmarc_status === "warn"
+                            ? "bg-amber-400"
+                            : "bg-rose-400"
+                        }`} />
                         {store.dmarc_status.toUpperCase()}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className="font-bold text-white text-xs">{store.unified_score}%</span>
+                      <span className={`font-bold text-xs flex items-center gap-1.5 ${
+                        store.unified_score >= 85 ? "text-emerald-400" :
+                        store.unified_score >= 60 ? "text-amber-400" : "text-rose-400"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          store.unified_score >= 85 ? "bg-emerald-400" :
+                          store.unified_score >= 60 ? "bg-amber-400" : "bg-rose-400"
+                        }`} />
+                        {store.unified_score}%
+                      </span>
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono text-right">
                       <div className="flex items-center justify-end gap-2">

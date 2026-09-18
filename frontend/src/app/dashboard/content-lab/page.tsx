@@ -207,17 +207,20 @@ export default function AIContentLabPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-emerald-400 fill-current" />
-            AI Content Lab &amp; Email Copy Optimizer
+            AI Content Lab &amp; Cryptographic Content Optimizer
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Audit transactional emails for spam triggers and generate Spam-Free Copy Variations (Preserves Shopify Liquid Tags).
+            Scan email templates for deliverability friction and generate Liquid-preserving polymorphic copy variations aligned with Google &amp; Yahoo 2024 enforcement rules.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1.5">
+          <span
+            title="No customer data leaves your browser."
+            className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1.5 cursor-help"
+          >
             <Cpu className="w-3.5 h-3.5" />
-            Zero-PII Engine Active
+            Privacy-Safe Analysis Engine
           </span>
           <EmeraldHoverButton
             onClick={() => {
@@ -245,7 +248,7 @@ export default function AIContentLabPage() {
           {/* Preset Selector */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-zinc-300">
-              Quick Test Presets
+              Shopify Template Presets
             </label>
             <div className="flex flex-wrap gap-2">
               {PRESET_TEMPLATES.map((p) => (
@@ -320,7 +323,7 @@ export default function AIContentLabPage() {
               size="sm"
               variant="secondary"
             >
-              Run AI Deliverability Audit
+              Run Deliverability Intelligence Scan
             </EmeraldHoverButton>
 
             <EmeraldHoverButton
@@ -353,7 +356,7 @@ export default function AIContentLabPage() {
 
       {/* Empty State / Quick-Start DTC Sample Loader */}
       {!auditResult && variants.length === 0 && !isAuditing && !isGeneratingVariants && (
-        <div className="p-8 rounded-2xl bg-[#0A0A0C]/80 border border-zinc-800/80 backdrop-blur-xl text-center space-y-4 max-w-2xl mx-auto my-4 shadow-xl animate-fadeIn">
+        <div className="p-8 sm:p-12 rounded-2xl bg-[#0A0A0C]/80 border border-zinc-800/80 backdrop-blur-xl text-center space-y-4 w-full max-w-[1360px] mx-auto my-4 shadow-xl animate-fadeIn">
           <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
             <Sparkles className="w-6 h-6" />
           </div>
@@ -365,16 +368,18 @@ export default function AIContentLabPage() {
               Test your transactional confirmation emails for 2024 spam trigger words and formatting friction while preserving all Shopify Liquid variables.
             </p>
           </div>
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => handleSelectPreset("order_confirmation")}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer active:scale-95 min-h-[44px]"
-            >
-              <FileText className="w-4 h-4" />
-              <span>Load Sample DTC Receipt</span>
-            </button>
-          </div>
+          {!subjectInput.trim() && !bodyInput.trim() && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => handleSelectPreset("order_confirmation")}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer active:scale-95 min-h-[44px]"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Load Sample DTC Receipt</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -424,8 +429,27 @@ export default function AIContentLabPage() {
 
               <div className="p-3.5 bg-[#08080A] rounded-xl border border-zinc-800 space-y-1">
                 <span className="text-[10px] uppercase text-zinc-500 block">Risk Tier</span>
-                <div className="text-sm font-bold uppercase text-white tracking-wide pt-1">
-                  {auditResult.risk_level}
+                <div className="pt-1">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide border ${
+                    auditResult.risk_level === "critical"
+                      ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                      : auditResult.risk_level === "high"
+                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                      : auditResult.risk_level === "medium"
+                      ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                      : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      auditResult.risk_level === "critical"
+                        ? "bg-rose-400 animate-pulse"
+                        : auditResult.risk_level === "high"
+                        ? "bg-amber-400 animate-pulse"
+                        : auditResult.risk_level === "medium"
+                        ? "bg-amber-300 animate-pulse"
+                        : "bg-emerald-400"
+                    }`} />
+                    {auditResult.risk_level}
+                  </span>
                 </div>
               </div>
 
@@ -449,7 +473,7 @@ export default function AIContentLabPage() {
                       key={i}
                       className="px-2.5 py-1 bg-rose-500/10 border border-rose-500/25 rounded-md text-xs font-mono font-bold text-rose-300"
                     >
-                      &ldquo;{trigger}&rdquo;
+                      “{trigger}”
                     </span>
                   ))}
                 </div>

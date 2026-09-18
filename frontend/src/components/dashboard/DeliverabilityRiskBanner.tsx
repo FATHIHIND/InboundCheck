@@ -97,7 +97,7 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
   if (isLoading) {
     return (
       <div
-        className={`relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-[#0a0d12]/80 backdrop-blur-xl p-5 shadow-2xl animate-pulse ${className}`}
+        className={`relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-[#0A0A0C]/80 backdrop-blur-xl p-5 shadow-2xl animate-pulse ${className}`}
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -126,7 +126,7 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
   if (!hasRealStore || !data) {
     return (
       <div
-        className={`relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-[#0a0d12] via-[#0f141c] to-[#0a0d12] p-5 backdrop-blur-xl shadow-xl ${className}`}
+        className={`relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-[#0A0A0C] via-[#0E1217] to-[#0A0A0C] p-5 backdrop-blur-xl shadow-xl ${className}`}
       >
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -174,10 +174,10 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
     <div
       className={`relative overflow-hidden rounded-2xl border transition-all duration-300 ${
         isZeroRisk
-          ? "border-emerald-500/30 bg-gradient-to-r from-[#0a0d12] via-[#0f141c] to-[#0a0d12]"
+          ? "border-emerald-500/30 bg-gradient-to-r from-[#0A0A0C] via-[#0E1217] to-[#0A0A0C]"
           : isHighRisk
-          ? "border-rose-500/30 bg-gradient-to-r from-[#170E10] via-[#0a0d12] to-[#140D0E]"
-          : "border-amber-500/30 bg-gradient-to-r from-[#17140E] via-[#0a0d12] to-[#120F0A]"
+          ? "border-rose-500/30 bg-gradient-to-r from-[#0A0A0C] via-[#0E1217] to-[#0A0A0C] bg-rose-950/40"
+          : "border-amber-500/30 bg-gradient-to-r from-[#0A0A0C] via-[#0E1217] to-[#0A0A0C] bg-amber-950/30"
       } p-5 backdrop-blur-xl shadow-2xl ${className}`}
     >
       {/* Background Accent Ambient Glow */}
@@ -211,7 +211,7 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs uppercase tracking-wider font-semibold text-zinc-400">
-                Revenue-at-Risk Diagnostic
+                {isZeroRisk ? "Protected Revenue Diagnostic" : "⚠ At-Risk Revenue Alert"}
               </span>
               <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border font-mono ${bandColor}`}>
                 Confidence: {data.confidence_band} {data.band_details ? `(±${data.band_details.margin_error_pct}%)` : ""}

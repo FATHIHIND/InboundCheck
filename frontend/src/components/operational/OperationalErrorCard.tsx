@@ -118,7 +118,7 @@ export function OperationalErrorCard({
             </p>
 
             <p className="text-xs text-zinc-400 font-sans leading-relaxed max-w-2xl bg-white/[0.02] border border-white/5 rounded-lg p-2.5">
-              <span className="text-emerald-400 font-semibold">Merchant Advice: </span>
+              <span className="text-emerald-400 font-semibold">Suggested Action: </span>
               {advice}
             </p>
 

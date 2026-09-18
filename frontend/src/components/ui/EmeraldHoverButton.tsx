@@ -110,11 +110,11 @@ export const EmeraldHoverButton = forwardRef<
       );
     } else if (variant === "secondary") {
       variantClasses =
-        "border border-slate-700/60 bg-slate-900/80 text-slate-200 hover:bg-slate-800 font-medium hover:border-slate-600 transition-all";
+        "border border-zinc-700/60 bg-zinc-900/80 text-zinc-200 hover:bg-zinc-800 font-medium hover:border-zinc-600 transition-all";
       fillElement = (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-slate-700/30 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none -z-10"
+          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-zinc-700/30 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none -z-10"
         />
       );
     } else if (variant === "outline") {
@@ -137,11 +137,11 @@ export const EmeraldHoverButton = forwardRef<
       );
     }
 
-    // Text color transition for primary/outline variants where text flips to obsidian
+    // Text color transition for primary/outline variants where text flips to obsidian, or ghost/secondary/destructive flipping to white
     const textClasses =
-      variant === "primary" || variant === "outline" || variant === "secondary"
+      variant === "primary" || variant === "outline"
         ? "relative z-10 flex items-center justify-center gap-2 transition-colors duration-300 group-hover:text-[#08080A]"
-        : variant === "destructive"
+        : variant === "ghost" || variant === "secondary" || variant === "destructive"
         ? "relative z-10 flex items-center justify-center gap-2 transition-colors duration-300 group-hover:text-white"
         : "relative z-10 flex items-center justify-center gap-2 transition-colors duration-300";
 

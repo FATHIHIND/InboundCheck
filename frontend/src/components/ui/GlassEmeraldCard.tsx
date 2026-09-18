@@ -24,6 +24,10 @@ export interface GlassEmeraldCardProps {
   actionLabel?: string;
   /** Optional secondary action click handler */
   onActionClick?: () => void;
+  /** Whether to disable the background cyber grid overlay */
+  disableGrid?: boolean;
+  /** Optional custom footer label. If omitted, no redundant brand label is displayed */
+  footerLabel?: string;
   /** Nested content or additional children elements */
   children?: React.ReactNode;
   /** Additional CSS class names for custom layout overrides */
@@ -62,6 +66,8 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
   onClick,
   actionLabel,
   onActionClick,
+  disableGrid = false,
+  footerLabel,
   children,
   className = "",
 }) => {
@@ -76,8 +82,10 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
       <div className="pointer-events-none absolute -top-24 -left-24 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl transition-all duration-500 group-hover:bg-emerald-500/20 group-hover:scale-125" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-48 w-48 rounded-full bg-emerald-400/5 blur-3xl transition-all duration-500 group-hover:bg-emerald-400/15" />
 
-      {/* Cyber Subtle Grid Lines Overlay */}
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#10b98108_1px,transparent_1px),linear-gradient(to_bottom,#10b98108_1px,transparent_1px)] bg-[size:24px_24px] opacity-40 group-hover:opacity-70 transition-opacity duration-300" />
+      {/* Cyber Subtle Grid Lines Overlay - lowered opacity to 0.20 to prevent interference */}
+      {!disableGrid && (
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#10b98108_1px,transparent_1px),linear-gradient(to_bottom,#10b98108_1px,transparent_1px)] bg-[size:24px_24px] opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
+      )}
 
       {/* Glass Light Reflection Shimmer Line */}
       <div className="pointer-events-none absolute -left-full top-0 h-full w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-emerald-400/10 to-transparent group-hover:animate-[shimmer_1.5s_ease-in-out_infinite]" />
@@ -131,26 +139,34 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
         </div>
       )}
 
-      {/* Children Content Slot */}
-      {children && <div className="relative z-10 mt-4 text-sm">{children}</div>}
+      {/* Children Content Slot - unconstrained typography allows child scale freedom */}
+      {children && <div className="relative z-10 mt-4">{children}</div>}
 
-      {/* Card Action Footer */}
-      {actionLabel && (
-        <div className="relative z-10 mt-5 pt-3 border-t border-emerald-500/10 flex items-center justify-between">
-          <span className="text-xs text-zinc-400 font-medium group-hover:text-zinc-300 transition-colors">
-            InboundCheck Intelligence
-          </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onActionClick?.();
-            }}
-            className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors group-hover:translate-x-0.5 duration-200"
-          >
-            <span>{actionLabel}</span>
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </button>
+      {/* Card Action Footer - customizable via footerLabel, no redundant default */}
+      {(actionLabel || footerLabel) && (
+        <div
+          className={`relative z-10 mt-5 pt-3 border-t border-emerald-500/10 flex items-center ${
+            footerLabel && actionLabel ? "justify-between" : footerLabel ? "justify-start" : "justify-end"
+          }`}
+        >
+          {footerLabel && (
+            <span className="text-xs text-zinc-400 font-medium group-hover:text-zinc-300 transition-colors">
+              {footerLabel}
+            </span>
+          )}
+          {actionLabel && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onActionClick?.();
+              }}
+              className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors group-hover:translate-x-0.5 duration-200"
+            >
+              <span>{actionLabel}</span>
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
     </div>

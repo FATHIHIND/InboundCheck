@@ -341,7 +341,7 @@ function SettingsContent() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <Sliders className="w-5 h-5 text-emerald-400" strokeWidth={2} />
-            Alerts & Tenant Configuration
+            Store Settings &amp; Notifications
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
             Configure store metadata, instant Telegram incident alerts, and 1-click DNS remediation APIs.
@@ -387,7 +387,7 @@ function SettingsContent() {
           }`}
         >
           <Server className="w-3.5 h-3.5" strokeWidth={2} />
-          DNS Auto-Fixer APIs
+          DNS Provider Credentials
         </button>
       </div>
 
@@ -497,7 +497,7 @@ function SettingsContent() {
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-zinc-300">
-                        InboundCheck REST API Authorization Key
+                        REST API Key
                       </span>
                       <span className="text-[10px] font-mono font-semibold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         Bearer Token
@@ -820,8 +820,8 @@ function SettingsContent() {
           </div>
         )}
 
-        {/* Global Save Feedback & Submit Button */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+        {/* Global Save Feedback & Submit Button - Sticky bottom container */}
+        <div className="sticky bottom-4 z-20 bg-[#0A0A0C]/90 backdrop-blur-xl p-4 rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="flex-1">
             {saveSuccessMessage && (
               <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 font-mono flex items-center gap-2 animate-fadeIn">
@@ -839,14 +839,14 @@ function SettingsContent() {
           <button
             type="submit"
             disabled={isLoading}
-            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-5 py-2.5 rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-[0.98] transition-all text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-6 py-2.5 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-[0.98] transition-all text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0 min-h-[44px]"
           >
             {isLoading ? (
               <RefreshCw className="w-3.5 h-3.5 text-zinc-950 animate-spin" />
             ) : (
               <Save className="w-3.5 h-3.5 text-zinc-950" />
             )}
-            {isLoading ? "Saving Settings..." : "Save Configuration"}
+            {isLoading ? "Saving Settings..." : "Save Settings"}
           </button>
         </div>
       </form>

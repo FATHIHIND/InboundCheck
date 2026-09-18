@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import {
   Terminal,
   CheckCircle2,
+  AlertTriangle,
   Copy,
   Check,
   RefreshCw,
@@ -129,7 +130,7 @@ function DNSInspectorContent() {
   const [hasCopiedRecords, setHasCopiedRecords] = useState(false);
   const [isVerifyingLive, setIsVerifyingLive] = useState(false);
   const [verifyPollingText, setVerifyPollingText] = useState<string | null>(null);
-  const [verifyOutcome, setVerifyOutcome] = useState<"success" | "pending" | null>(null);
+  const [verifyOutcome, setVerifyOutcome] = useState<"success" | "pending" | "error" | null>(null);
   const [telegramAlertDispatched, setTelegramAlertDispatched] = useState(false);
 
   // Copy Feedback Tracking
@@ -349,8 +350,8 @@ function DNSInspectorContent() {
       setVerifyOutcome("success");
       setTelegramAlertDispatched(true);
     } catch {
-      setVerifyOutcome("success");
-      setTelegramAlertDispatched(true);
+      setVerifyOutcome("error");
+      setTelegramAlertDispatched(false);
     } finally {
       setIsVerifyingLive(false);
       setVerifyPollingText(null);
@@ -390,7 +391,11 @@ function DNSInspectorContent() {
   const handleApplyAutoFix = async (fix: GeneratedFix) => {
     const d = domainInput.trim().toLowerCase();
     if (!d) {
-      alert("Please enter or select a target domain first.");
+      setAuditError({
+        message: "Target domain required: Please enter or select a valid sending domain before applying an auto-fix.",
+        retryable: false,
+        endpoint: "/api/v1/dns/auto-fix/apply",
+      });
       return;
     }
 
@@ -453,7 +458,7 @@ function DNSInspectorContent() {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#0E0E12] border border-zinc-800/80 rounded-xl font-mono text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#0E0E12] border border-zinc-800/80 rounded-xl font-mono text-xs w-fit max-w-max">
           <button
             type="button"
             onClick={() => setActiveTab("generator")}
@@ -615,7 +620,21 @@ function DNSInspectorContent() {
             </div>
           )}
 
-          {/* 2-Column Grid: Integration Options (Left) + Bounded Generated Records (Right) */}
+          {/* Verify Error State */}
+          {verifyOutcome === "error" && (
+            <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2 animate-fadeIn font-mono text-xs">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="font-bold text-rose-300 text-sm">
+                  Live verification failed — DNS records could not be confirmed.
+                </span>
+              </div>
+              <p className="text-rose-300/80 font-sans text-xs pl-6">
+                Check your authoritative nameserver propagation and retry. Records may take up to 48h to propagate globally.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column: Stack Config Options */}
             <GlassEmeraldCard
