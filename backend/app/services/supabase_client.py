@@ -455,6 +455,104 @@ class SupabaseService:
                     logger.warning(f"Could not fetch stores from '{table_name}': {e}")
         return self._in_memory_stores.get(user_id, [])
 
+    def handle_customer_data_request(
+        self,
+        shop_domain: str,
+        customer_email: Optional[str],
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Handle Shopify GDPR customers/data_request:
+        Locate any transactional records/logs associated with this customer and store.
+        """
+        clean_shop = shop_domain.strip().lower() if shop_domain else ""
+        logger.info(f"Processing GDPR customer data request for shop={clean_shop}, email={customer_email}")
+        records: List[Dict[str, Any]] = []
+
+        # Query failover/delivery logs if customer email is provided
+        if customer_email and self._client:
+            try:
+                res = self._client.table("failover_logs").select("*").eq("recipient_email", customer_email).execute()
+                if res.data:
+                    records.extend(res.data)
+            except Exception as e:
+                logger.warning(f"Error querying customer records for GDPR data request: {e}")
+
+        return {
+            "shop_domain": clean_shop,
+            "customer_email": customer_email,
+            "records_count": len(records),
+            "status": "completed"
+        }
+
+    def redact_customer_records(
+        self,
+        shop_domain: str,
+        customer_email: Optional[str],
+        customer_phone: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Handle Shopify GDPR customers/redact:
+        Purge/anonymize all personal identifiers from failover logs and delivery failure records.
+        """
+        clean_shop = shop_domain.strip().lower() if shop_domain else ""
+        logger.info(f"Processing GDPR customer redaction for shop={clean_shop}, email={customer_email}")
+        redacted_count = 0
+
+        if customer_email and self._client:
+            try:
+                res = self._client.table("failover_logs").update({
+                    "recipient_email": "[REDACTED_GDPR]",
+                }).eq("recipient_email", customer_email).execute()
+                if res.data:
+                    redacted_count += len(res.data)
+            except Exception as e:
+                logger.warning(f"Error redacting customer records from database: {e}")
+
+        # In-memory redaction for test environments
+        if hasattr(self, "_in_memory_failover_logs"):
+            for uid, logs in self._in_memory_failover_logs.items():
+                for entry in logs:
+                    if customer_email and entry.get("recipient_email") == customer_email:
+                        entry["recipient_email"] = "[REDACTED_GDPR]"
+                        redacted_count += 1
+
+        return {
+            "shop_domain": clean_shop,
+            "customer_email": customer_email,
+            "redacted_count": redacted_count,
+            "status": "redacted"
+        }
+
+    def purge_store_records(
+        self,
+        shop_domain: str
+    ) -> Dict[str, Any]:
+        """
+        Handle Shopify GDPR shop/redact:
+        Purge store credentials, tokens, and records 48h post-uninstall.
+        """
+        clean_shop = shop_domain.strip().lower() if shop_domain else ""
+        logger.info(f"Processing GDPR shop redaction for shop={clean_shop}")
+
+        if self._client:
+            for table_name in ["shopify_stores", "monitored_stores"]:
+                try:
+                    self._client.table(table_name).delete().eq("shop_domain", clean_shop).execute()
+                except Exception as e:
+                    logger.warning(f"Error purging store from {table_name}: {e}")
+
+        # In-memory store purge
+        for uid, stores in list(self._in_memory_stores.items()):
+            self._in_memory_stores[uid] = [
+                s for s in stores if s.get("shop_domain") != clean_shop
+            ]
+
+        return {
+            "shop_domain": clean_shop,
+            "status": "purged"
+        }
+
     def persist_rbl_scan(self, user_id: str, domain_name: str, scan: Any) -> None:
         """
         Persist normalized per-provider RBL scan evidence and update reputation snapshot.

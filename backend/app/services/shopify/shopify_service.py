@@ -14,11 +14,15 @@ from typing import Dict, Any, Optional, Tuple, List
 import httpx
 import logging
 from datetime import datetime
+import re
+from fastapi import HTTPException, status
 from cryptography.fernet import Fernet
 
 from app.core.config import settings
 
 logger = logging.getLogger("ShopifyService")
+
+SHOPIFY_DOMAIN_REGEX = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\-]*\.myshopify\.com$")
 
 
 class ShopifyService:
@@ -78,11 +82,25 @@ class ShopifyService:
             return False
 
     def clean_shop_domain(self, shop: str) -> str:
-        """Sanitize and normalize Shopify shop domain."""
+        """
+        Sanitize and normalize Shopify shop domain, enforcing strict FQDN regex.
+        Rejects empty or non-compliant domain strings with HTTPException 400.
+        """
+        if not shop:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Shop domain cannot be empty."
+            )
         s = shop.strip().lower()
-        s = s.replace("https://", "").replace("http://", "").split("/")[0]
+        s = s.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
         if not s.endswith(".myshopify.com"):
             s = f"{s}.myshopify.com"
+
+        if not SHOPIFY_DOMAIN_REGEX.match(s):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid Shopify store domain format: '{shop}'. Must match '^[a-zA-Z0-9][a-zA-Z0-9-]*\\.myshopify\\.com$'."
+            )
         return s
 
     def build_auth_url(self, shop: str, redirect_uri: str, state: str) -> str:
@@ -107,6 +125,7 @@ class ShopifyService:
     def encrypt_token(self, token: str) -> str:
         """
         Encrypt Shopify access token using AES-128-CBC / HMAC (Fernet) prior to DB storage.
+        Enforces a strict fail-closed policy: raises RuntimeError on failure, never returning plaintext.
         """
         if not token:
             return ""
@@ -114,12 +133,12 @@ class ShopifyService:
             cipher = self.get_encryption_cipher()
             return cipher.encrypt(token.encode("utf-8")).decode("utf-8")
         except Exception as e:
-            logger.error(f"Failed to encrypt Shopify token: {e}")
-            return token
+            logger.critical(f"Cryptographic failure encrypting Shopify token: {e}")
+            raise RuntimeError(f"Cryptographic failure: unable to encrypt Shopify token: {e}")
 
     def decrypt_token(self, encrypted_token: str) -> str:
         """
-        Decrypt stored Shopify access token.
+        Decrypt stored Shopify access token. Fail-closed.
         """
         if not encrypted_token:
             return ""
@@ -128,7 +147,7 @@ class ShopifyService:
             return cipher.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
         except Exception as e:
             logger.error(f"Failed to decrypt Shopify token: {e}")
-            return encrypted_token
+            raise RuntimeError(f"Cryptographic failure: unable to decrypt Shopify token: {e}")
 
     def generate_oauth_state(self, user_id: str) -> str:
         """

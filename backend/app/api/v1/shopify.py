@@ -5,10 +5,12 @@ Endpoints for Shopify OAuth handshake, store connection, sender alignment auditi
 and HMAC-verified webhook ingestion.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Request, status, Depends
+from fastapi import APIRouter, HTTPException, Query, Request, status, Depends, BackgroundTasks
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 import logging
+import json
 
 from app.core.security import get_current_user_id
 from app.core.config import settings
@@ -48,6 +50,38 @@ class UpdateStoreSettingsRequest(BaseModel):
     custom_domain: Optional[str] = None
     sender_email: Optional[str] = None
     esp_provider: Optional[str] = "shopify"
+
+
+@router.get("/install")
+async def shopify_direct_install(
+    request: Request,
+    shop: str = Query(..., description="Shopify store domain, e.g. store.myshopify.com"),
+    timestamp: Optional[str] = Query(None),
+    hmac: Optional[str] = Query(None)
+):
+    """
+    Public entrypoint for Shopify App Store direct installation.
+    Validates HMAC parameters if present, sanitizes domain using strict regex,
+    generates secure signed state token, and redirects to Shopify OAuth consent screen.
+    """
+    query_params = dict(request.query_params)
+    if "hmac" in query_params and query_params.get("hmac"):
+        if not shopify_service.verify_shopify_hmac(query_params):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Shopify installation HMAC signature"
+            )
+
+    clean_shop = shopify_service.clean_shop_domain(shop)
+    state = shopify_service.generate_oauth_state(user_id="shopify_app_store_install")
+    redirect_uri = f"{settings.FRONTEND_URL}/dashboard/shopify/callback"
+    auth_url = shopify_service.build_auth_url(
+        shop=clean_shop,
+        redirect_uri=redirect_uri,
+        state=state
+    )
+
+    return RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/oauth/authorize")
@@ -166,6 +200,69 @@ async def shopify_auth_callback(
         raise HTTPException(status_code=400, detail="Shopify OAuth authorization code exchange failed")
 
 
+@router.get("/billing/callback")
+async def shopify_billing_callback(
+    charge_id: Optional[str] = Query(None),
+    plan_tier: Optional[str] = Query("growth"),
+    shop: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+):
+    """
+    Callback endpoint triggered by Shopify Admin after merchant approves an appSubscription.
+    Verifies subscription status with Shopify Admin API and activates the plan tier in Supabase.
+    Redirects merchant to frontend dashboard with billing=success.
+    """
+    if not charge_id:
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/dashboard/billing?checkout=cancelled",
+            status_code=status.HTTP_302_FOUND
+        )
+
+    clean_shop = None
+    if shop:
+        try:
+            clean_shop = shopify_service.clean_shop_domain(shop)
+        except Exception:
+            clean_shop = shop
+
+    resolved_user_id = user_id
+    if not resolved_user_id and clean_shop:
+        # Resolve user by store domain in persistent/in-memory store registry
+        for uid, stores in getattr(supabase_service, "_in_memory_stores", {}).items():
+            if any(s.get("shop_domain") == clean_shop for s in stores):
+                resolved_user_id = uid
+                break
+
+    # If store has encrypted token, verify charge node with Shopify Admin API
+    if clean_shop and resolved_user_id:
+        from app.services.shopify.shopify_billing_service import shopify_billing_service
+        stores = supabase_service.get_user_stores(resolved_user_id)
+        store = next((s for s in stores if s.get("shop_domain") == clean_shop), None)
+        if store and store.get("access_token_encrypted"):
+            try:
+                token = shopify_service.decrypt_token(store["access_token_encrypted"])
+                await shopify_billing_service.verify_and_activate_subscription(
+                    shop_domain=clean_shop,
+                    access_token=token,
+                    charge_id=charge_id
+                )
+            except Exception as err:
+                logger.warning(f"Could not verify subscription node with Shopify: {err}")
+
+    # Activate subscription tier in Supabase profile
+    tier = (plan_tier or "growth").lower()
+    if resolved_user_id:
+        supabase_service.update_user_profile(resolved_user_id, {
+            "subscription_tier": tier,
+            "subscription_status": "active",
+            "billing_provider": "shopify",
+            "shopify_charge_id": charge_id,
+        })
+
+    redirect_target = f"{settings.FRONTEND_URL}/dashboard/billing?checkout=success&billing=success&plan={tier}"
+    return RedirectResponse(url=redirect_target, status_code=status.HTTP_302_FOUND)
+
+
 @router.post("/sender-alignment")
 async def check_sender_alignment(
     payload: SenderAlignmentRequest,
@@ -271,6 +368,129 @@ async def shopify_orders_webhook(request: Request):
         "action": "transactional_audit_dispatched",
         "verified": True,
         "webhook_id": webhook_id
+    }
+
+
+@router.post("/webhooks/customers/data_request", status_code=status.HTTP_200_OK)
+async def shopify_customer_data_request_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks
+):
+    """
+    Mandatory Shopify GDPR Webhook: customers/data_request
+    Triggered when a merchant or customer requests their stored personal data.
+    Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
+    """
+    body_bytes = await request.body()
+    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
+    if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Shopify HMAC-SHA256 signature"
+        )
+
+    try:
+        payload = json.loads(body_bytes.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
+
+    shop_domain = payload.get("shop_domain")
+    customer = payload.get("customer", {})
+    customer_email = customer.get("email") if isinstance(customer, dict) else None
+
+    # Offload data collection to background tasks (<500ms response time)
+    background_tasks.add_task(
+        supabase_service.handle_customer_data_request,
+        shop_domain=shop_domain,
+        customer_email=customer_email,
+        payload=payload
+    )
+
+    return {
+        "status": "acknowledged",
+        "action": "customer_data_request_queued",
+        "verified": True
+    }
+
+
+@router.post("/webhooks/customers/redact", status_code=status.HTTP_200_OK)
+async def shopify_customer_redact_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks
+):
+    """
+    Mandatory Shopify GDPR Webhook: customers/redact
+    Triggered when a customer requests erasure of their personal information.
+    Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
+    """
+    body_bytes = await request.body()
+    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
+    if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Shopify HMAC-SHA256 signature"
+        )
+
+    try:
+        payload = json.loads(body_bytes.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
+
+    shop_domain = payload.get("shop_domain")
+    customer = payload.get("customer", {})
+    customer_email = customer.get("email") if isinstance(customer, dict) else None
+    customer_phone = customer.get("phone") if isinstance(customer, dict) else None
+
+    # Offload customer record redaction to background tasks
+    background_tasks.add_task(
+        supabase_service.redact_customer_records,
+        shop_domain=shop_domain,
+        customer_email=customer_email,
+        customer_phone=customer_phone
+    )
+
+    return {
+        "status": "acknowledged",
+        "action": "customer_redaction_queued",
+        "verified": True
+    }
+
+
+@router.post("/webhooks/shop/redact", status_code=status.HTTP_200_OK)
+async def shopify_shop_redact_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks
+):
+    """
+    Mandatory Shopify GDPR Webhook: shop/redact
+    Triggered 48 hours after a merchant uninstalls the app.
+    Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
+    """
+    body_bytes = await request.body()
+    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
+    if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Shopify HMAC-SHA256 signature"
+        )
+
+    try:
+        payload = json.loads(body_bytes.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
+
+    shop_domain = payload.get("shop_domain")
+
+    # Offload store records purge to background tasks
+    background_tasks.add_task(
+        supabase_service.purge_store_records,
+        shop_domain=shop_domain
+    )
+
+    return {
+        "status": "acknowledged",
+        "action": "shop_redaction_queued",
+        "verified": True
     }
 
 

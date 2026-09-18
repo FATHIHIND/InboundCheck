@@ -25,8 +25,12 @@ router = APIRouter(prefix="/billing", tags=["Stripe Billing & Subscriptions"])
 
 class CreateCheckoutRequest(BaseModel):
     email: Optional[str] = "merchant@store.com"
-    plan_tier: Optional[str] = Field(default=None, description="starter | growth | enterprise")
+    plan_tier: Optional[str] = Field(default=None, description="starter | growth | agency | enterprise")
     price_id: Optional[str] = Field(default=None, description="Stripe Price ID or plan tier")
+    shop_domain: Optional[str] = Field(default=None, description="Connected Shopify shop domain")
+    billing_provider: Optional[str] = Field(default=None, description="shopify | stripe")
+    billing_cycle: Optional[str] = Field(default="monthly", description="monthly | annual")
+    domain: Optional[str] = None
     return_url: Optional[str] = None
     success_url: Optional[str] = None
     cancel_url: Optional[str] = None
@@ -110,8 +114,58 @@ async def create_checkout_session(
     """
     try:
         resolved_price_or_tier = payload.price_id or payload.plan_tier or "growth"
-        
-        # Resolve user's actual email from Supabase profile or auth if payload.email is default
+        plan_tier = (payload.plan_tier or payload.price_id or "growth").lower()
+
+        # 1. Detect Shopify App Store Origin (Hybrid Checkout Engine)
+        shopify_stores = supabase_service.get_user_stores(user_id)
+        target_store = None
+        if payload.shop_domain:
+            target_store = next((s for s in shopify_stores if s.get("shop_domain") == payload.shop_domain), None)
+        if not target_store and payload.billing_provider == "shopify":
+            target_store = next((s for s in shopify_stores if s.get("is_active", True)), None)
+        if not target_store:
+            # Check if merchant has an active connected Shopify store
+            target_store = next((s for s in shopify_stores if s.get("is_active", True) and s.get("access_token_encrypted")), None)
+
+        if target_store and target_store.get("access_token_encrypted"):
+            try:
+                from app.services.shopify.shopify_service import shopify_service
+                from app.services.shopify.shopify_billing_service import shopify_billing_service
+                
+                shop_domain = target_store.get("shop_domain")
+                access_token = shopify_service.decrypt_token(target_store["access_token_encrypted"])
+
+                callback_return_url = (
+                    f"{settings.FRONTEND_URL}/api/v1/shopify/billing/callback"
+                    f"?shop={shop_domain}&user_id={user_id}&plan_tier={plan_tier}"
+                )
+
+                confirmation_url = await shopify_billing_service.create_shopify_recurring_charge(
+                    shop_domain=shop_domain,
+                    access_token=access_token,
+                    plan_name=plan_tier,
+                    return_url=callback_return_url,
+                )
+
+                return {
+                    "success": True,
+                    "url": confirmation_url,
+                    "checkout_url": confirmation_url,
+                    "confirmation_url": confirmation_url,
+                    "billing_provider": "shopify",
+                    "plan_tier": plan_tier,
+                    "shop": shop_domain,
+                }
+            except Exception as shop_err:
+                logger.warning(f"Shopify Billing charge creation error: {shop_err}")
+                if payload.billing_provider == "shopify":
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to generate Shopify recurring billing charge: {shop_err}"
+                    )
+                # If shopify wasn't explicitly forced, gracefully fall through to standard Stripe
+
+        # 2. Direct Web Signups: Route through standard Stripe Checkout
         user_email = payload.email
         if not user_email or user_email == "merchant@store.com":
             profile = supabase_service.get_user_profile(user_id)
@@ -132,8 +186,11 @@ async def create_checkout_session(
             "success": True,
             "url": target_url,
             "checkout_url": target_url,
+            "billing_provider": "stripe",
             **session_data,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating checkout session: {e}")
         raise HTTPException(status_code=500, detail="Failed to create checkout session")

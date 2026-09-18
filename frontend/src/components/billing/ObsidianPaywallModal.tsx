@@ -141,9 +141,9 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
           return;
         }
       }
-      setErrorMessage(data.detail || "Unable to initiate Stripe checkout. Please try again.");
+      setErrorMessage(data.detail || "Unable to initiate secure checkout. Please try again.");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Network communication error with Stripe checkout service.";
+      const message = err instanceof Error ? err.message : "Network communication error with secure checkout service.";
       setErrorMessage(message);
     } finally {
       setLoadingTier(null);

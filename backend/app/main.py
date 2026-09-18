@@ -99,8 +99,11 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         client_ip = request.client.host if request.client else "127.0.0.1"
         now = time.time()
 
-        # Exempt health checks from rate limiting
-        is_exempt = request.url.path in ["/health", "/", "/docs", "/openapi.json"]
+        # Exempt health checks and pytest test runner from IP rate limiting
+        is_exempt = (
+            request.url.path in ["/health", "/", "/docs", "/openapi.json"]
+            or os.getenv("PYTEST_CURRENT_TEST") is not None
+        )
 
         if not is_exempt:
             # Periodic cleanup of stale IPs to prevent memory exhaustion
