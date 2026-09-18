@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   ArrowRight,
   DollarSign,
+  Sparkles,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import ReputationTrendChart, { ReputationPoint } from "./components/ReputationTrendChart";
@@ -125,6 +126,100 @@ export interface TelegramConfig {
   store_name?: string;
 }
 
+// 2026 Interactive Instant Activation Demo Constants (<60s TTV)
+const DEMO_STORE_RECORD: MonitoredStore = {
+  id: "demo-allure-apparel",
+  domain_name: "allure-apparel.com",
+  shopify_store: "allure-apparel.myshopify.com",
+  unified_score: 64,
+  dns_health_score: 64,
+  imap_status: "spam",
+  spf_status: "warning",
+  dkim_status: "optimal",
+  dmarc_status: "critical",
+  rbl_clean_count: 8,
+  risk_level: "high",
+  last_checked_at: "Just now (Interactive Simulation)",
+};
+
+const DEMO_REVENUE_RISK: RevenueRiskData = {
+  domain: "allure-apparel.com",
+  expected_risk_cents: 240000,
+  expected_risk_formatted: "$2,400.00",
+  monthly_gmv_cents: 4800000,
+  monthly_gmv_formatted: "$48,000.00",
+  impairment_probability: 0.28,
+  customer_impact_factor: 1.25,
+  confidence_band: "high",
+  calculated_at: new Date().toISOString(),
+  recommendation: "Repair SPF multi-lookup record and enforce DMARC p=quarantine to prevent silent Gmail/Yahoo order drop.",
+  breakdown: {
+    order_count: 640,
+    average_order_value_cents: 7500,
+    monthly_gmv_cents: 4800000,
+    impairment_probability: 0.28,
+    customer_impact_factor: 1.25,
+    deliverability_score: 64,
+    dmarc_penalty: 20,
+    spf_penalty: 16,
+    dkim_penalty: 0,
+    rbl_penalty: 0,
+  },
+};
+
+const DEMO_REPUTATION_POINTS: ReputationPoint[] = [
+  {
+    id: "demo-rep-1",
+    checked_at: "2026-09-14T10:00:00Z",
+    unified_score: 95,
+    dns_health_score: 95,
+    spam_risk_pct: 5,
+    risk_level: "low",
+    blacklist_count: 0,
+    rbl_status: "10/10 Clean",
+  },
+  {
+    id: "demo-rep-2",
+    checked_at: "2026-09-15T10:00:00Z",
+    unified_score: 89,
+    dns_health_score: 89,
+    spam_risk_pct: 11,
+    risk_level: "low",
+    blacklist_count: 0,
+    rbl_status: "10/10 Clean",
+  },
+  {
+    id: "demo-rep-3",
+    checked_at: "2026-09-16T10:00:00Z",
+    unified_score: 82,
+    dns_health_score: 82,
+    spam_risk_pct: 18,
+    risk_level: "medium",
+    blacklist_count: 1,
+    rbl_status: "9/10 Clean",
+  },
+  {
+    id: "demo-rep-4",
+    checked_at: "2026-09-17T10:00:00Z",
+    unified_score: 71,
+    dns_health_score: 71,
+    spam_risk_pct: 29,
+    risk_level: "medium",
+    blacklist_count: 1,
+    rbl_status: "9/10 Clean",
+  },
+  {
+    id: "demo-rep-5",
+    checked_at: "2026-09-18T10:00:00Z",
+    unified_score: 64,
+    dns_health_score: 64,
+    spam_risk_pct: 36,
+    risk_level: "high",
+    blacklist_count: 2,
+    rbl_status: "8/10 Clean",
+  },
+];
+
 export default function DashboardOverviewPage() {
   const [selectedStore, setSelectedStore] = useState<string>("all");
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
@@ -136,6 +231,7 @@ export default function DashboardOverviewPage() {
   const [addError, setAddError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [showWizardModal, setShowWizardModal] = useState(false);
+  const [isDemoActive, setIsDemoActive] = useState(false);
 
   // Store Deletion Guard State
   const [storeToDelete, setStoreToDelete] = useState<{ id: string; domain_name: string } | null>(null);
@@ -190,7 +286,14 @@ export default function DashboardOverviewPage() {
     isEmpty: (data) => !data || !Array.isArray(data) || data.length === 0,
   });
 
-  const stores = domainsResource.state === "ready" ? domainsResource.data : [];
+  const stores = isDemoActive
+    ? [DEMO_STORE_RECORD]
+    : domainsResource.state === "ready"
+    ? domainsResource.data
+    : [];
+
+  const effectiveRevenueRisk = isDemoActive && !revenueRisk ? DEMO_REVENUE_RISK : revenueRisk;
+  const reputationPointsToRender = isDemoActive && reputationPoints.length === 0 ? DEMO_REPUTATION_POINTS : reputationPoints;
 
   const activeDomain = selectedStore !== "all"
     ? stores.find((s) => s.shopify_store === selectedStore)?.domain_name
@@ -330,6 +433,11 @@ export default function DashboardOverviewPage() {
 
   const handleReAudit = async (domainId: string, domainName: string) => {
     setAuditingId(domainId);
+    if (isDemoActive && domainId === DEMO_STORE_RECORD.id) {
+      await new Promise((r) => setTimeout(r, 650));
+      setAuditingId(null);
+      return;
+    }
     try {
       const res = await apiFetch(
         `/api/v1/domains/${domainId}/audit?domain_name=${encodeURIComponent(domainName)}`,
@@ -386,6 +494,10 @@ export default function DashboardOverviewPage() {
   };
 
   const handleOpenDeleteModal = (id: string, domain_name: string) => {
+    if (isDemoActive && id === DEMO_STORE_RECORD.id) {
+      setIsDemoActive(false);
+      return;
+    }
     setStoreToDelete({ id, domain_name });
     setDeleteError(null);
   };
@@ -419,7 +531,7 @@ export default function DashboardOverviewPage() {
     : null;
 
   // Deliverability Health Score & Status Tier (Optimal / Warning / Critical) derived from DeliverabilityScorer
-  const healthScore = avgUnifiedScore !== null ? avgUnifiedScore : (revenueRisk?.breakdown?.deliverability_score ?? null);
+  const healthScore = avgUnifiedScore !== null ? avgUnifiedScore : (effectiveRevenueRisk?.breakdown?.deliverability_score ?? null);
   const healthStatusTier: "Optimal" | "Warning" | "Critical" | "Setup Required" =
     healthScore !== null
       ? healthScore >= 90
@@ -430,12 +542,12 @@ export default function DashboardOverviewPage() {
       : "Setup Required";
 
   // Revenue Risk & Protected GMV calculations
-  const monthlyGmvCents = revenueRisk?.monthly_gmv_cents ?? 0;
-  const expectedRiskCents = revenueRisk?.expected_risk_cents ?? 0;
+  const monthlyGmvCents = effectiveRevenueRisk?.monthly_gmv_cents ?? 0;
+  const expectedRiskCents = effectiveRevenueRisk?.expected_risk_cents ?? 0;
   const protectedGmvCents = Math.max(0, monthlyGmvCents - expectedRiskCents);
   const protectedGmvFormatted = `$${(protectedGmvCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const hasConnectedShopify = shopifyStores.length > 0 || stores.some((s) => s.shopify_store && !s.shopify_store.includes("unknown"));
-  const hasValidRevenueData = hasConnectedShopify && stores.length > 0 && monthlyGmvCents > 0;
+  const hasValidRevenueData = (hasConnectedShopify || isDemoActive) && stores.length > 0 && monthlyGmvCents > 0;
 
   // Radar & Telegram Guardian Status
   const lowestRblClean = stores.length > 0 ? Math.min(...stores.map((s) => s.rbl_clean_count)) : 10;
@@ -450,16 +562,16 @@ export default function DashboardOverviewPage() {
       s.dmarc_status === "missing" ||
       s.dns_health_score < 60
   );
-  const hasCriticalMisalignment = misalignedStores.length > 0 || (revenueRisk !== null && revenueRisk.impairment_probability >= 0.15 && expectedRiskCents > 0);
-  const atRiskOrders = revenueRisk?.breakdown?.order_count && revenueRisk?.impairment_probability
-    ? Math.round(revenueRisk.breakdown.order_count * revenueRisk.impairment_probability)
+  const hasCriticalMisalignment = misalignedStores.length > 0 || (effectiveRevenueRisk !== null && effectiveRevenueRisk.impairment_probability >= 0.15 && expectedRiskCents > 0);
+  const atRiskOrders = effectiveRevenueRisk?.breakdown?.order_count && effectiveRevenueRisk?.impairment_probability
+    ? Math.round(effectiveRevenueRisk.breakdown.order_count * effectiveRevenueRisk.impairment_probability)
     : misalignedStores.length > 0
     ? misalignedStores.length * 280
     : 0;
 
   // Forecasted 48-72h Risk
-  const impairmentPct = revenueRisk?.impairment_probability
-    ? (revenueRisk.impairment_probability * 100).toFixed(1)
+  const impairmentPct = effectiveRevenueRisk?.impairment_probability
+    ? (effectiveRevenueRisk.impairment_probability * 100).toFixed(1)
     : (stores.length > 0 ? "< 5" : "--");
   const forecastRiskDisplay = impairmentPct !== "--" ? `${impairmentPct}%` : "--";
 
@@ -670,7 +782,7 @@ export default function DashboardOverviewPage() {
               {expectedRiskCents > 0 ? (
                 <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3 text-amber-400" />
-                  {revenueRisk?.expected_risk_formatted || "$0.00"} At Risk
+                  {effectiveRevenueRisk?.expected_risk_formatted || "$0.00"} At Risk
                 </span>
               ) : (
                 <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
@@ -688,7 +800,7 @@ export default function DashboardOverviewPage() {
                 <span>
                   {expectedRiskCents > 0 ? (
                     <span className="text-rose-400 font-semibold">
-                      {revenueRisk?.expected_risk_formatted} at silent drop risk
+                      {effectiveRevenueRisk?.expected_risk_formatted} at silent drop risk
                     </span>
                   ) : (
                     <span className="text-emerald-400 font-semibold">
@@ -696,7 +808,7 @@ export default function DashboardOverviewPage() {
                     </span>
                   )}
                 </span>
-                {revenueRisk?.confidence_band && (
+                {effectiveRevenueRisk?.confidence_band && (
                   <span className="text-emerald-400 font-mono text-[10px]">
                     High Statistical Confidence (95% Accuracy)
                   </span>
@@ -794,7 +906,7 @@ export default function DashboardOverviewPage() {
                   ? "Elevated Dispute Risk"
                   : "Predictive Risk Model"}
               </span>
-              {revenueRisk?.confidence_band && (
+              {effectiveRevenueRisk?.confidence_band && (
                 <span className="text-emerald-400 font-mono text-[10px]">
                   High Statistical Confidence (95% Accuracy)
                 </span>
@@ -858,7 +970,7 @@ export default function DashboardOverviewPage() {
       {/* 3. Middle 2-Column Section: 60% ReputationTrendChart + 40% CheckHistoryChart */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">
-          <ReputationTrendChart data={reputationPoints} />
+          <ReputationTrendChart data={reputationPointsToRender} />
         </div>
         <div className="lg:col-span-5">
           <CheckHistoryChart logs={imapLogs} />
@@ -882,25 +994,139 @@ export default function DashboardOverviewPage() {
         />
       )}
 
-      {domainsResource.state === "empty" && (
-        <OperationalEmptyState
-          icon={<Globe className="w-8 h-8 text-zinc-500" />}
-          title="No domains registered yet"
-          description="No domains registered yet - Add your first domain to begin continuous DNS governance, SPF/DKIM verification, and blacklist surveillance."
-          action={{
-            label: "Add your first domain",
-            onClick: () => setShowAddModal(true),
-          }}
-        />
+      {domainsResource.state === "empty" && !isDemoActive && (
+        <div className="obsidian-card p-6 sm:p-8 rounded-2xl border border-emerald-500/20 relative overflow-hidden shadow-2xl space-y-6">
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                <ShieldCheck className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                    Instant Activation: Protect Your Shopify Transactional Deliverability
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold uppercase tracking-wider">
+                    &lt; 60s TTV
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
+                  Google and Yahoo 2024 mailbox rules silently classify unaligned store emails as spam. Eliminate order receipt drops, cut chargeback disputes, and protect your GMV in under 60 seconds.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Micro-Feature Pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 relative z-10">
+            <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] hover:border-emerald-500/30 transition-all">
+              <div className="text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Zero Email Drops</span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-snug">
+                Combines Shopify, Klaviyo &amp; Zendesk records without exceeding the strict 10-lookup barrier.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] hover:border-emerald-500/30 transition-all">
+              <div className="text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
+                <Radio className="w-3.5 h-3.5" />
+                <span>Blacklist Radar</span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-snug">
+                24/7 scanning across 10 authoritative RBLs (Spamhaus, Barracuda) with instant Telegram/Slack alerts.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] hover:border-emerald-500/30 transition-all">
+              <div className="text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
+                <Shield className="w-3.5 h-3.5" />
+                <span>1-Click Auto-Remediation</span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-snug">
+                Direct Cloudflare &amp; GoDaddy API zone injection with pre-flight safety checks and instant rollback.
+              </p>
+            </div>
+          </div>
+
+          {/* Dual Action Controls for <60s TTV */}
+          <div className="pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+            <div className="text-xs text-zinc-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Ready for first scan. Enter your domain or test drive a live simulation.</span>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setIsDemoActive(true)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-emerald-500/40 text-xs font-semibold transition-all active:scale-95 cursor-pointer min-h-[44px]"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Simulate Audit with Demo Store</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95 cursor-pointer min-h-[44px]"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Add Your Store Domain</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {domainsResource.state === "ready" && (
+      {(domainsResource.state === "ready" || isDemoActive) && (
         <div className="obsidian-card rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl">
+          {/* Live Mock Simulation Header Banner */}
+          {isDemoActive && (
+            <div className="p-4 border-b border-emerald-500/20 bg-gradient-to-r from-emerald-950/40 via-[#0A0A0C] to-cyan-950/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-2">
+                    <span>Interactive Simulation Mode: {DEMO_STORE_RECORD.domain_name}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
+                      Live Mock Scenario
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Demonstrating real-time DNS conflict diagnosis, $2,400/wk at-risk GMV radar, and 1-click repair tools.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(true)}
+                  className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.25)] min-h-[44px]"
+                >
+                  Add Real Store Domain →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDemoActive(false)}
+                  className="px-3 py-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-mono text-xs rounded-xl border border-white/10 transition-colors min-h-[44px]"
+                >
+                  Exit Demo
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="p-5 border-b border-white/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
                 <Shield className="w-4 h-4 text-emerald-400" />
-                Monitored Stores & Verified Sending Domains
+                Monitored Stores &amp; Verified Sending Domains
               </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
                 Live DNS records, customer inbox placement status, and on-demand diagnostic inspector.
@@ -913,7 +1139,7 @@ export default function DashboardOverviewPage() {
 
           <div className="overflow-x-auto max-h-[480px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
             <table className="w-full text-left text-xs font-mono border-collapse">
-              <thead className="sticky top-0 bg-[#0E0E12] z-10 backdrop-blur-md border-b border-zinc-800/80 text-zinc-400 text-[10px] uppercase">
+              <thead className="sticky top-0 bg-[#0A0A0C] z-10 backdrop-blur-md border-b border-white/[0.08] text-zinc-400 text-[10px] uppercase">
                 <tr>
                   <th className="py-3.5 px-4 font-semibold">Domain Name</th>
                   <th className="py-3.5 px-4 font-semibold">Shopify Store</th>
@@ -974,25 +1200,25 @@ export default function DashboardOverviewPage() {
                           type="button"
                           onClick={() => handleReAudit(store.id, store.domain_name)}
                           disabled={auditingId === store.id}
-                          className="px-2.5 py-1 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.08] text-zinc-300 font-bold rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 text-[11px] flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          className="min-h-[44px] px-3 py-2 bg-[#0E1217] hover:bg-[#121820] border border-white/[0.08] hover:border-emerald-500/40 text-zinc-300 font-bold rounded-xl transition-all duration-150 hover:scale-105 active:scale-95 text-xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
-                          <RefreshCw className={`w-3 h-3 ${auditingId === store.id ? "animate-spin text-emerald-400" : ""}`} />
-                          Audit
+                          <RefreshCw className={`w-3.5 h-3.5 ${auditingId === store.id ? "animate-spin text-emerald-400" : ""}`} />
+                          <span>Audit</span>
                         </button>
                         <Link
                           href={`/dashboard/inspector?domain=${encodeURIComponent(store.domain_name)}`}
-                          className="px-2.5 py-1 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.08] text-emerald-400 font-bold rounded-lg transition-all duration-150 hover:scale-105 active:scale-95 text-[11px] flex items-center gap-1"
+                          className="min-h-[44px] px-3 py-2 bg-[#0E1217] hover:bg-[#121820] border border-white/[0.08] hover:border-emerald-500/40 text-emerald-400 font-bold rounded-xl transition-all duration-150 hover:scale-105 active:scale-95 text-xs inline-flex items-center gap-1.5"
                         >
-                          <Terminal className="w-3 h-3" />
-                          Inspect DNS
+                          <Terminal className="w-3.5 h-3.5" />
+                          <span>Inspect DNS</span>
                         </Link>
                         <button
                           type="button"
                           onClick={() => handleOpenDeleteModal(store.id, store.domain_name)}
-                          className="p-1 bg-[#14141A] hover:bg-red-500/10 border border-white/[0.08] text-zinc-500 hover:text-red-400 rounded-lg transition cursor-pointer"
+                          className="min-h-[44px] min-w-[44px] p-2 bg-[#0E1217] hover:bg-red-500/10 border border-white/[0.08] hover:border-red-500/30 text-zinc-500 hover:text-red-400 rounded-xl transition inline-flex items-center justify-center cursor-pointer"
                           title="Delete record"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

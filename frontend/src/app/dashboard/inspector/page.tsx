@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -178,47 +178,7 @@ function DNSInspectorContent() {
     checkProviderCredentials();
   }, []);
 
-  // Initial load and URL param deep-link reactivity
-  useEffect(() => {
-    async function initTargetDomain() {
-      let target = (queryDomain || "").trim().toLowerCase();
-
-      if (!target) {
-        try {
-          const res = await apiFetch("/api/v1/domains");
-          if (res.ok) {
-            const data = await res.json();
-            const list = Array.isArray(data)
-              ? data
-              : Array.isArray(data?.domains)
-              ? data.domains
-              : [];
-            if (list.length > 0 && list[0]?.domain_name) {
-              target = list[0].domain_name.trim().toLowerCase();
-            }
-          }
-        } catch {
-          // Fallback gracefully in offline / dev mode
-        }
-      }
-
-      setDomainInput(target);
-      if (target) {
-        const targetEmail = `dmarc-aggregate@${target}`;
-        setDmarcReportEmail(targetEmail);
-        handleRunAudit(target);
-        handleGenerateRecords(target, targetEmail);
-      } else {
-        setDmarcReportEmail("");
-        setGeneratedRecords([]);
-        setAuditData(null);
-      }
-    }
-
-    initTargetDomain();
-  }, [queryDomain]);
-
-  const handleRunAudit = async (targetDomain?: string) => {
+  const handleRunAudit = useCallback(async (targetDomain?: string) => {
     const d = (targetDomain || domainInput).trim().toLowerCase();
     if (!d) return;
 
@@ -252,9 +212,10 @@ function DNSInspectorContent() {
         });
         setAuditData(null);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to reach DNS diagnostic endpoint";
       setAuditError({
-        message: err?.message || "Failed to reach DNS diagnostic endpoint",
+        message,
         retryable: true,
         endpoint: "/api/v1/dns/audit",
       });
@@ -262,9 +223,9 @@ function DNSInspectorContent() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [domainInput, customSelectors]);
 
-  const handleGenerateRecords = async (targetDomain?: string, targetEmail?: string) => {
+  const handleGenerateRecords = useCallback(async (targetDomain?: string, targetEmail?: string) => {
     const d = (targetDomain || domainInput).trim().toLowerCase();
     if (!d) {
       setGeneratedRecords([]);
@@ -308,7 +269,47 @@ function DNSInspectorContent() {
     } catch {
       setGeneratedRecords([]);
     }
-  };
+  }, [domainInput, dmarcReportEmail, includeShopify, includeGoogle, includeMicrosoft, includeKlaviyo, includeSendgrid, dmarcPolicy]);
+
+  // Initial load and URL param deep-link reactivity
+  useEffect(() => {
+    async function initTargetDomain() {
+      let target = (queryDomain || "").trim().toLowerCase();
+
+      if (!target) {
+        try {
+          const res = await apiFetch("/api/v1/domains");
+          if (res.ok) {
+            const data = await res.json();
+            const list = Array.isArray(data)
+              ? data
+              : Array.isArray(data?.domains)
+              ? data.domains
+              : [];
+            if (list.length > 0 && list[0]?.domain_name) {
+              target = list[0].domain_name.trim().toLowerCase();
+            }
+          }
+        } catch {
+          // Fallback gracefully in offline / dev mode
+        }
+      }
+
+      setDomainInput(target);
+      if (target) {
+        const targetEmail = `dmarc-aggregate@${target}`;
+        setDmarcReportEmail(targetEmail);
+        handleRunAudit(target);
+        handleGenerateRecords(target, targetEmail);
+      } else {
+        setDmarcReportEmail("");
+        setGeneratedRecords([]);
+        setAuditData(null);
+      }
+    }
+
+    initTargetDomain();
+  }, [queryDomain, handleRunAudit, handleGenerateRecords]);
 
   const toggleRecordExpansion = (id: string) => {
     setExpandedRecordIds((prev) => ({
@@ -712,7 +713,7 @@ function DNSInspectorContent() {
                   <button
                     type="button"
                     onClick={copyAllRecords}
-                    className="border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs font-mono px-3 py-1.5 transition flex items-center gap-1.5 cursor-pointer"
+                    className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
                   >
                     {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     {copiedAll ? "All Copied!" : "Copy All Records"}
@@ -720,7 +721,7 @@ function DNSInspectorContent() {
                   <button
                     type="button"
                     onClick={downloadZoneFile}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-lg text-xs px-3 py-1.5 transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)] font-mono"
+                    className="min-h-[44px] bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-xl text-xs px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)] font-mono active:scale-95"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Official Domain DNS Records (.zone)
@@ -754,11 +755,11 @@ function DNSInspectorContent() {
                               type="button"
                               onClick={() => handleApplyAutoFix(fix)}
                               disabled={fixStatus[fix.id] === "applying" || fixStatus[fix.id] === "applied"}
-                              className={`px-3 py-1 rounded-lg text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                                 fixStatus[fix.id] === "applied"
                                   ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 cursor-default"
                                   : fixStatus[fix.id] === "applying"
-                                  ? "bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-wait"
+                                  ? "bg-[#0E1217] text-zinc-400 border border-white/10 cursor-wait"
                                   : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
                               }`}
                             >
@@ -782,10 +783,10 @@ function DNSInspectorContent() {
                           ) : (
                             <Link
                               href="/dashboard/settings?tab=providers"
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-mono text-zinc-400 hover:text-emerald-400 bg-zinc-900/60 hover:bg-zinc-800/80 border border-zinc-800/80 hover:border-emerald-500/30 transition flex items-center gap-1.5"
+                              className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-emerald-400 bg-[#0A0A0C] hover:bg-[#0E1217] border border-white/[0.08] hover:border-emerald-500/30 transition flex items-center gap-1.5"
                               title="Connect Cloudflare or GoDaddy in Settings to enable 1-click zone auto-insertion"
                             >
-                              <Zap className="w-3 h-3 text-zinc-500" />
+                              <Zap className="w-3.5 h-3.5 text-zinc-500" />
                               <span>Connect Cloudflare to Auto-Insert</span>
                             </Link>
                           )}
@@ -793,7 +794,7 @@ function DNSInspectorContent() {
                           <button
                             type="button"
                             onClick={() => copyToClipboard(fix.value, fix.id)}
-                            className="border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs font-mono px-3 py-1 transition flex items-center gap-1.5 cursor-pointer"
+                            className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
                           >
                             {copiedIdx === fix.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                             {copiedIdx === fix.id ? "Copied!" : "Copy Value"}
@@ -803,7 +804,7 @@ function DNSInspectorContent() {
                           <button
                             type="button"
                             onClick={() => toggleRecordExpansion(fix.id)}
-                            className="p-1 rounded-lg border border-zinc-800/80 bg-zinc-900/60 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition cursor-pointer"
+                            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-white/[0.08] bg-[#0A0A0C] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition cursor-pointer"
                             title={isExpanded ? "Collapse Details" : "Expand Details"}
                           >
                             <ChevronDown

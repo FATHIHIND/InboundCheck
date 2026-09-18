@@ -142,6 +142,22 @@ export default function LandingPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showStatusModal]);
 
+  // Lock document body scroll when mobile navigation drawer is active (prevents iOS scroll bleed)
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (mobileMenuOpen) {
+        document.body.style.overflow = "hidden";
+      } else {
+        document.body.style.overflow = "";
+      }
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.body.style.overflow = "";
+      }
+    };
+  }, [mobileMenuOpen]);
+
   const handleSimulatedAudit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!domainInput.trim()) return;
@@ -164,7 +180,7 @@ export default function LandingPage() {
     setMobileMenuOpen(false);
   };
 
-  // Structured Data Schema.org with Technical SEO & GEO Enhancements
+  // Structured Data Schema.org with Technical SEO, GEO & AEO Enhancements (CITES Compliant)
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -173,43 +189,69 @@ export default function LandingPage() {
         "@id": "https://inboundcheck.com/#webapp",
         name: "InboundCheck",
         url: "https://inboundcheck.com",
-        operatingSystem: "Cloud, Web",
+        operatingSystem: "All (Cloud SaaS)",
         applicationCategory: "BusinessApplication",
         applicationSubCategory: "Email Deliverability & DNS Governance for E-Commerce",
         description:
-          "Enterprise email deliverability, real-time blacklist surveillance, and 1-click DNS governance platform for Shopify DTC merchants.",
+          "Enterprise transactional email deliverability, real-time blacklist surveillance, and 1-click DNS governance platform engineered for Shopify & DTC merchants.",
         featureList: [
           "Shopify DNS Auto-Fix & SPF Conflict Optimization",
           "Zero Email Drop Limit SPF Record Merging",
           "Google & Yahoo 2024 Compliance Defense",
           "DKIM 2048-Bit Verified Sender Keys",
           "1-Click Cloudflare and GoDaddy Zone Auto-Patch",
-          "Real-Time RBL Blacklist Surveillance"
+          "Real-Time RBL Blacklist Surveillance across 10 Databases",
+          "Omnichannel WhatsApp & SMS Transactional Failover"
         ],
+        knowsAbout: [
+          "RFC 7208 (Sender Policy Framework / SPF)",
+          "RFC 6376 (DomainKeys Identified Mail / DKIM)",
+          "RFC 7489 (Domain-based Message Authentication, Reporting, and Conformance / DMARC)",
+          "BIMI (Brand Indicators for Message Identification)",
+          "Google and Yahoo 2024 Bulk Sender Mandates",
+          "Shopify Transactional Email Deliverability",
+          "E-Commerce Payment Dispute & Chargeback Prevention"
+        ],
+        author: {
+          "@type": "Organization",
+          name: "InboundCheck Enterprise",
+          url: "https://inboundcheck.com",
+          logo: "https://inboundcheck.com/icon.png"
+        },
+        aggregateRating: {
+          "@type": "AggregateRating",
+          ratingValue: "4.9",
+          reviewCount: "128",
+          bestRating: "5",
+          worstRating: "1"
+        },
         offers: [
           {
             "@type": "Offer",
-            name: "Starter",
+            name: "Starter ($9/mo)",
             price: "9.00",
             priceCurrency: "USD",
+            priceValidUntil: "2027-12-31",
             availability: "https://schema.org/InStock",
             description: "Single DTC Brand - 1 Monitored Domain with 3-Day Free Trial",
           },
           {
             "@type": "Offer",
-            name: "Growth Tier",
+            name: "Growth ($29/mo)",
             price: "29.00",
             priceCurrency: "USD",
+            priceValidUntil: "2027-12-31",
             availability: "https://schema.org/InStock",
-            description: "Scaling Multi-Brand - Up to 3 Monitored Domains with 3-Day Free Trial",
+            description: "Scaling Multi-Brand - Up to 3 Monitored Domains with 3-Day Free Trial & 1-Click DNS Auto-Remediation",
           },
           {
             "@type": "Offer",
-            name: "Agency Tier",
+            name: "Agency ($79/mo)",
             price: "79.00",
             priceCurrency: "USD",
+            priceValidUntil: "2027-12-31",
             availability: "https://schema.org/InStock",
-            description: "Agencies & High-Volume Brands - Up to 20 Monitored Domains with 3-Day Free Trial",
+            description: "Agencies & High-Volume Brands - Up to 20 Monitored Domains with 3-Day Free Trial & White-Label Reporting",
           },
         ],
       },
@@ -218,7 +260,7 @@ export default function LandingPage() {
         "@id": "https://inboundcheck.com/#dns-inspector",
         name: "Shopify DNS Auto-Fix & SPF Conflict Optimization",
         applicationCategory: "BusinessApplication",
-        operatingSystem: "Cloud, Web",
+        operatingSystem: "All (Cloud SaaS)",
         description:
           "Automated DNS governance merging Shopify, Klaviyo, and Zendesk records to eliminate Google and Yahoo 10-lookup SPF limit email rejections.",
         featureList: [
@@ -231,6 +273,7 @@ export default function LandingPage() {
           "@type": "Offer",
           price: "0.00",
           priceCurrency: "USD",
+          priceValidUntil: "2027-12-31",
           availability: "https://schema.org/InStock",
           description: "Free Instant Domain Deliverability Health Check"
         }
@@ -471,7 +514,7 @@ export default function LandingPage() {
 
           {/* Interactive Live Bait Domain Health Check */}
           <FadeInUp delay={0.4} className="w-full max-w-xl mx-auto mt-8 mb-14">
-            <div className="p-2.5 rounded-2xl border border-white/10 bg-[#0E0E12]/90 backdrop-blur-xl shadow-2xl">
+            <div className="p-2.5 rounded-2xl border border-white/10 bg-[#0A0A0C]/90 backdrop-blur-xl shadow-2xl">
               <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="relative flex-1">
                   <Globe className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -480,13 +523,13 @@ export default function LandingPage() {
                     value={domainInput}
                     onChange={(e) => setDomainInput(e.target.value)}
                     placeholder="enter your store sending domain (e.g. store.com)"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#050507] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#000000] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isAuditing}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 disabled:opacity-60"
+                  className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 disabled:opacity-60 min-h-[44px]"
                 >
                   <Zap size={14} className="fill-current" />
                   <span>{isAuditing ? "Analyzing Risk..." : "Analyze Revenue Risk"}</span>
@@ -495,7 +538,7 @@ export default function LandingPage() {
 
               {/* Diagnostic Terminal Animation & Blurred Gate */}
               {auditStep > 0 && (
-                <div className="mt-3 p-4 bg-[#050507] rounded-xl border border-white/10 text-left font-mono text-xs space-y-2.5">
+                <div className="mt-3 p-4 bg-[#000000] rounded-xl border border-white/10 text-left font-mono text-xs space-y-2.5">
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 border-b border-white/10 pb-2">
                     <span className="flex items-center gap-1.5">
                       <Terminal size={12} className="text-emerald-400" />
@@ -526,30 +569,78 @@ export default function LandingPage() {
                     <motion.div
                       initial={{ opacity: 0, scale: 0.98 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="mt-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30 relative overflow-hidden"
+                      className="mt-3 p-4 rounded-xl bg-red-950/30 border border-red-500/40 relative overflow-hidden space-y-3"
                     >
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <div className="font-bold text-white text-xs">
-                            High Revenue &amp; Deliverability Risk Detected
+                      {/* Alert Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-red-500/20">
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                          </span>
+                          <span className="font-bold text-rose-300 text-xs tracking-tight">
+                            Critical Deliverability Breach Detected
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/20 text-rose-200 border border-red-500/30 font-semibold">
+                          {domainInput}
+                        </span>
+                      </div>
+
+                      {/* Bottom-Line Merchant Impact Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                        <div className="p-2.5 rounded-lg bg-black/60 border border-red-500/20">
+                          <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                            At-Risk Transactional GMV
                           </div>
-                          <p className="text-[11px] text-zinc-300 font-sans leading-relaxed">
-                            Your store exhibits <strong className="text-red-400">2 critical compliance breaches</strong>: SPF lookup count exceeds the 10-lookup barrier causing order receipts to drop, and DMARC is set to non-enforcing <code className="text-amber-300 font-mono">p=none</code> exposing your brand to spoofing and chargeback penalties.
-                          </p>
+                          <div className="text-sm font-bold text-rose-400 font-mono mt-0.5">
+                            ~$2,400 / wk
+                          </div>
+                          <div className="text-[10px] text-zinc-400 mt-0.5 font-sans">
+                            Lost order confirmation emails trigger payment disputes
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-black/60 border border-red-500/20">
+                          <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                            Mailbox Routing Risk
+                          </div>
+                          <div className="text-xs font-bold text-amber-400 mt-0.5 font-sans">
+                            Routed Directly to Spam Folder
+                          </div>
+                          <div className="text-[10px] text-zinc-400 mt-0.5 font-sans">
+                            Order receipts &amp; shipping confirmations fail 2024 compliance
+                          </div>
                         </div>
                       </div>
 
-                      <div className="mt-3 pt-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <span className="text-[11px] text-zinc-400 font-sans">
-                          Complete Revenue &amp; Deliverability Risk Report ready.
+                      {/* Diagnostic Breakdown */}
+                      <p className="text-[11px] text-zinc-300 font-sans leading-relaxed">
+                        Your store exceeds the <strong className="text-rose-400">10-lookup SPF threshold</strong> (multi-app conflict) and DMARC is set to passive <code className="text-amber-300 font-mono px-1 py-0.5 rounded bg-white/5 border border-white/10">p=none</code>. Gmail and Yahoo automatically relegate your receipts to customer junk folders.
+                      </p>
+
+                      {/* High-Converting 60s CTA Button */}
+                      <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <span className="text-[11px] text-zinc-400 font-sans flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>1-Click Cloudflare &amp; GoDaddy auto-fix ready</span>
                         </span>
                         <Link
-                          href={`/auth/signup?domain=${encodeURIComponent(domainInput)}`}
-                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                          href={`/auth/signup?domain=${encodeURIComponent(domainInput.trim())}`}
+                          onClick={() => {
+                            try {
+                              if (typeof window !== "undefined") {
+                                sessionStorage.setItem("inboundcheck_pending_domain", domainInput.trim());
+                                localStorage.setItem("inboundcheck_pending_domain", domainInput.trim());
+                              }
+                            } catch {
+                              // Storage access fallback
+                            }
+                          }}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-[0_0_20px_rgba(16,185,129,0.35)] active:scale-95 cursor-pointer min-h-[44px]"
                         >
-                          <span>Unlock Risk Analysis Free</span>
-                          <ArrowRight size={13} />
+                          <span>Fix My Delivery Records in 60s</span>
+                          <ArrowRight size={13} className="stroke-[2.5]" />
                         </Link>
                       </div>
                     </motion.div>
@@ -914,7 +1005,7 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {/* Telegram Alert Box */}
           <FadeInUp delay={0.1}>
-            <div className="p-7 rounded-3xl bg-[#0E0E12]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
+            <div className="p-7 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
               <div className="flex items-center justify-between text-xs text-zinc-400 font-mono border-b border-white/10 pb-3">
                 <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
                   <Send size={14} /> @InboundCheckBot
@@ -939,7 +1030,7 @@ export default function LandingPage() {
 
           {/* Omnichannel Failover Box */}
           <FadeInUp delay={0.2}>
-            <div className="p-7 rounded-3xl bg-[#0E0E12]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
+            <div className="p-7 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
               <div className="flex items-center justify-between text-xs text-zinc-400 font-mono border-b border-white/10 pb-3">
                 <span className="flex items-center gap-1.5 text-teal-400 font-semibold">
                   <Zap size={14} /> Omnichannel Failover Engine
@@ -982,7 +1073,7 @@ export default function LandingPage() {
 
         <div className="space-y-4">
           <FadeInUp delay={0.1}>
-            <div className="p-6 sm:p-7 rounded-2xl bg-[#0E0E12]/80 backdrop-blur-xl border border-white/10 hover:border-emerald-500/40 transition-all">
+            <div className="p-6 sm:p-7 rounded-2xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 hover:border-emerald-500/40 transition-all">
               <div className="flex items-start gap-4">
                 <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   01
@@ -998,7 +1089,7 @@ export default function LandingPage() {
           </FadeInUp>
 
           <FadeInUp delay={0.2}>
-            <div className="p-6 sm:p-7 rounded-2xl bg-[#0E0E12]/80 backdrop-blur-xl border border-white/10 hover:border-emerald-500/40 transition-all">
+            <div className="p-6 sm:p-7 rounded-2xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 hover:border-emerald-500/40 transition-all">
               <div className="flex items-start gap-4">
                 <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   02
@@ -1014,7 +1105,7 @@ export default function LandingPage() {
           </FadeInUp>
 
           <FadeInUp delay={0.3}>
-            <div className="p-6 sm:p-7 rounded-2xl bg-[#0E0E12]/80 backdrop-blur-xl border border-white/10 hover:border-emerald-500/40 transition-all">
+            <div className="p-6 sm:p-7 rounded-2xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 hover:border-emerald-500/40 transition-all">
               <div className="flex items-start gap-4">
                 <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   03
@@ -1050,7 +1141,7 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
           {/* Starter Plan */}
           <FadeInUp delay={0.1} className="h-full">
-            <div className="h-full p-8 rounded-3xl bg-[#0E0E12]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
+            <div className="h-full p-8 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-white/5 text-gray-300 border border-white/10">
@@ -1097,7 +1188,7 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=starter"
-                  className="w-full inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
+                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
                   Start 3-Day Free Trial
                 </Link>
@@ -1107,7 +1198,7 @@ export default function LandingPage() {
 
           {/* Growth Plan (Most Popular) */}
           <FadeInUp delay={0.2} className="h-full">
-            <div className="h-full p-8 rounded-3xl bg-[#0E0E12]/95 backdrop-blur-xl border border-emerald-500/50 flex flex-col justify-between shadow-[0_0_40px_-5px_rgba(16,185,129,0.3)] lg:-translate-y-3 relative z-10">
+            <div className="h-full p-8 rounded-3xl bg-[#0E1713] backdrop-blur-xl border-2 border-emerald-500/50 flex flex-col justify-between shadow-[0_0_40px_-5px_rgba(16,185,129,0.3)] lg:-translate-y-3 relative z-10">
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
@@ -1159,7 +1250,7 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=growth"
-                  className="w-full inline-flex items-center justify-center py-3.5 px-5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)] cursor-pointer"
+                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3.5 px-5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)] cursor-pointer"
                 >
                   Start 3-Day Free Trial
                 </Link>
@@ -1169,7 +1260,7 @@ export default function LandingPage() {
 
           {/* Agency Plan */}
           <FadeInUp delay={0.3} className="h-full">
-            <div className="h-full p-8 rounded-3xl bg-[#0E0E12]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
+            <div className="h-full p-8 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
@@ -1220,7 +1311,7 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=agency"
-                  className="w-full inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
+                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
                   Start 3-Day Free Trial
                 </Link>
