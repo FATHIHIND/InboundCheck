@@ -968,15 +968,19 @@ export default function DashboardOverviewPage() {
         </GlassEmeraldCard>
       </div>
 
-      {/* 3. Middle 2-Column Section: 60% ReputationTrendChart + 40% CheckHistoryChart */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7">
-          <ReputationTrendChart data={reputationPointsToRender} />
+      {/* 3. Middle Section: Telemetry Preview & Check History (Suppressed in empty state to eliminate stacked clutter) */}
+      {(reputationPointsToRender.length > 0 || imapLogs.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className={imapLogs.length > 0 ? "lg:col-span-7" : "col-span-12"}>
+            <ReputationTrendChart data={reputationPointsToRender} />
+          </div>
+          {imapLogs.length > 0 && (
+            <div className="lg:col-span-5">
+              <CheckHistoryChart logs={imapLogs} />
+            </div>
+          )}
         </div>
-        <div className="lg:col-span-5">
-          <CheckHistoryChart logs={imapLogs} />
-        </div>
-      </div>
+      )}
 
       {/* 4. Bottom Section: Monitored Stores & Domains Table with 4-State Governance */}
       {domainsResource.state === "loading" && (

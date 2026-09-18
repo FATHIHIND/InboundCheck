@@ -503,11 +503,11 @@ export default function LandingPage() {
             </div>
           </FadeInUp>
 
-          {/* Value Proposition Framing (Obsidian Editorial Serif & Sans) */}
+          {/* Value Proposition Framing (Unified Obsidian Modern Sans-Serif) */}
           <FadeInUp delay={0.1}>
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-semibold tracking-tight text-white max-w-4xl leading-[1.08] mb-6 text-center">
+            <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white max-w-4xl leading-[1.08] mb-6 text-center font-sans">
               Stop Shopify Order Receipts{" "}
-              <span className="italic font-serif text-emerald-400 font-normal">
+              <span className="font-sans font-extrabold tracking-tight text-emerald-400">
                 Landing in Spam.
               </span>
             </h1>
@@ -693,9 +693,9 @@ export default function LandingPage() {
         <div id="threat" className="absolute -top-10 left-0" />
         <FadeInUp>
           <div className="text-center space-y-3 mb-16">
-            <span className="text-xs font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
-              THE REALITY GAP
-            </span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold uppercase">
+              <span>THE REALITY GAP</span>
+            </div>
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-white tracking-tight">
               The $4,200 Monthly Silent Leak in Your Store
             </h2>
@@ -724,7 +724,7 @@ export default function LandingPage() {
           {/* Left: Copy */}
           <FadeInUp className="space-y-6">
             <div className="flex flex-wrap items-center gap-2.5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold uppercase">
                 <Server size={14} />
                 <span>DNS GOVERNANCE ENGINE</span>
               </div>
@@ -746,41 +746,50 @@ export default function LandingPage() {
             </p>
             <div className="space-y-3.5 font-sans text-sm text-gray-300">
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Check size={13} />
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Check size={12} strokeWidth={2.5} />
                 </div>
                 <span>
                   <strong className="text-white">Prevents Spam Routing:</strong> Automatically merges multi-app SPF records to bypass Google&apos;s 10-lookup barrier.
                 </span>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Check size={13} />
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Check size={12} strokeWidth={2.5} />
                 </div>
                 <span>
                   <strong className="text-white">Establishes Cryptographic Sender Trust:</strong> Validates 2048-bit DKIM keys to pass DMARC alignment on Gmail and Yahoo.
                 </span>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Check size={13} />
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Check size={12} strokeWidth={2.5} />
                 </div>
                 <span>
                   <strong className="text-white">Zero Manual Editing:</strong> Syncs verified records directly to Cloudflare, GoDaddy, or Namecheap via secure API.
                 </span>
               </div>
             </div>
+            <div className="pt-2">
+              <Link
+                href="/auth/signup"
+                className="inline-flex items-center gap-2 text-emerald-400 font-semibold text-sm hover:text-emerald-300 transition-colors"
+              >
+                <span>Protect your DNS configuration</span>
+                <ChevronRight size={16} />
+              </Link>
+            </div>
           </FadeInUp>
 
           {/* Right Mockup: Glassmorphic floating card with Dynamic Flowing Emerald Background */}
           <FadeInUp delay={0.2}>
-            <div className="bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
+            <div className="bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300 min-h-[420px] flex flex-col justify-between">
               {/* Glowing Emerald Gradient Wave Base */}
               <div
                 className="absolute inset-0 -z-20 pointer-events-none rounded-2xl"
                 style={{
                   background:
-                    "radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.25) 0%, rgba(0, 128, 96, 0.1) 40%, rgba(14, 18, 23, 0.95) 100%)",
+                    "radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.20) 0%, rgba(0, 128, 96, 0.08) 40%, rgba(14, 18, 23, 0.95) 100%)",
                 }}
               />
               {/* Flowing Ambient Background Video with Screen Blend */}
@@ -865,14 +874,22 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left Mockup: Floating card with background video */}
           <FadeInUp className="order-2 lg:order-1">
-            <div className="bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
+            <div className="bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300 min-h-[420px] flex flex-col justify-between">
+              {/* Glowing Emerald Gradient Wave Base */}
+              <div
+                className="absolute inset-0 -z-20 pointer-events-none rounded-2xl"
+                style={{
+                  background:
+                    "radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.20) 0%, rgba(0, 128, 96, 0.08) 40%, rgba(14, 18, 23, 0.95) 100%)",
+                }}
+              />
               {/* Background Video */}
               <video
                 autoPlay
                 loop
                 muted
                 playsInline
-                className="absolute inset-0 w-full h-full object-cover opacity-30 -z-10 pointer-events-none"
+                className="absolute inset-0 w-full h-full object-cover opacity-25 -z-10 pointer-events-none mix-blend-screen"
               >
                 <source
                   src="https://cdn.sceneai.art/Hero%20Section%20Video/736fd4a0-70ac-4f44-9633-55769ead6aca.mp4"
@@ -953,7 +970,7 @@ export default function LandingPage() {
 
           {/* Right: Copy */}
           <FadeInUp delay={0.2} className="order-1 lg:order-2 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold uppercase">
               <Radio size={14} />
               <span>REAL-TIME BLACKLIST RADAR</span>
             </div>
@@ -965,20 +982,20 @@ export default function LandingPage() {
             </p>
             <div className="space-y-3 font-sans text-sm text-gray-300">
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Check size={13} />
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Check size={12} strokeWidth={2.5} />
                 </div>
                 <span><strong>Continuous 60-Minute Probing:</strong> Queries 10 authoritative RBL databases around the clock.</span>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Check size={13} />
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Check size={12} strokeWidth={2.5} />
                 </div>
                 <span><strong>Predictive 48–72h Risk Forecasting:</strong> Identifies early listing velocity before primary inbox placement is destroyed.</span>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Check size={13} />
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Check size={12} strokeWidth={2.5} />
                 </div>
                 <span><strong>Automated Delisting Guidance:</strong> Pre-fills delisting requests with verified diagnostic proofs to expedite remediation.</span>
               </div>
@@ -1000,9 +1017,9 @@ export default function LandingPage() {
       <section className="py-24 px-6 max-w-7xl mx-auto border-t border-white/5 relative z-10">
         <FadeInUp>
           <div className="text-center space-y-3 mb-16">
-            <span className="text-xs font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
-              INSTANT INCIDENT RESPONSE
-            </span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold uppercase">
+              <span>INSTANT INCIDENT RESPONSE</span>
+            </div>
             <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tight">
               Telegram Bot Alerts &amp; Omnichannel WhatsApp Fallback
             </h2>
@@ -1069,9 +1086,9 @@ export default function LandingPage() {
       <section id="how-it-works" className="py-28 px-6 max-w-4xl mx-auto border-t border-white/5 relative z-10">
         <FadeInUp>
           <div className="text-center space-y-3 mb-16">
-            <span className="text-xs font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
-              ONBOARDING IN 60 SECONDS
-            </span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold uppercase">
+              <span>ONBOARDING IN 60 SECONDS</span>
+            </div>
             <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tight">
               How InboundCheck Protects Your Store
             </h2>
@@ -1136,9 +1153,9 @@ export default function LandingPage() {
       <section id="pricing" className="py-28 px-6 max-w-7xl mx-auto border-t border-white/5 relative z-10">
         <FadeInUp>
           <div className="text-center space-y-3 mb-16">
-            <span className="text-xs font-mono tracking-[0.2em] text-emerald-400 uppercase font-semibold">
-              TRANSPARENT PRICING
-            </span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono font-semibold uppercase">
+              <span>TRANSPARENT PRICING</span>
+            </div>
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-white tracking-tight">
               Simple Pricing, No Surprises.
             </h2>
@@ -1172,24 +1189,34 @@ export default function LandingPage() {
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <strong className="text-white font-semibold">1 Monitored Domain Cap</strong>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>24/7 Continuous DNS &amp; 10-RBL Blacklist Radar</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Instant Telegram Failure Alerts</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>10,000 automated transactional email delivery audits / mo</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
@@ -1230,28 +1257,40 @@ export default function LandingPage() {
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <strong className="text-white font-semibold">Up to 3 Monitored Domains</strong>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Shopify Store OAuth Sync &amp; Alignment</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>1-Click DNS Auto-Remediation (Cloudflare &amp; GoDaddy)</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Revenue &amp; Dispute Risk Analytics (Preserves ~$37.30 in Shopify GMV per $1 invested)</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Instant Telegram Incident Alert Engine</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
@@ -1291,28 +1330,40 @@ export default function LandingPage() {
                 </p>
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <strong className="text-white font-semibold">Up to 20 Monitored Domains</strong>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Multi-Store Management Hub</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Priority Audit Queue &amp; White-Label Reporting</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Dedicated 15m Sweeps &amp; IMAP Probes</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span>Automated Zone Auto-Patching &amp; Backups</span>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} strokeWidth={2.5} />
+                    </div>
                     <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
@@ -1382,59 +1433,46 @@ export default function LandingPage() {
         </FadeInUp>
       </section>
 
-      {/* 6. High-Converting Footer (id="contact") */}
+      {/* 6. Pre-Footer High-Converting Conversion CTA */}
+      <section className="py-24 px-6 max-w-7xl mx-auto relative z-10 border-t border-white/5">
+        <FadeInUp>
+          <div className="text-center space-y-6 max-w-3xl mx-auto">
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-tight font-sans">
+              Ready to protect your store&apos;s{" "}
+              <span className="font-sans font-extrabold tracking-tight text-emerald-400">
+                deliverability?
+              </span>
+            </h2>
+            <p className="text-gray-400 text-sm md:text-base max-w-xl mx-auto">
+              Join high-volume Shopify DTC merchants who never lose revenue to spam filters. Setup takes under 60 seconds.
+            </p>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link
+                href={domainInput.trim() ? `/auth/signup?domain=${encodeURIComponent(domainInput.trim())}` : "/auth/signup"}
+                className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-8 py-3.5 rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.35)] transition-all active:scale-95"
+              >
+                <span>Start 3-Day Free Trial</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link
+                href="/auth/login"
+                className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium px-8 py-3.5 rounded-xl border border-white/10 transition-all active:scale-95"
+              >
+                <span>Sign In to Dashboard</span>
+              </Link>
+            </div>
+          </div>
+        </FadeInUp>
+      </section>
+
+      {/* 7. Institutional Navigation & Governance Footer (id="contact") */}
       <footer
         id="contact"
-        className="relative pt-28 pb-16 px-6 border-t border-white/10 overflow-hidden"
+        className="relative pt-16 pb-16 px-6 border-t border-white/10 overflow-hidden bg-[#050507]"
       >
-        {/* Ambient Background Video */}
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-25 -z-10 pointer-events-none"
-        >
-          <source
-            src="https://cdn.sceneai.art/Hero%20Section%20Video/50b4f304-cdca-4e12-8735-580d225834be.mp4"
-            type="video/mp4"
-          />
-        </video>
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/90 to-transparent -z-10" />
-
-        <div className="max-w-7xl mx-auto space-y-16 relative z-10">
-          {/* Top CTA */}
-          <FadeInUp>
-            <div className="text-center space-y-6 max-w-3xl mx-auto">
-              <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-tight">
-                Ready to protect your store&apos;s{" "}
-                <span className="italic font-serif text-emerald-400 font-normal">
-                  deliverability?
-                </span>
-              </h2>
-              <p className="text-gray-400 text-sm md:text-base max-w-xl mx-auto">
-                Join high-volume Shopify DTC merchants who never lose revenue to spam filters. Setup takes under 60 seconds.
-              </p>
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link
-                  href={domainInput.trim() ? `/auth/signup?domain=${encodeURIComponent(domainInput.trim())}` : "/auth/signup"}
-                  className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-8 py-3.5 rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.35)] transition-all active:scale-95"
-                >
-                  <span>Start 3-Day Free Trial</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-                <Link
-                  href="/auth/login"
-                  className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium px-8 py-3.5 rounded-xl border border-white/10 transition-all active:scale-95"
-                >
-                  <span>Sign In to Dashboard</span>
-                </Link>
-              </div>
-            </div>
-          </FadeInUp>
-
+        <div className="max-w-7xl mx-auto space-y-12 relative z-10">
           {/* Footer Links Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-12 border-t border-white/10 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
             <div className="space-y-3">
               <div className="font-semibold text-white tracking-wide">Product</div>
               <ul className="space-y-2 text-gray-400">

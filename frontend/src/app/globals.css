@@ -99,11 +99,6 @@ body::before {
 }
 
 /* Typography Classes */
-.font-serif-drama {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-style: italic;
-}
-
 .font-mono-tech {
   font-family: 'JetBrains Mono', monospace;
 }
