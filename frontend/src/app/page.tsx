@@ -380,7 +380,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/auth/signup"
-              className="bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium px-5 py-2.5 rounded-full border border-white/10 transition-all hover:border-white/25 shadow-sm active:scale-95"
+              className="min-h-[44px] inline-flex items-center bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium px-5 py-2.5 rounded-xl border border-white/10 transition-all hover:border-white/25 shadow-sm active:scale-95"
             >
               Get started
             </Link>
@@ -393,7 +393,7 @@ export default function LandingPage() {
             className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
             aria-label="Toggle navigation menu"
           >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
 
@@ -488,25 +488,27 @@ export default function LandingPage() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-transparent to-black pointer-events-none" />
 
         <div className="max-w-4xl mx-auto flex flex-col items-center relative z-10">
-          {/* Top Badge */}
-          <FadeInUp delay={0.1}>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-emerald-400 mb-8 backdrop-blur-sm shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-              <span>✨ Shopify Order Email Guardian • 2024 Enforcement Defense</span>
+          {/* Institutional Compliance & 2024 Enforcement Hero Badge */}
+          <FadeInUp>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 mb-8 backdrop-blur-md hover:border-emerald-500/40 transition-colors cursor-default">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-mono font-medium text-gray-300 tracking-wide">
+                2024 GOOGLE &amp; YAHOO DMARC ENFORCEMENT LIVE
+              </span>
             </div>
           </FadeInUp>
 
-          {/* Main Headline */}
-          <FadeInUp delay={0.2}>
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white leading-[1.12] mb-6">
-              Know when your Shopify order emails stop reaching customers —{" "}
-              <span className="font-serif italic font-normal text-emerald-400">
-                before you lose sales.
+          {/* Value Proposition Framing (Obsidian Editorial Serif & Sans) */}
+          <FadeInUp delay={0.1}>
+            <h1 className="text-4xl sm:text-6xl md:text-7xl font-semibold tracking-tight text-white max-w-4xl leading-[1.08] mb-6 text-center">
+              Stop Shopify Order Receipts{" "}
+              <span className="italic font-serif text-emerald-400 font-normal">
+                Landing in Spam.
               </span>
             </h1>
           </FadeInUp>
 
-          {/* Sub-text */}
-          <FadeInUp delay={0.3}>
+          <FadeInUp delay={0.2}>
             <p className="text-[16px] text-gray-400 max-w-2xl text-center mb-8 leading-relaxed">
               Google and Yahoo 2024 DMARC &amp; SPF rules trigger silent rejections when merchants connect multiple apps. Unreceived order receipts cause dispute surges, customer support spikes, and lost GMV. InboundCheck protects your deliverability before revenue leaks.
             </p>
@@ -531,7 +533,7 @@ export default function LandingPage() {
                   disabled={isAuditing}
                   className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 disabled:opacity-60 min-h-[44px]"
                 >
-                  <Zap size={14} className="fill-current" />
+                  <Zap className="w-3.5 h-3.5 fill-current" />
                   <span>{isAuditing ? "Analyzing Risk..." : "Analyze Revenue Risk"}</span>
                 </button>
               </form>
@@ -541,7 +543,7 @@ export default function LandingPage() {
                 <div className="mt-3 p-4 bg-[#000000] rounded-xl border border-white/10 text-left font-mono text-xs space-y-2.5">
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 border-b border-white/10 pb-2">
                     <span className="flex items-center gap-1.5">
-                      <Terminal size={12} className="text-emerald-400" />
+                      <Terminal className="w-3 h-3 text-emerald-400" />
                       REVENUE &amp; DELIVERABILITY RISK PROBE: {domainInput}
                     </span>
                     <span className="text-emerald-400 font-semibold">2024 ENFORCEMENT AUDIT</span>
@@ -765,10 +767,10 @@ export default function LandingPage() {
 
           {/* Right Mockup: Glassmorphic floating card with Dynamic Flowing Emerald Background */}
           <FadeInUp delay={0.2}>
-            <div className="bg-[#1C1C1E]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
+            <div className="bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
               {/* Glowing Emerald Gradient Wave Base */}
               <div
-                className="absolute inset-0 -z-20 pointer-events-none rounded-3xl"
+                className="absolute inset-0 -z-20 pointer-events-none rounded-2xl"
                 style={{
                   background:
                     "radial-gradient(ellipse at top right, rgba(16, 185, 129, 0.25) 0%, rgba(0, 128, 96, 0.1) 40%, rgba(14, 18, 23, 0.95) 100%)",
@@ -788,32 +790,33 @@ export default function LandingPage() {
                 />
               </video>
 
-              {/* Card Content */}
               <div className="space-y-6 relative z-10">
+                {/* Visual Glass Header */}
                 <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                       <Server size={16} />
                     </div>
                     <div>
-                      <div className="font-semibold text-sm text-white">store-checkout.com</div>
-                      <div className="text-[10px] text-gray-400 font-mono">Cloudflare Managed Zone</div>
+                      <div className="text-sm font-semibold text-white">Cloudflare Zone Automation</div>
+                      <div className="text-xs text-gray-400 font-mono">Auto-Remediate • Connected</div>
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
+                  <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    PROTECTED &amp; CONNECTED
+                    SYNCED
                   </span>
                 </div>
 
-                {/* SPF Lookup Gauge */}
-                <div className="p-4 bg-black/75 backdrop-blur-md rounded-2xl border border-white/10 space-y-3 font-mono">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-400">SPF LOOKUP BUDGET</span>
-                    <span className="text-emerald-400 font-bold">4 of 10 Lookups Used - Safe Range</span>
+                {/* SPF Mechanism Visual Counter */}
+                <div className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
+                    <span>SPF LOOKUP COUNTER</span>
+                    <span className="text-emerald-400 font-bold">5 / 10 RFC LIMIT</span>
                   </div>
-                  <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-                    <div className="bg-emerald-400 h-2 rounded-full w-[40%] shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
+                  {/* Visual Progress Bar */}
+                  <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                    <div className="w-1/2 h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full" />
                   </div>
                   <div className="flex items-center justify-between text-[11px] pt-1">
                     <span className="text-zinc-400 font-sans">Google &amp; Yahoo Threshold</span>
@@ -825,13 +828,13 @@ export default function LandingPage() {
                 <div className="grid grid-cols-2 gap-3 font-mono text-xs">
                   <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1.5">
                     <span className="text-[10px] text-zinc-400 block">DMARC STATUS</span>
-                    <span className="text-emerald-400 font-semibold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
+                    <span className="text-emerald-400 font-semibold text-[10px] font-mono bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30 inline-block">
                       DMARC: Inboxing Safe
                     </span>
                   </div>
                   <div className="p-3 bg-black/75 rounded-xl border border-white/10 space-y-1.5">
                     <span className="text-[10px] text-zinc-400 block">DKIM STATUS</span>
-                    <span className="text-emerald-400 font-semibold text-xs bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 inline-block">
+                    <span className="text-emerald-400 font-semibold text-[10px] font-mono bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30 inline-block">
                       DKIM: Verified &amp; Active
                     </span>
                   </div>
@@ -839,7 +842,7 @@ export default function LandingPage() {
 
                 {/* Verified System Footer Status Strip */}
                 <div className="w-full py-3 px-4 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center gap-2.5 text-xs text-zinc-300 font-mono shadow-sm">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
                   <span className="tracking-tight text-center">
                     Automated DNS Synchronization Active • Cloudflare API Connected
                   </span>
@@ -855,7 +858,7 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left Mockup: Floating card with background video */}
           <FadeInUp className="order-2 lg:order-1">
-            <div className="bg-[#1C1C1E]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
+            <div className="bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xl group hover:border-emerald-500/40 transition-all duration-300">
               {/* Background Video */}
               <video
                 autoPlay
@@ -1005,22 +1008,22 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {/* Telegram Alert Box */}
           <FadeInUp delay={0.1}>
-            <div className="p-7 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
+            <div className="p-7 rounded-2xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
               <div className="flex items-center justify-between text-xs text-zinc-400 font-mono border-b border-white/10 pb-3">
                 <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-                  <Send size={14} /> @InboundCheckBot
+                  <Send className="w-3.5 h-3.5" /> @InboundCheckBot
                 </span>
                 <span>Real-Time Push</span>
               </div>
               <div className="text-sm font-semibold text-white flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping" />
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
                 CRITICAL: Spam Placement Alert
               </div>
               <p className="text-xs text-zinc-300 font-mono leading-relaxed bg-black/60 p-3 rounded-xl border border-white/5">
                 Sending domain health score dropped to 72%. Gmail anti-spam filter classified Order #10492 as junk.
               </p>
               <div className="flex items-center justify-between pt-1">
-                <span className="text-xs font-mono px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                   1-Click Remediate
                 </span>
                 <span className="text-xs text-zinc-400 font-mono">Dispatched in 320ms</span>
@@ -1030,15 +1033,15 @@ export default function LandingPage() {
 
           {/* Omnichannel Failover Box */}
           <FadeInUp delay={0.2}>
-            <div className="p-7 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
+            <div className="p-7 rounded-2xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 space-y-4 hover:border-emerald-500/40 transition-all shadow-xl">
               <div className="flex items-center justify-between text-xs text-zinc-400 font-mono border-b border-white/10 pb-3">
                 <span className="flex items-center gap-1.5 text-teal-400 font-semibold">
-                  <Zap size={14} /> Omnichannel Failover Engine
+                  <Zap className="w-3.5 h-3.5" /> Omnichannel Failover Engine
                 </span>
                 <span>International SMS &amp; WhatsApp Fallback</span>
               </div>
               <div className="text-sm font-semibold text-white flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Receipt Auto-Routed to WhatsApp
               </div>
               <p className="text-xs text-zinc-300 font-mono leading-relaxed bg-black/60 p-3 rounded-xl border border-white/5">
@@ -1141,7 +1144,7 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
           {/* Starter Plan */}
           <FadeInUp delay={0.1} className="h-full">
-            <div className="h-full p-8 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
+            <div className="h-full p-8 rounded-2xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-white/5 text-gray-300 border border-white/10">
@@ -1163,23 +1166,23 @@ export default function LandingPage() {
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <strong className="text-white font-semibold">1 Monitored Domain Cap</strong>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>24/7 Continuous DNS &amp; 10-RBL Blacklist Radar</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Instant Telegram Failure Alerts</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Multi-Resolver Automated Audits</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
@@ -1188,7 +1191,7 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=starter"
-                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
+                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-xl bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
                   Start 3-Day Free Trial
                 </Link>
@@ -1198,7 +1201,7 @@ export default function LandingPage() {
 
           {/* Growth Plan (Most Popular) */}
           <FadeInUp delay={0.2} className="h-full">
-            <div className="h-full p-8 rounded-3xl bg-[#0E1713] backdrop-blur-xl border-2 border-emerald-500/50 flex flex-col justify-between shadow-[0_0_40px_-5px_rgba(16,185,129,0.3)] lg:-translate-y-3 relative z-10">
+            <div className="h-full p-8 rounded-2xl bg-[#0E1217] backdrop-blur-xl border-2 border-emerald-500/50 flex flex-col justify-between shadow-[0_0_40px_-5px_rgba(16,185,129,0.3)] lg:-translate-y-3 relative z-10">
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
@@ -1221,27 +1224,27 @@ export default function LandingPage() {
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <strong className="text-white font-semibold">Up to 3 Monitored Domains</strong>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Shopify Store OAuth Sync &amp; Alignment</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>1-Click DNS Auto-Remediation (Cloudflare &amp; GoDaddy)</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Revenue &amp; Dispute Risk Analytics (Protected GMV)</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Instant Telegram Incident Alert Engine</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
@@ -1250,7 +1253,7 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=growth"
-                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3.5 px-5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)] cursor-pointer"
+                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3.5 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)] cursor-pointer"
                 >
                   Start 3-Day Free Trial
                 </Link>
@@ -1260,7 +1263,7 @@ export default function LandingPage() {
 
           {/* Agency Plan */}
           <FadeInUp delay={0.3} className="h-full">
-            <div className="h-full p-8 rounded-3xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
+            <div className="h-full p-8 rounded-2xl bg-[#0A0A0C]/90 backdrop-blur-xl border border-white/10 flex flex-col justify-between hover:border-white/20 transition-all shadow-xl">
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
@@ -1282,27 +1285,27 @@ export default function LandingPage() {
 
                 <div className="space-y-3 pt-6 border-t border-white/10 text-xs sm:text-sm text-gray-300">
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <strong className="text-white font-semibold">Up to 20 Monitored Domains</strong>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Multi-Store Management Hub</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Priority Audit Queue &amp; White-Label Reporting</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Dedicated 15m Sweeps &amp; IMAP Probes</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>Automated Zone Auto-Patching &amp; Backups</span>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <Check size={16} className="text-emerald-400 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span className="text-emerald-400 font-medium">3-Day Free Trial — No Risk</span>
                   </div>
                 </div>
@@ -1311,7 +1314,7 @@ export default function LandingPage() {
               <div className="pt-8 mt-auto">
                 <Link
                   href="/auth/signup?tier=agency"
-                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-full bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
+                  className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-xl bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
                   Start 3-Day Free Trial
                 </Link>
@@ -1350,7 +1353,7 @@ export default function LandingPage() {
                         isOpen ? "rotate-45 text-emerald-400" : "text-gray-400"
                       }`}
                     >
-                      <Plus size={18} />
+                      <Plus className="w-4 h-4" />
                     </div>
                   </button>
                   {/* Smooth CSS Grid Transition */}
@@ -1408,14 +1411,14 @@ export default function LandingPage() {
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link
                   href="/auth/signup"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-8 py-3.5 rounded-full shadow-[0_0_30px_rgba(16,185,129,0.35)] transition-all active:scale-95"
+                  className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-8 py-3.5 rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.35)] transition-all active:scale-95"
                 >
                   <span>Start 3-Day Free Trial</span>
-                  <ArrowRight size={16} />
+                  <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   href="/auth/login"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium px-8 py-3.5 rounded-full border border-white/10 transition-all active:scale-95"
+                  className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium px-8 py-3.5 rounded-xl border border-white/10 transition-all active:scale-95"
                 >
                   <span>Sign In to Dashboard</span>
                 </Link>

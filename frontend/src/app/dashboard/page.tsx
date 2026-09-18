@@ -580,7 +580,7 @@ export default function DashboardOverviewPage() {
       {/* 1. Header: Store Selector + Run Live Diagnostic Pipeline */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             Shopify Store Deliverability & Revenue Shield
           </h1>
@@ -838,7 +838,7 @@ export default function DashboardOverviewPage() {
             <div className="relative z-10 pt-1">
               <Link
                 href="/dashboard/shopify"
-                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
               >
                 <span>Connect Shopify</span>
                 <ArrowRight className="w-3 h-3" />
@@ -1132,69 +1132,69 @@ export default function DashboardOverviewPage() {
                 Live DNS records, customer inbox placement status, and on-demand diagnostic inspector.
               </p>
             </div>
-            <span className="text-xs font-mono text-zinc-400 px-2.5 py-1 rounded-lg bg-[#08080A] border border-white/[0.06]">
+            <span className="text-[10px] font-mono font-semibold text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#0E1217] border border-white/[0.08]">
               {filteredStores.length} Active Stores
             </span>
           </div>
 
           <div className="overflow-x-auto max-h-[480px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
             <table className="w-full text-left text-xs font-mono border-collapse">
-              <thead className="sticky top-0 bg-[#0A0A0C] z-10 backdrop-blur-md border-b border-white/[0.08] text-zinc-400 text-[10px] uppercase">
+              <thead className="sticky top-0 z-10 bg-[#0E1217]/95 backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                 <tr>
-                  <th className="py-3.5 px-4 font-semibold">Domain Name</th>
-                  <th className="py-3.5 px-4 font-semibold">Shopify Store</th>
-                  <th className="py-3.5 px-4 font-semibold">Inbox Placement</th>
-                  <th className="py-3.5 px-4 font-semibold">SPF</th>
-                  <th className="py-3.5 px-4 font-semibold">DKIM</th>
-                  <th className="py-3.5 px-4 font-semibold">DMARC</th>
-                  <th className="py-3.5 px-4 font-semibold">Health Score</th>
-                  <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
+                  <th className="py-3 px-4 font-semibold text-left">Domain Name</th>
+                  <th className="py-3 px-4 font-semibold text-left">Shopify Store</th>
+                  <th className="py-3 px-4 font-semibold text-left">Inbox Placement</th>
+                  <th className="py-3 px-4 font-semibold text-left">SPF</th>
+                  <th className="py-3 px-4 font-semibold text-left">DKIM</th>
+                  <th className="py-3 px-4 font-semibold text-left">DMARC</th>
+                  <th className="py-3 px-4 font-semibold text-left">Health Score</th>
+                  <th className="py-3 px-4 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
+              <tbody className="divide-y divide-white/[0.05] text-zinc-300">
                 {filteredStores.map((store) => (
                   <tr
                     key={store.id}
-                    className="border-b border-zinc-900/60 hover:bg-zinc-800/25 transition-colors duration-150"
+                    className="hover:bg-white/[0.02] transition-colors"
                   >
-                    <td className="py-4 px-4 font-bold text-white flex items-center gap-2">
+                    <td className="py-3.5 px-4 text-xs font-mono font-bold text-white flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       {store.domain_name}
                     </td>
-                    <td className="py-4 px-4 text-zinc-400 text-[11px]">{store.shopify_store}</td>
-                    <td className="py-4 px-4">
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 flex items-center gap-1.5 w-fit">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping" />
+                    <td className="py-3.5 px-4 text-xs font-mono text-zinc-400 text-[11px]">{store.shopify_store}</td>
+                    <td className="py-3.5 px-4 text-xs font-mono">
+                      <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 w-fit">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         <Inbox className="w-3 h-3" />
                         INBOX
                       </span>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold inline-flex items-center gap-1.5 ${
+                    <td className="py-3.5 px-4 text-xs font-mono">
+                      <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
                         store.spf_status === "optimal"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                          : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
                       }`}>
-                        <span className={`w-1 h-1 rounded-full ${store.spf_status === "optimal" ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${store.spf_status === "optimal" ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
                         {store.spf_status.toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 inline-flex items-center gap-1.5">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                    <td className="py-3.5 px-4 text-xs font-mono">
+                      <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         {store.dkim_status.toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 inline-flex items-center gap-1.5">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                    <td className="py-3.5 px-4 text-xs font-mono">
+                      <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         {store.dmarc_status.toUpperCase()}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-3.5 px-4 text-xs font-mono">
                       <span className="font-bold text-white text-xs">{store.unified_score}%</span>
                     </td>
-                    <td className="py-4 px-4 text-right">
+                    <td className="py-3.5 px-4 text-xs font-mono text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"

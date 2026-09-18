@@ -5,9 +5,14 @@
 :root {
   --background: #000000;
   --foreground: #FFFFFF;
-  --surface: #0A0A0C;
+  --canvas-base: #000000;
+  --surface-primary: #0A0A0C;
   --surface-elevated: #0E1217;
-  --surface-hover: #121216;
+  --surface-subtle: #12161D;
+  --surface-hover: rgba(255, 255, 255, 0.03);
+  --border-card: rgba(255, 255, 255, 0.08);
+  --border-elevated: rgba(255, 255, 255, 0.12);
+  --surface: #0A0A0C;
   --border-subtle: rgba(0, 128, 96, 0.2);
   --border-active: rgba(16, 185, 129, 0.45);
   --text-primary: #FFFFFF;

@@ -443,7 +443,7 @@ function DNSInspectorContent() {
       {/* 1. Header with Navigation Mode Switcher */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <Terminal className="w-6 h-6 text-emerald-400" />
             Domain Health &amp; Deliverability Inspector
           </h1>
@@ -600,7 +600,7 @@ function DNSInspectorContent() {
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   ✓ All DNS records successfully verified & propagated live!
                 </span>
-                <span className="text-xs px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Score: 100/100 • Optimal
                 </span>
               </div>
@@ -742,7 +742,7 @@ function DNSInspectorContent() {
                       {/* Header Summary Row */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                          <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                          <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
                             {fix.record_type}
                           </span>
                           <span className="text-xs font-bold text-white">{fix.category}</span>
@@ -959,7 +959,7 @@ function DNSInspectorContent() {
                 <span className="text-[10px] text-zinc-500 uppercase block">2048-bit DKIM Selectors</span>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {auditData.summary.dkim.found_selectors.map((sel, i) => (
-                    <span key={i} className="px-2.5 py-1 bg-[#14141A] text-white rounded-lg border border-zinc-700/80 text-xs">
+                    <span key={i} className="px-2.5 py-0.5 bg-[#14141A] text-white rounded-full border border-white/[0.08] text-[10px] font-mono font-semibold">
                       {sel}._domainkey ({sel})
                     </span>
                   ))}
@@ -987,7 +987,7 @@ function DNSInspectorContent() {
             <div className="flex items-center gap-2.5">
               <Code2 className="w-4 h-4 text-emerald-400" />
               <span className="font-bold text-white">Raw Diagnostic JSON Report</span>
-              <span className="text-xs px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+              <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                 {auditData ? `${auditData.execution_time_ms}ms execution` : "237.92ms execution"}
               </span>
             </div>

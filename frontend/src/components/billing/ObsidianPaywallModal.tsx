@@ -157,7 +157,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
       aria-labelledby="paywall-title"
       className="fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
     >
-      <div className="relative w-full max-w-5xl rounded-3xl bg-[#09090C] border border-emerald-500/30 shadow-[0_0_60px_rgba(16,185,129,0.15)] p-6 sm:p-10 space-y-8 text-white my-8">
+      <div className="relative w-full max-w-5xl rounded-2xl bg-[#0A0A0C] border border-emerald-500/30 shadow-[0_0_60px_rgba(16,185,129,0.15)] p-6 sm:p-10 space-y-8 text-white my-8">
         {/* Subtle Ambient Radial Glow */}
         <div className="absolute -top-32 -right-32 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -left-32 w-80 h-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
@@ -165,7 +165,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
         {/* Modal Header: High-Impact GMV Protection & ROI Framing */}
         <div className="text-center space-y-3.5 max-w-2xl mx-auto relative z-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-            <ShieldCheck size={14} className="text-emerald-400" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span>37.3x Average GMV Protection ROI</span>
           </div>
 
@@ -230,13 +230,13 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
                 key={tier.id}
                 className={`relative rounded-2xl flex flex-col justify-between p-6 sm:p-7 transition-all duration-300 ${
                   tier.isPopular
-                    ? "bg-[#0E1713] border-2 border-emerald-500/70 shadow-[0_0_40px_rgba(16,185,129,0.25)] md:-translate-y-2"
-                    : "bg-[#0E0E12] border border-white/[0.08] hover:border-emerald-500/30"
+                    ? "bg-[#0E1217] border-2 border-emerald-500/70 shadow-[0_0_40px_rgba(16,185,129,0.25)] md:-translate-y-2"
+                    : "bg-[#0A0A0C] border border-white/[0.08] hover:border-emerald-500/30"
                 }`}
               >
                 {tier.isPopular && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-0.5 rounded-full bg-emerald-500 text-black font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
-                    <Sparkles size={11} className="fill-current" />
+                    <Sparkles className="w-3 h-3 fill-current" />
                     <span>Most Popular</span>
                   </div>
                 )}
@@ -261,7 +261,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
                         {tier.annualSavings}
                       </div>
                     )}
-                    <span className="inline-block mt-2.5 text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/25">
+                    <span className="inline-block mt-2.5 text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                       {tier.domainLimit}
                     </span>
                   </div>
@@ -270,7 +270,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
                   <ul className="space-y-2.5 pt-1 text-xs text-zinc-300 font-sans">
                     {tier.features.map((feat, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
-                        <Check size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                         <span className="leading-snug">{feat}</span>
                       </li>
                     ))}
@@ -291,13 +291,13 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 size={15} className="animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                         <span>Connecting to Stripe...</span>
                       </>
                     ) : (
                       <>
                         <span>Activate {tier.name} Protection</span>
-                        <ArrowRight size={14} />
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </>
                     )}
                   </button>
@@ -315,7 +315,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
               href="mailto:enterprise@inboundcheck.com?subject=Enterprise%20InboundCheck%20Inquiry"
               className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-4 decoration-emerald-500/50 hover:decoration-emerald-400 transition-colors inline-flex items-center gap-1"
             >
-              <Building2 size={13} />
+              <Building2 className="w-3.5 h-3.5" />
               <span>Contact Enterprise Team</span>
             </a>
           </p>
@@ -324,11 +324,11 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
         {/* Security & Instant Activation Guarantee */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4 text-xs text-zinc-400 border-t border-white/[0.08] relative z-10">
           <div className="flex items-center gap-2">
-            <ShieldCheck size={16} className="text-emerald-400" />
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>256-bit Encrypted Stripe Checkout</span>
           </div>
           <div className="flex items-center gap-2">
-            <Zap size={16} className="text-emerald-400" />
+            <Zap className="w-4 h-4 text-emerald-400" />
             <span>Instant Provisioning &amp; Live Domain Unlocking</span>
           </div>
           {onClose && (

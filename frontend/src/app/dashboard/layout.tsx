@@ -100,9 +100,9 @@ export default function DashboardLayout({
   const isActive = (path: string) => pathname === path;
 
   return (
-    <div className="min-h-screen bg-[#08080A] text-white flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen bg-[#000000] text-white flex flex-col md:flex-row font-sans">
       {/* Mobile Top Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/[0.08] bg-[#0E0E12]/95 backdrop-blur-md sticky top-0 z-50">
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/[0.08] bg-[#0A0A0C]/95 backdrop-blur-md sticky top-0 z-50">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.25)]">
             <svg
@@ -145,8 +145,8 @@ export default function DashboardLayout({
 
       {/* Streamlined Enterprise Governance Sidebar */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-40 h-screen w-64 bg-[#08080A] border-r border-white/[0.08] flex flex-col justify-between p-4 transition-transform duration-200 ${
-          mobileMenuOpen ? "translate-x-0 bg-[#0E0E12]" : "-translate-x-full md:translate-x-0"
+        className={`fixed md:sticky top-0 left-0 z-40 h-screen w-64 bg-[#0A0A0C] border-r border-white/[0.08] flex flex-col justify-between p-4 transition-transform duration-200 ${
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
         <div className="space-y-6 overflow-y-auto pr-1">
@@ -189,10 +189,10 @@ export default function DashboardLayout({
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
                   isActive("/dashboard")
                     ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    : "text-zinc-400 hover:text-white border border-transparent"
                 }`}
               >
-                <LayoutDashboard strokeWidth={1.75} size={18} />
+                <LayoutDashboard strokeWidth={2} size={18} />
                 <span>Overview</span>
               </Link>
               <Link
@@ -200,10 +200,10 @@ export default function DashboardLayout({
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
                   isActive("/dashboard/shopify")
                     ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    : "text-zinc-400 hover:text-white border border-transparent"
                 }`}
               >
-                <ShoppingBag strokeWidth={1.75} size={18} />
+                <ShoppingBag strokeWidth={2} size={18} />
                 <span>Shopify Sync</span>
               </Link>
             </div>
@@ -218,10 +218,10 @@ export default function DashboardLayout({
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
                   isActive("/dashboard/inspector")
                     ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    : "text-zinc-400 hover:text-white border border-transparent"
                 }`}
               >
-                <TerminalSquare strokeWidth={1.75} size={18} />
+                <TerminalSquare strokeWidth={2} size={18} />
                 <span>DNS Inspector</span>
               </Link>
               <Link
@@ -229,11 +229,11 @@ export default function DashboardLayout({
                 className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
                   isActive("/dashboard/radar")
                     ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    : "text-zinc-400 hover:text-white border border-transparent"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Radio strokeWidth={1.75} size={18} />
+                  <Radio strokeWidth={2} size={18} />
                   <span>Blacklist Radar</span>
                 </div>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -243,10 +243,10 @@ export default function DashboardLayout({
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
                   isActive("/dashboard/content-lab")
                     ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    : "text-zinc-400 hover:text-white border border-transparent"
                 }`}
               >
-                <Sparkles strokeWidth={1.75} size={18} />
+                <Sparkles strokeWidth={2} size={18} />
                 <span>AI Content Lab</span>
               </Link>
             </div>
@@ -261,10 +261,10 @@ export default function DashboardLayout({
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
                   isActive("/dashboard/settings")
                     ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    : "text-zinc-400 hover:text-white border border-transparent"
                 }`}
               >
-                <Sliders strokeWidth={1.75} size={18} />
+                <Sliders strokeWidth={2} size={18} />
                 <span>Alerts & Settings</span>
               </Link>
               <Link
@@ -272,10 +272,10 @@ export default function DashboardLayout({
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
                   isActive("/dashboard/billing")
                     ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white"
+                    : "text-zinc-400 hover:text-white border border-transparent"
                 }`}
               >
-                <CreditCard strokeWidth={1.75} size={18} />
+                <CreditCard strokeWidth={2} size={18} />
                 <span>Billing Portal</span>
               </Link>
             </div>
@@ -316,7 +316,7 @@ export default function DashboardLayout({
             onClick={handleSignOut}
             className="w-full flex items-center gap-2 px-3 py-1.5 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-white/[0.02] transition-colors duration-150 cursor-pointer text-xs font-sans"
           >
-            <LogOut strokeWidth={1.75} size={15} />
+            <LogOut strokeWidth={2} size={15} />
             <span>Logout</span>
           </button>
         </div>

@@ -352,7 +352,7 @@ export default function BillingPortalPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <CreditCard className="w-5 h-5 text-emerald-400" />
             Stripe Billing & Subscription Governance
           </h1>
@@ -365,7 +365,7 @@ export default function BillingPortalPage() {
           type="button"
           onClick={handleOpenStripePortal}
           disabled={isLoadingPortal}
-          className="bg-[#14141A] hover:bg-[#1E1E26] border border-emerald-500/30 text-emerald-400 font-semibold px-4 py-2 rounded-lg shadow-sm transition-all text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-mono"
+          className="min-h-[44px] bg-[#14141A] hover:bg-[#1E1E26] border border-emerald-500/30 text-emerald-400 font-semibold px-4 py-2 rounded-xl shadow-sm transition-all text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-mono"
         >
           {isLoadingPortal ? (
             <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
@@ -651,29 +651,29 @@ export default function BillingPortalPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="text-zinc-500 border-b border-white/[0.04] text-[10px] uppercase bg-[#08080A]">
+            <table className="w-full text-left text-xs font-mono border-collapse">
+              <thead className="sticky top-0 z-10 bg-[#0E1217]/95 backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                 <tr>
-                  <th className="px-5 py-3.5 font-semibold">Invoice Number</th>
-                  <th className="px-5 py-3.5 font-semibold">Billing Period</th>
-                  <th className="px-5 py-3.5 font-semibold">Amount</th>
-                  <th className="px-5 py-3.5 font-semibold">Status</th>
-                  <th className="px-5 py-3.5 font-semibold text-right">Action</th>
+                  <th className="py-3 px-4 font-semibold text-left">Invoice Number</th>
+                  <th className="py-3 px-4 font-semibold text-left">Billing Period</th>
+                  <th className="py-3 px-4 font-semibold text-left">Amount</th>
+                  <th className="py-3 px-4 font-semibold text-left">Status</th>
+                  <th className="py-3 px-4 font-semibold text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04] text-zinc-300">
+              <tbody className="divide-y divide-white/[0.05] text-zinc-300">
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-white/[0.01] transition">
-                    <td className="px-5 py-4 font-bold text-white">{inv.invoice_number}</td>
-                    <td className="px-5 py-4 text-zinc-400">{inv.billing_period}</td>
-                    <td className="px-5 py-4 font-bold text-white">{inv.amount}</td>
-                    <td className="px-5 py-4">
-                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
+                  <tr key={inv.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3.5 px-4 text-xs font-mono font-bold text-white">{inv.invoice_number}</td>
+                    <td className="py-3.5 px-4 text-xs font-mono text-zinc-400">{inv.billing_period}</td>
+                    <td className="py-3.5 px-4 text-xs font-mono font-bold text-white">{inv.amount}</td>
+                    <td className="py-3.5 px-4 text-xs font-mono">
+                      <span className="text-[10px] font-mono font-semibold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
                         {inv.status.toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-right">
+                    <td className="py-3.5 px-4 text-xs font-mono text-right">
                       {inv.pdf_url && inv.pdf_url !== "#" ? (
                         <a
                           href={inv.pdf_url}
@@ -685,7 +685,7 @@ export default function BillingPortalPage() {
                           View PDF
                         </a>
                       ) : (
-                        <span className="text-zinc-600 text-xs">—</span>
+                        <span className="text-zinc-600 text-xs font-mono">Processing</span>
                       )}
                     </td>
                   </tr>

@@ -35,7 +35,7 @@ const BADGE_VARIANTS = {
   amber: "bg-amber-500/10 text-amber-400 border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.2)]",
   cyan: "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.2)]",
   rose: "bg-rose-500/10 text-rose-400 border border-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.2)]",
-  neutral: "bg-slate-800/60 text-slate-400 border border-slate-700/40 font-medium px-2.5 py-0.5 rounded-full text-xs",
+  neutral: "bg-white/[0.04] text-zinc-400 border border-white/[0.08]",
 };
 
 const DOT_VARIANTS = {
@@ -43,12 +43,12 @@ const DOT_VARIANTS = {
   amber: "bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)]",
   cyan: "bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]",
   rose: "bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.8)]",
-  neutral: "bg-slate-400 shadow-none",
+  neutral: "bg-zinc-400 shadow-none",
 };
 
 /**
  * Premium UIverse-inspired Glassmorphic Card styled strictly for the InboundCheck theme.
- * Base: Midnight Obsidian (#0a0d12 / #0f141c) with backdrop blur.
+ * Base: Midnight Obsidian (#0A0A0C) with backdrop blur.
  * Accents: Shopify Emerald (#10B981) neon glow.
  */
 export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
@@ -68,7 +68,7 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`group relative overflow-hidden rounded-2xl border border-emerald-500/15 bg-[#0f141c]/90 backdrop-blur-md p-6 transition-all duration-300 hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)] ${
+      className={`group relative overflow-hidden rounded-2xl border border-emerald-500/15 bg-[#0A0A0C]/90 backdrop-blur-md p-6 transition-all duration-300 hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)] ${
         onClick ? "cursor-pointer" : ""
       } ${className}`}
     >

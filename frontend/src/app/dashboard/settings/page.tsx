@@ -339,8 +339,8 @@ function SettingsContent() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            <Sliders className="w-5 h-5 text-emerald-400" strokeWidth={1.75} />
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+            <Sliders className="w-5 h-5 text-emerald-400" strokeWidth={2} />
             Alerts & Tenant Configuration
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
@@ -350,7 +350,7 @@ function SettingsContent() {
       </div>
 
       {/* Sub-Navigation Tab Bar */}
-      <div className="flex items-center gap-1.5 p-1 bg-[#0E0E12]/80 backdrop-blur-md border border-zinc-800 rounded-xl font-mono text-xs overflow-x-auto">
+      <div className="flex items-center gap-1.5 p-1 bg-[#0E0E12]/80 backdrop-blur-md border border-white/[0.08] rounded-xl font-mono text-xs overflow-x-auto">
         <button
           type="button"
           onClick={() => switchTab("general")}
@@ -360,7 +360,7 @@ function SettingsContent() {
               : "text-zinc-400 hover:text-white border-transparent"
           }`}
         >
-          <ShoppingBag className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <ShoppingBag className="w-3.5 h-3.5" strokeWidth={2} />
           Store & Security
         </button>
 
@@ -373,7 +373,7 @@ function SettingsContent() {
               : "text-zinc-400 hover:text-white border-transparent"
           }`}
         >
-          <Radio className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <Radio className="w-3.5 h-3.5" strokeWidth={2} />
           Telegram Alerts & Rules
         </button>
 
@@ -386,7 +386,7 @@ function SettingsContent() {
               : "text-zinc-400 hover:text-white border-transparent"
           }`}
         >
-          <Server className="w-3.5 h-3.5" strokeWidth={1.75} />
+          <Server className="w-3.5 h-3.5" strokeWidth={2} />
           DNS Auto-Fixer APIs
         </button>
       </div>
@@ -463,20 +463,20 @@ function SettingsContent() {
             </GlassEmeraldCard>
 
             {/* Developer & API Keys (Collapsible Accordion) */}
-            <div className="border border-zinc-800/80 rounded-2xl bg-[#0B0B0E]/60 overflow-hidden transition-all duration-200">
+            <div className="border border-white/[0.08] rounded-2xl bg-[#0E1217] overflow-hidden transition-all duration-200">
               <button
                 type="button"
                 onClick={() => setIsDevAccordionOpen(!isDevAccordionOpen)}
                 className="w-full p-4 flex items-center justify-between text-left hover:bg-white/[0.02] transition cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/[0.08] flex items-center justify-center">
                     <Key className="w-4 h-4 text-emerald-400" />
                   </div>
                   <div>
                     <div className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
                       Developer & API Keys
-                      <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
+                      <span className="text-[10px] font-mono font-semibold text-zinc-400 bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.08]">
                         Advanced
                       </span>
                     </div>
@@ -493,13 +493,13 @@ function SettingsContent() {
               </button>
 
               {isDevAccordionOpen && (
-                <div className="p-5 border-t border-zinc-800/80 bg-[#08080A]/80 space-y-4 animate-fadeIn">
+                <div className="p-5 border-t border-white/[0.08] bg-[#0A0A0C]/80 space-y-4 animate-fadeIn">
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-zinc-300">
                         InboundCheck REST API Authorization Key
                       </span>
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="text-[10px] font-mono font-semibold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         Bearer Token
                       </span>
                     </div>
