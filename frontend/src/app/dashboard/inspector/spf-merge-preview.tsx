@@ -435,8 +435,9 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                   Proposed Consolidated Record (TXT @)
                 </span>
                 <button
+                  type="button"
                   onClick={() => handleCopy(plan.proposed_record!)}
-                  className="text-xs flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition"
+                  className="relative text-xs flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition cursor-pointer p-1.5 rounded-lg before:absolute before:-inset-2 before:content-[''] focus:outline-none"
                 >
                   {copied ? (
                     <>
@@ -450,7 +451,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                 </button>
               </div>
 
-              <div className="p-4 rounded-xl bg-black/80 border border-emerald-500/30 font-mono text-xs text-emerald-300 overflow-x-auto select-all">
+              <div className="p-4 rounded-xl bg-black/80 border border-emerald-500/30 font-mono text-xs text-emerald-300 overflow-x-auto select-all selection:bg-emerald-500/30 selection:text-white">
                 {plan.proposed_record}
               </div>
             </div>

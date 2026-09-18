@@ -360,7 +360,7 @@ export function StoreSettingsDrawer({
             type="button"
             onClick={onClose}
             disabled={isSaving}
-            className="bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 font-medium px-4 py-2 rounded-xl transition cursor-pointer text-xs"
+            className="bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/60 font-medium px-4 py-2 rounded-xl transition cursor-pointer text-xs"
           >
             Cancel
           </button>

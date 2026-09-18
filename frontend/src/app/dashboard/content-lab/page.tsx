@@ -306,7 +306,7 @@ export default function AIContentLabPage() {
                 setSelectedPreset("");
               }}
               placeholder="<p>Hi {{ customer.first_name }},</p><p>Thank you for buying from our store! ACT NOW to claim 100% FREE shipping on your next purchase...</p>"
-              className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-200 font-mono text-xs focus:outline-none focus:border-emerald-500 leading-relaxed"
+              className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-200 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/30 focus:border-emerald-500/60 leading-relaxed transition-all"
             />
           </div>
 
@@ -350,6 +350,33 @@ export default function AIContentLabPage() {
           )}
         </GlassEmeraldCard>
       </div>
+
+      {/* Empty State / Quick-Start DTC Sample Loader */}
+      {!auditResult && variants.length === 0 && !isAuditing && !isGeneratingVariants && (
+        <div className="p-8 rounded-2xl bg-[#0A0A0C]/80 border border-zinc-800/80 backdrop-blur-xl text-center space-y-4 max-w-2xl mx-auto my-4 shadow-xl animate-fadeIn">
+          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-base font-semibold text-white">
+              No Active Template Audit
+            </h3>
+            <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+              Test your transactional confirmation emails for 2024 spam trigger words and formatting friction while preserving all Shopify Liquid variables.
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => handleSelectPreset("order_confirmation")}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer active:scale-95 min-h-[44px]"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Load Sample DTC Receipt</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 3. Live Audit Results Panel */}
       {auditResult && (

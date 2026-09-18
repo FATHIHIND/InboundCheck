@@ -18,7 +18,9 @@ import {
   Shield,
   Sparkles,
   Sliders,
-  Edit3
+  Edit3,
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
@@ -77,6 +79,7 @@ export default function ShopifyHubPage() {
   const [alignmentError, setAlignmentError] = useState<string | null>(null);
 
   const [showWizardModal, setShowWizardModal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // 1. Data-State Contract for Connected Shopify Stores
   const {
@@ -190,6 +193,19 @@ export default function ShopifyHubPage() {
     }
   };
 
+  const handleSyncStore = async () => {
+    setIsSyncing(true);
+    try {
+      await reloadStores();
+      await reloadFailoverLogs();
+      if (senderEmail && customDomain) {
+        await handleAuditAlignment();
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header & Actions */}
@@ -205,6 +221,25 @@ export default function ShopifyHubPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSyncStore}
+            disabled={isSyncing}
+            className="bg-zinc-900/80 hover:bg-zinc-800 disabled:opacity-50 text-zinc-200 border border-zinc-700/60 font-medium px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[36px]"
+          >
+            {isSyncing ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                <span>Syncing Store...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Sync Store</span>
+              </>
+            )}
+          </button>
+
           <EmeraldHoverButton
             onClick={() => setShowSettingsDrawer(true)}
             size="sm"
@@ -365,7 +400,7 @@ export default function ShopifyHubPage() {
             <button
               type="button"
               onClick={() => setShowSettingsDrawer(true)}
-              className="bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 font-medium px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              className="bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/60 font-medium px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <Sliders className="w-3.5 h-3.5 text-emerald-400" />
               Edit Store
@@ -478,7 +513,7 @@ export default function ShopifyHubPage() {
         {failoverLogsResource.state === "ready" && (
           <div className="overflow-x-auto max-h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
             <table className="w-full text-left text-xs font-mono">
-              <thead className="text-zinc-400 border-b border-zinc-800 text-[10px] uppercase bg-[#0E0E12] sticky top-0 z-10 backdrop-blur-sm">
+              <thead className="text-zinc-400 border-b border-zinc-800 text-[10px] uppercase bg-[#0E1217]/95 backdrop-blur-md sticky top-0 z-10">
                 <tr>
                   <th className="px-5 py-3.5 font-semibold">Order ID</th>
                   <th className="px-5 py-3.5 font-semibold">Domain</th>

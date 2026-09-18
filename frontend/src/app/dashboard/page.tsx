@@ -625,7 +625,8 @@ export default function DashboardOverviewPage() {
               setAddError(null);
               setShowAddModal(true);
             }}
-            className="p-2 bg-[#0E0E12] hover:bg-[#14141A] border border-white/[0.08] text-white rounded-xl transition cursor-pointer"
+            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2.5 bg-[#0E0E12] hover:bg-[#14141A] border border-white/[0.08] text-white rounded-xl transition cursor-pointer"
+            aria-label="Add Monitored Store"
             title="Add Monitored Store"
           >
             <Plus className="w-4 h-4" />
@@ -792,8 +793,8 @@ export default function DashboardOverviewPage() {
               )}
             </div>
             <div className="space-y-1 relative z-10">
-              <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2">
-                <span>{protectedGmvFormatted}</span>
+              <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2 tabular-nums">
+                <span className="tabular-nums">{protectedGmvFormatted}</span>
                 <span className="text-xs font-mono text-zinc-400 font-normal">/ mo</span>
               </div>
               <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
@@ -857,8 +858,8 @@ export default function DashboardOverviewPage() {
             <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
           </div>
           <div className="space-y-1 relative z-10">
-            <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2">
-              <span>{stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10/10 Probed"}</span>
+            <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2 tabular-nums">
+              <span className="tabular-nums">{stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10/10 Probed"}</span>
             </div>
             <div className="text-[11px] text-zinc-400 font-mono space-y-0.5">
               <div className="flex items-center gap-1.5">
@@ -893,7 +894,7 @@ export default function DashboardOverviewPage() {
             <Activity className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="space-y-1 relative z-10">
-            <div className="text-3xl font-bold text-emerald-400 font-mono tracking-tight">
+            <div className="text-3xl font-bold text-emerald-400 font-mono tracking-tight tabular-nums">
               {forecastRiskDisplay}
             </div>
             <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
@@ -1158,8 +1159,10 @@ export default function DashboardOverviewPage() {
                     className="hover:bg-white/[0.02] transition-colors"
                   >
                     <td className="py-3.5 px-4 text-xs font-mono font-bold text-white flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {store.domain_name}
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      <span className="truncate max-w-[180px] sm:max-w-[300px] inline-block" title={store.domain_name}>
+                        {store.domain_name}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono text-zinc-400 text-[11px]">{store.shopify_store}</td>
                     <td className="py-3.5 px-4 text-xs font-mono">

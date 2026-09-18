@@ -60,6 +60,12 @@
   justify-content: center;
 }
 
+/* Micro-Typography: Tabular Numbers Baseline */
+.metric-value,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 * {
   box-sizing: border-box;
 }

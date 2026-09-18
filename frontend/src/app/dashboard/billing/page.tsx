@@ -507,7 +507,7 @@ export default function BillingPortalPage() {
                 }`}
               >
                 {tier.badge && (
-                  <div className="absolute -top-2.5 right-4 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500 text-zinc-950 shadow-sm">
+                  <div className="absolute -top-2.5 right-4 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500 text-zinc-950 shadow-sm">
                     {tier.badge}
                   </div>
                 )}
@@ -656,7 +656,7 @@ export default function BillingPortalPage() {
                 <tr>
                   <th className="py-3 px-4 font-semibold text-left">Invoice Number</th>
                   <th className="py-3 px-4 font-semibold text-left">Billing Period</th>
-                  <th className="py-3 px-4 font-semibold text-left">Amount</th>
+                  <th className="py-3 px-4 font-semibold text-right">Amount</th>
                   <th className="py-3 px-4 font-semibold text-left">Status</th>
                   <th className="py-3 px-4 font-semibold text-right">Action</th>
                 </tr>
@@ -666,7 +666,7 @@ export default function BillingPortalPage() {
                   <tr key={inv.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-3.5 px-4 text-xs font-mono font-bold text-white">{inv.invoice_number}</td>
                     <td className="py-3.5 px-4 text-xs font-mono text-zinc-400">{inv.billing_period}</td>
-                    <td className="py-3.5 px-4 text-xs font-mono font-bold text-white">{inv.amount}</td>
+                    <td className="py-3.5 px-4 text-xs font-mono font-bold text-white text-right tabular-nums">{inv.amount}</td>
                     <td className="py-3.5 px-4 text-xs font-mono">
                       <span className="text-[10px] font-mono font-semibold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5" />

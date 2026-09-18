@@ -503,7 +503,7 @@ function SettingsContent() {
                         Bearer Token
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400">
+                    <p id="api-key-hint" className="text-xs text-zinc-400">
                       Use this secret bearer key to query deliverability endpoints programmatically from your backend systems.
                     </p>
                   </div>
@@ -515,6 +515,8 @@ function SettingsContent() {
                           type={showApiKey ? "text" : "password"}
                           value={apiKey}
                           readOnly
+                          aria-describedby="api-key-hint"
+                          aria-label="InboundCheck REST API Authorization Key"
                           className="w-full pl-3.5 pr-10 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-emerald-400 font-mono text-xs select-all focus:outline-none"
                         />
                         <button
@@ -593,27 +595,31 @@ function SettingsContent() {
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
                 <div className="space-y-1.5">
-                  <label className="block font-semibold text-zinc-300">Telegram Bot Token</label>
+                  <label htmlFor="telegram-bot-token" className="block font-semibold text-zinc-300">Telegram Bot Token</label>
                   <input
+                    id="telegram-bot-token"
                     type="text"
                     value={telegramBotToken}
                     onChange={(e) => setTelegramBotToken(e.target.value)}
                     placeholder="7198234891:AAH8Fj90qWz1x9_example"
+                    aria-describedby="telegram-bot-token-hint"
                     className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
                   />
-                  <span className="text-[10px] text-zinc-500 block font-mono">Obtained from @BotFather on Telegram</span>
+                  <span id="telegram-bot-token-hint" className="text-[10px] text-zinc-500 block font-mono">Obtained from @BotFather on Telegram</span>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block font-semibold text-zinc-300">Telegram Chat ID / Channel ID</label>
+                  <label htmlFor="telegram-chat-id" className="block font-semibold text-zinc-300">Telegram Chat ID / Channel ID</label>
                   <input
+                    id="telegram-chat-id"
                     type="text"
                     value={telegramChatId}
                     onChange={(e) => setTelegramChatId(e.target.value)}
                     placeholder="@inboundcheck_alerts or -1001982348712"
+                    aria-describedby="telegram-chat-id-hint"
                     className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
                   />
-                  <span className="text-[10px] text-zinc-500 block font-mono">Channel handle or numeric chat ID</span>
+                  <span id="telegram-chat-id-hint" className="text-[10px] text-zinc-500 block font-mono">Channel handle or numeric chat ID</span>
                 </div>
               </div>
 

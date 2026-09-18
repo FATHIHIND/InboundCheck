@@ -125,7 +125,12 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
 
       {/* Dynamic Glowing Line SVG Graphic with Hover Crosshair */}
       <div className="relative w-full overflow-hidden pt-2">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
+        <svg
+          role="img"
+          aria-label="30-day domain reputation trajectory and 72-hour forecast chart"
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full h-auto overflow-visible"
+        >
           <defs>
             <linearGradient id="reputationWaveGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10B981" stopOpacity="0.38" />

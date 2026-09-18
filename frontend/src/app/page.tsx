@@ -48,7 +48,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How long does the 1-Click Cloudflare & GoDaddy DNS auto-fix take?",
-    a: "Under 5 seconds. Connect your Cloudflare API token or GoDaddy key, click 'Auto-Insert Records', and our backend engine runs pre-flight conflict checks before injecting records directly into your DNS zone—with zero manual zone file editing required.",
+    a: "Under 5 seconds. Connect your Cloudflare API token or GoDaddy key, click '1-Click Cryptographic Auto-Remediation', and our backend engine runs pre-flight conflict checks before injecting verified records directly into your DNS zone—with zero manual zone file editing required.",
   },
   {
     q: "How does the continuous Blacklist Radar and Telegram alerting protect my revenue?",
@@ -178,6 +178,11 @@ export default function LandingPage() {
 
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
+  };
+
+  const getSignupHref = (tier: string) => {
+    const trimmed = domainInput.trim();
+    return trimmed ? `/auth/signup?tier=${tier}&domain=${encodeURIComponent(trimmed)}` : `/auth/signup?tier=${tier}`;
   };
 
   // Structured Data Schema.org with Technical SEO, GEO & AEO Enhancements (CITES Compliant)
@@ -517,21 +522,21 @@ export default function LandingPage() {
           {/* Interactive Live Bait Domain Health Check */}
           <FadeInUp delay={0.4} className="w-full max-w-xl mx-auto mt-8 mb-14">
             <div className="p-2.5 rounded-2xl border border-white/10 bg-[#0A0A0C]/90 backdrop-blur-xl shadow-2xl">
-              <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="relative flex-1">
+              <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+                <div className="relative flex-1 min-w-0 w-full">
                   <Globe className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={domainInput}
                     onChange={(e) => setDomainInput(e.target.value)}
                     placeholder="enter your store sending domain (e.g. store.com)"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#000000] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full min-w-0 pl-10 pr-4 py-2.5 bg-[#000000] border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-emerald-500 transition-colors"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isAuditing}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 disabled:opacity-60 min-h-[44px]"
+                  className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 disabled:opacity-60 min-h-[44px]"
                 >
                   <Zap className="w-3.5 h-3.5 fill-current" />
                   <span>{isAuditing ? "Analyzing Risk..." : "Analyze Revenue Risk"}</span>
@@ -701,7 +706,9 @@ export default function LandingPage() {
         </FadeInUp>
 
         <FadeInUp delay={0.2} className="w-full flex justify-center">
-          <ShopifyAuditPasses />
+          <div id="shopify-sync" className="w-full flex justify-center">
+            <ShopifyAuditPasses />
+          </div>
         </FadeInUp>
       </section>
 
@@ -1135,8 +1142,8 @@ export default function LandingPage() {
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-white tracking-tight">
               Simple Pricing, No Surprises.
             </h2>
-            <p className="text-sm md:text-base text-gray-400 max-w-md mx-auto">
-              Choose a plan tailored to your store volume with continuous deliverability protection.
+            <p className="text-sm md:text-base text-gray-400 max-w-xl mx-auto">
+              Choose a plan tailored to your store volume with continuous deliverability protection. Preserves ~$37.30 in Shopify GMV per $1 invested.
             </p>
           </div>
         </FadeInUp>
@@ -1179,7 +1186,7 @@ export default function LandingPage() {
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>Multi-Resolver Automated Audits</span>
+                    <span>10,000 automated transactional email delivery audits / mo</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -1190,7 +1197,7 @@ export default function LandingPage() {
 
               <div className="pt-8 mt-auto">
                 <Link
-                  href="/auth/signup?tier=starter"
+                  href={getSignupHref("starter")}
                   className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-xl bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
                   Start 3-Day Free Trial
@@ -1237,7 +1244,7 @@ export default function LandingPage() {
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>Revenue &amp; Dispute Risk Analytics (Protected GMV)</span>
+                    <span>Revenue &amp; Dispute Risk Analytics (Preserves ~$37.30 in Shopify GMV per $1 invested)</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -1252,7 +1259,7 @@ export default function LandingPage() {
 
               <div className="pt-8 mt-auto">
                 <Link
-                  href="/auth/signup?tier=growth"
+                  href={getSignupHref("growth")}
                   className="w-full min-h-[44px] inline-flex items-center justify-center py-3.5 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_25px_rgba(16,185,129,0.4)] cursor-pointer"
                 >
                   Start 3-Day Free Trial
@@ -1313,7 +1320,7 @@ export default function LandingPage() {
 
               <div className="pt-8 mt-auto">
                 <Link
-                  href="/auth/signup?tier=agency"
+                  href={getSignupHref("agency")}
                   className="w-full min-h-[44px] inline-flex items-center justify-center py-3 px-5 rounded-xl bg-[#1F1F22] hover:bg-[#2A2A2D] text-white text-sm font-medium border border-white/10 transition-all hover:border-emerald-500/40"
                 >
                   Start 3-Day Free Trial
@@ -1410,7 +1417,7 @@ export default function LandingPage() {
               </p>
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link
-                  href="/auth/signup"
+                  href={domainInput.trim() ? `/auth/signup?domain=${encodeURIComponent(domainInput.trim())}` : "/auth/signup"}
                   className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm px-8 py-3.5 rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.35)] transition-all active:scale-95"
                 >
                   <span>Start 3-Day Free Trial</span>
@@ -1433,7 +1440,7 @@ export default function LandingPage() {
               <ul className="space-y-2 text-gray-400">
                 <li><a href="#dns-inspector" className="hover:text-white transition">DNS Inspector</a></li>
                 <li><a href="#radar" className="hover:text-white transition">Blacklist Radar</a></li>
-                <li><a href="#how-it-works" className="hover:text-white transition">Shopify Sync</a></li>
+                <li><a href="#shopify-sync" className="hover:text-white transition">Shopify Sync</a></li>
                 <li><a href="#pricing" className="hover:text-white transition">Pricing</a></li>
               </ul>
             </div>
@@ -1451,7 +1458,7 @@ export default function LandingPage() {
             <div className="space-y-3">
               <div className="font-semibold text-white tracking-wide">Documentation</div>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="#how-it-works" className="hover:text-white transition">Google 2024 Rulebook</a></li>
+                <li><a href="#blindspot" className="hover:text-white transition">Google 2024 Rulebook</a></li>
                 <li><a href="#dns-inspector" className="hover:text-white transition">SPF 10-Lookup Guide</a></li>
                 <li><a href="#dns-inspector" className="hover:text-white transition">DKIM Selector Setup</a></li>
                 <li><a href="#radar" className="hover:text-white transition">RBL Delisting Engine</a></li>
@@ -1461,7 +1468,7 @@ export default function LandingPage() {
             <div className="space-y-3">
               <div className="font-semibold text-white tracking-wide">Connect</div>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="https://t.me/InboundCheckBot" target="_blank" rel="noreferrer" className="hover:text-white transition flex items-center gap-1.5"><Send size={13} /> Telegram Bot</a></li>
+                <li><a href="https://t.me/InboundCheckBot" target="_blank" rel="noopener noreferrer" className="hover:text-white transition flex items-center gap-1.5"><Send size={13} /> Telegram Bot</a></li>
                 <li><a href="mailto:support@inboundcheck.com" className="hover:text-white transition">support@inboundcheck.com</a></li>
                 <li>
                   <button

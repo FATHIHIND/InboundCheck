@@ -312,13 +312,14 @@ export default function BlacklistRadarPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => runScan()}
-              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded border border-rose-500/40 text-[11px] transition"
+              className="relative px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded border border-rose-500/40 text-[11px] transition before:absolute before:-inset-2 before:content-[''] cursor-pointer"
             >
               Retry
             </button>
             <button
               onClick={() => setError(null)}
-              className="text-zinc-400 hover:text-white text-xs px-2 py-1 rounded"
+              aria-label="Dismiss error notification"
+              className="relative text-zinc-400 hover:text-white text-xs px-2 py-1 rounded before:absolute before:-inset-2 before:content-[''] cursor-pointer"
             >
               ✕
             </button>
@@ -613,7 +614,8 @@ export default function BlacklistRadarPage() {
                                 e.stopPropagation();
                                 toggleRow(rbl.provider_id);
                               }}
-                              className="p-0.5 rounded text-zinc-400 hover:text-emerald-400 transition cursor-pointer"
+                              className="relative p-1 rounded text-zinc-400 hover:text-emerald-400 transition cursor-pointer before:absolute before:-inset-2 before:content-['']"
+                              aria-label={isExpanded ? "Collapse row details" : "Expand row details"}
                               title={isExpanded ? "Collapse Row" : "Expand Row"}
                             >
                               <ChevronDown
@@ -634,34 +636,34 @@ export default function BlacklistRadarPage() {
                         </td>
                         <td className="py-3.5 px-4 text-xs font-mono text-zinc-300">{rbl.zone}</td>
                         <td className="py-3.5 px-4 text-xs font-mono">
-                          <span className="text-[10px] uppercase font-mono font-semibold px-2.5 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-white/[0.08]">
+                          <span className="text-[11px] font-mono uppercase tracking-wider font-semibold px-2.5 py-0.5 rounded-md bg-zinc-800/80 text-zinc-300 border border-white/[0.08]">
                             {rbl.target_type}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-xs font-mono">
                           {isListed ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/30">
                               <XCircle className="w-3.5 h-3.5" />
                               LISTED
                             </span>
                           ) : isUnknown ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold font-mono text-amber-400 bg-amber-500/10 border border-amber-500/30">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30">
                               <AlertCircle className="w-3.5 h-3.5" />
                               UNKNOWN
                             </span>
                           ) : isError ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold font-mono text-zinc-400 bg-zinc-800 border border-zinc-700">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-zinc-400 bg-zinc-800 border border-zinc-700">
                               <HelpCircle className="w-3.5 h-3.5" />
                               ERROR
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               CLEAN
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-mono text-zinc-300">
+                        <td className="py-3.5 px-4 text-xs font-mono text-zinc-300 tabular-nums">
                           {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "--"}
                         </td>
                         <td className="py-3.5 px-4 text-xs font-mono text-right" onClick={(e) => e.stopPropagation()}>

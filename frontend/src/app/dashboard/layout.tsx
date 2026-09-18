@@ -173,7 +173,7 @@ export default function DashboardLayout({
                   PRO
                 </span>
               </div>
-              <span className="text-xs text-zinc-500 font-mono tracking-wide">DNS & Deliverability Hub</span>
+              <span className="text-xs text-zinc-400 font-mono tracking-wide">DNS & Deliverability Hub</span>
             </div>
           </Link>
 

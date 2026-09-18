@@ -205,7 +205,7 @@ function DNSInspectorContent() {
       } else {
         const body = await res.json().catch(() => ({}));
         setAuditError({
-          message: body.detail || "DNS resolution failed for the specified domain",
+          message: body.detail || "DNS resolution failed for the specified domain. Verify your authoritative nameservers, DNS zone propagation, and published TXT/CNAME records.",
           status: res.status,
           retryable: true,
           endpoint: "/api/v1/dns/audit",
@@ -213,7 +213,7 @@ function DNSInspectorContent() {
         setAuditData(null);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to reach DNS diagnostic endpoint";
+      const message = err instanceof Error ? err.message : "Failed to reach DNS diagnostic endpoint. Ensure domain is a valid FQDN and authoritative nameservers respond to RFC 1035 UDP queries.";
       setAuditError({
         message,
         retryable: true,
@@ -553,7 +553,7 @@ function DNSInspectorContent() {
             handleRunAudit();
             handleGenerateRecords();
           }}
-          retryLabel="Retry DNS Query"
+          retryLabel="Retry Diagnostic Scan"
         />
       )}
 
@@ -836,7 +836,7 @@ function DNSInspectorContent() {
                         </div>
                         <div className="md:col-span-3">
                           <span className="text-[10px] text-zinc-500 uppercase block font-mono">Record Content / Value</span>
-                          <code className="text-emerald-400/90 selection:bg-emerald-500/30 break-all block mt-0.5 text-xs font-mono">
+                          <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white break-all block mt-0.5 text-xs font-mono">
                             {fix.value}
                           </code>
                         </div>
@@ -943,14 +943,14 @@ function DNSInspectorContent() {
             <div className="space-y-3">
               <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
                 <span className="text-[10px] text-zinc-500 uppercase block">Sender Authorization (SPF)</span>
-                <code className="text-emerald-400/90 block text-xs break-all">
+                <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white block text-xs break-all">
                   {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
                 </code>
               </div>
 
               <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
                 <span className="text-[10px] text-zinc-500 uppercase block">Email Impersonation Shield (DMARC)</span>
-                <code className="text-emerald-400/90 block text-xs break-all">
+                <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white block text-xs break-all">
                   {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100; rua=mailto:dmarc-reports@shopify.com;"}
                 </code>
               </div>
@@ -1014,7 +1014,7 @@ function DNSInspectorContent() {
                   {copiedJson ? "JSON Copied" : "Copy JSON"}
                 </button>
               </div>
-              <pre className="text-emerald-400/90 font-mono text-xs overflow-x-auto max-h-80 p-4 bg-[#08080A] rounded-lg border border-zinc-800/80 selection:bg-emerald-500/30">
+              <pre className="text-emerald-400/90 font-mono text-xs overflow-x-auto max-h-80 p-4 bg-[#08080A] rounded-lg border border-zinc-800/80 selection:bg-emerald-500/30 selection:text-white">
                 {JSON.stringify(auditData || { domain: domainInput, status: "optimal", execution_time_ms: 237.92 }, null, 2)}
               </pre>
             </div>
