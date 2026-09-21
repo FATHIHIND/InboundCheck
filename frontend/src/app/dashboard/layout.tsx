@@ -14,6 +14,7 @@ import {
   TerminalSquare,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BackendStatusBadge } from "@/components/operational/BackendStatusBadge";
@@ -194,6 +195,17 @@ export default function DashboardLayout({
               >
                 <LayoutDashboard strokeWidth={2} size={18} />
                 <span>Dashboard</span>
+              </Link>
+              <Link
+                href="/dashboard/wizard"
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                  isActive("/dashboard/wizard")
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                }`}
+              >
+                <ShieldCheck strokeWidth={2} size={18} />
+                <span>Setup Wizard</span>
               </Link>
               <Link
                 href="/dashboard/shopify"

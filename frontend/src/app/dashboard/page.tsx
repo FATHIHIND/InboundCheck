@@ -668,7 +668,10 @@ export default function DashboardOverviewPage() {
           atRiskOrders={atRiskOrders}
           atRiskGmvFormatted={effectiveRevenueRisk?.expected_risk_formatted}
           misalignedStoresCount={misalignedStores.length}
-          onOpenWizard={() => setShowWizardModal(true)}
+          onOpenWizard={() => {
+            const target = misalignedStores.length > 0 ? misalignedStores[0].domain_name : activeDomain;
+            router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
+          }}
           inspectorHref={
             misalignedStores.length > 0
               ? `/dashboard/inspector?domain=${encodeURIComponent(misalignedStores[0].domain_name)}`
@@ -679,7 +682,9 @@ export default function DashboardOverviewPage() {
         /* Deliverability Revenue-at-Risk Diagnostic Banner */
         <DeliverabilityRiskBanner
           domain={activeDomain}
-          onOpenWizard={() => setShowWizardModal(true)}
+          onOpenWizard={() => {
+            router.push(activeDomain ? `/dashboard/wizard?domain=${encodeURIComponent(activeDomain)}` : "/dashboard/wizard");
+          }}
         />
       )}
 

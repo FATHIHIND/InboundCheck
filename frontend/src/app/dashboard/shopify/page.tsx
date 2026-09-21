@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useApiResource } from "@/hooks/useApiResource";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
@@ -59,6 +60,7 @@ interface ShopifyStoreItem {
 }
 
 export default function ShopifyHubPage() {
+  const router = useRouter();
   const [storeName, setStoreName] = useState("");
   const [storeDomain, setStoreDomain] = useState("");
   const [customDomain, setCustomDomain] = useState("");
@@ -250,7 +252,10 @@ export default function ShopifyHubPage() {
           </EmeraldHoverButton>
 
           <EmeraldHoverButton
-            onClick={() => setShowWizardModal(true)}
+            onClick={() => {
+              const target = customDomain || storeDomain;
+              router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
+            }}
             size="sm"
             variant="outline"
             icon={<Sparkles className="w-3.5 h-3.5" />}
@@ -276,7 +281,10 @@ export default function ShopifyHubPage() {
       {/* Deliverability Revenue-at-Risk Diagnostic Banner */}
       <DeliverabilityRiskBanner
         domain={customDomain || storeDomain || undefined}
-        onOpenWizard={() => setShowWizardModal(true)}
+        onOpenWizard={() => {
+          const target = customDomain || storeDomain;
+          router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
+        }}
       />
 
       {simulationError && (
