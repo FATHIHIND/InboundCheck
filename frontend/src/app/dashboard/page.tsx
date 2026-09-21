@@ -33,7 +33,6 @@ import {
 import dynamic from "next/dynamic";
 import ReputationTrendChart, { ReputationPoint } from "./components/ReputationTrendChart";
 import CheckHistoryChart, { IMAPCheckLog } from "./components/CheckHistoryChart";
-import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityRiskBanner";
 import { MerchantHealthBanner } from "@/components/dashboard/MerchantHealthBanner";
@@ -589,10 +588,10 @@ export default function DashboardOverviewPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            Shopify Store Deliverability & Revenue Shield
+            Shopify Store Deliverability &amp; Revenue Shield
           </h1>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Protect Store GMV, prevent silent spam drops, and avoid customer disputes (chargebacks) by ensuring Order Confirmation Receipts, Tracking Numbers, and Abandoned Cart Recovery emails land in the primary inbox.
+          <p className="text-xs text-zinc-400 mt-1">
+            Monitor store deliverability, protect customer order receipts, and prevent silent spam placement across your fleet.
           </p>
         </div>
 
@@ -689,11 +688,19 @@ export default function DashboardOverviewPage() {
         {/* KPI 1: Deliverability Health Status */}
         <StripeMetricTile
           label="Deliverability Health Status"
-          value={stores.length > 0 && healthScore !== null ? `${healthScore}` : "--"}
+          value={
+            stores.length > 0 && healthScore !== null ? (
+              `${healthScore}`
+            ) : (
+              <span className="animate-pulse text-zinc-600 font-mono">--</span>
+            )
+          }
           unit={stores.length > 0 && healthScore !== null ? "/ 100 HEALTH" : undefined}
-          badgeText={stores.length > 0 && healthScore !== null ? healthStatusTier : "Setup Required"}
+          badgeText={stores.length > 0 && healthScore !== null ? healthStatusTier : "Scan Required"}
           badgeVariant={
-            healthStatusTier === "Optimal"
+            stores.length === 0 || healthScore === null
+              ? "amber"
+              : healthStatusTier === "Optimal"
               ? "emerald"
               : healthStatusTier === "Warning"
               ? "amber"
@@ -707,7 +714,9 @@ export default function DashboardOverviewPage() {
               : "Awaiting First Store Scan"
           }
           highlightVariant={
-            healthStatusTier === "Optimal"
+            stores.length === 0 || healthScore === null
+              ? "amber"
+              : healthStatusTier === "Optimal"
               ? "emerald"
               : healthStatusTier === "Warning"
               ? "amber"
@@ -720,7 +729,7 @@ export default function DashboardOverviewPage() {
             <ScoreGauge3DCanvas score={healthScore} className="h-28 w-full relative z-10" />
           ) : (
             <div className="h-28 w-full flex flex-col items-center justify-center text-center">
-              <span className="text-4xl font-extrabold text-white font-mono tracking-tight drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]">
+              <span className="text-4xl font-extrabold animate-pulse text-zinc-600 font-mono tracking-tight">
                 --
               </span>
             </div>
@@ -795,34 +804,44 @@ export default function DashboardOverviewPage() {
         {/* KPI 4: 48–72h Risk Forecast */}
         <StripeMetricTile
           label="48–72h Risk Forecast"
-          value={forecastRiskDisplay}
+          value={
+            forecastRiskDisplay !== "--" ? (
+              forecastRiskDisplay
+            ) : (
+              <span className="animate-pulse text-zinc-600 font-mono">--</span>
+            )
+          }
           badgeText={
-            healthScore !== null && healthScore >= 90
+            stores.length === 0 || healthScore === null
+              ? "Scan Required"
+              : healthScore >= 90
               ? "Optimal Trajectory"
-              : healthScore !== null && healthScore >= 60
+              : healthScore >= 60
               ? "Moderate Risk"
-              : healthScore !== null
-              ? "Elevated Risk"
-              : "Predictive Model"
+              : "Elevated Risk"
           }
           badgeVariant={
-            healthScore === null || healthScore >= 90
+            stores.length === 0 || healthScore === null
+              ? "amber"
+              : healthScore >= 90
               ? "emerald"
               : healthScore >= 60
               ? "amber"
               : "rose"
           }
           highlightText={
-            healthScore !== null && healthScore >= 90
+            stores.length === 0 || healthScore === null
+              ? "Predictive Risk Model"
+              : healthScore >= 90
               ? "Optimal Delivery Trajectory"
-              : healthScore !== null && healthScore >= 60
+              : healthScore >= 60
               ? "Moderate Attrition Exposure"
-              : healthScore !== null
-              ? "Elevated Dispute Risk"
-              : "Predictive Risk Model"
+              : "Elevated Dispute Risk"
           }
           highlightVariant={
-            healthScore === null || healthScore >= 90
+            stores.length === 0 || healthScore === null
+              ? "amber"
+              : healthScore >= 90
               ? "emerald"
               : healthScore >= 60
               ? "amber"
@@ -839,57 +858,6 @@ export default function DashboardOverviewPage() {
         >
           <Sparkline3DCanvas />
         </StripeMetricTile>
-      </div>
-
-      {/* 2b. Feature Highlights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <GlassEmeraldCard
-          title="1-Click DNS Sync"
-          subtitle="Works with Cloudflare, GoDaddy & Namecheap"
-          badgeText="Auto-Fix Ready"
-          badgeVariant="emerald"
-          metricValue="99.8%"
-          trendText="Automated alignment"
-          icon={<Zap className="w-5 h-5 text-emerald-400" />}
-          actionLabel="Launch Inspector"
-          onActionClick={() => router.push("/dashboard/inspector")}
-        >
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Automated CNAME selector discovery, SPF syntax validation, and DMARC enforcement aligned with Google &amp; Yahoo 2024 Bulk Sender Requirements (US &amp; EU).
-          </p>
-        </GlassEmeraldCard>
-
-        <GlassEmeraldCard
-          title="Telegram Incident Guard"
-          subtitle="Instant Alert Delivery"
-          badgeText={imapLogs.length > 0 ? "Active Failover" : "Awaiting Data"}
-          badgeVariant={imapLogs.length > 0 ? "cyan" : "neutral"}
-          metricValue={imapLogs.length > 0 ? `${imapLogs.filter((l: IMAPCheckLog) => l.folder === "inbox").length} Delivered` : "No Logs Yet"}
-          trendText={imapLogs.length > 0 ? "Live receipt data" : "Connect store to activate"}
-          icon={<Radio className="w-5 h-5 text-cyan-400" />}
-          actionLabel="View Failover Logs"
-          onActionClick={() => router.push("/dashboard/shopify")}
-        >
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Live alerts sent to your Telegram whenever customer order receipts or tracking emails bounce.
-          </p>
-        </GlassEmeraldCard>
-
-        <GlassEmeraldCard
-          title="Protected GMV & ROI Multiplier"
-          subtitle="Recover Lost Checkout Revenue"
-          badgeText="37.3x ROI"
-          badgeVariant="emerald"
-          metricValue={hasValidRevenueData ? protectedGmvFormatted : "$142,850"}
-          trendText="Dispute avoidance"
-          icon={<TrendingUp className="w-5 h-5 text-emerald-400" />}
-          actionLabel="Explore Dispute Analytics"
-          onActionClick={() => router.push("/dashboard/shopify")}
-        >
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Real-time correlation linking inbox deliverability health to Shopify weekly revenue protection and customer dispute prevention.
-          </p>
-        </GlassEmeraldCard>
       </div>
 
       {/* 3. Middle Section: Telemetry Preview & Check History (Suppressed in empty state to eliminate stacked clutter) */}

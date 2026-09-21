@@ -5,7 +5,7 @@ import { TrendingUp, TrendingDown, LucideIcon } from "lucide-react";
 
 export interface StripeMetricTileProps {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   unit?: string;
   subtext?: string;
   highlightText?: string;

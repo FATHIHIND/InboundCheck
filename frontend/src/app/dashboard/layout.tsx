@@ -173,116 +173,116 @@ export default function DashboardLayout({
                   PRO
                 </span>
               </div>
-              <span className="text-xs text-zinc-400 font-mono tracking-wide">DNS & Deliverability Hub</span>
+              <span className="text-[10px] text-emerald-400/90 font-mono tracking-wide font-medium">Shopify Email Shield</span>
             </div>
           </Link>
 
           {/* Governance Navigation Groups */}
-          <div className="space-y-6 text-xs">
+          <div className="space-y-6">
             {/* Group 1: Store Protection */}
             <div className="space-y-1">
-              <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400/70 uppercase font-semibold pl-2 mb-2 select-none block">
+              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 select-none block">
                 STORE PROTECTION
               </span>
               <Link
                 href="/dashboard"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
                   isActive("/dashboard")
-                    ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white border border-transparent"
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
                 }`}
               >
                 <LayoutDashboard strokeWidth={2} size={18} />
-                <span>Overview</span>
+                <span>Dashboard</span>
               </Link>
               <Link
                 href="/dashboard/shopify"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
                   isActive("/dashboard/shopify")
-                    ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white border border-transparent"
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
                 }`}
               >
                 <ShoppingBag strokeWidth={2} size={18} />
-                <span>Shopify Sync</span>
+                <span>Store Fleet</span>
               </Link>
             </div>
 
             {/* Group 2: Diagnostics & Radar */}
             <div className="space-y-1">
-              <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400/70 uppercase font-semibold pl-2 mb-2 select-none block">
-                DIAGNOSTICS & RADAR
+              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 select-none block">
+                DIAGNOSTICS &amp; RADAR
               </span>
               <Link
                 href="/dashboard/inspector"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
                   isActive("/dashboard/inspector")
-                    ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white border border-transparent"
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
                 }`}
               >
                 <TerminalSquare strokeWidth={2} size={18} />
-                <span>DNS Inspector</span>
+                <span>Domain Health</span>
               </Link>
               <Link
                 href="/dashboard/radar"
-                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
+                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-sm ${
                   isActive("/dashboard/radar")
-                    ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white border border-transparent"
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Radio strokeWidth={2} size={18} />
-                  <span>Blacklist Radar</span>
+                  <span>Reputation Radar</span>
                 </div>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               </Link>
               <Link
                 href="/dashboard/content-lab"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
                   isActive("/dashboard/content-lab")
-                    ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white border border-transparent"
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
                 }`}
               >
                 <Sparkles strokeWidth={2} size={18} />
-                <span>AI Content Lab</span>
+                <span>Template Optimizer</span>
               </Link>
             </div>
 
             {/* Group 3: Configuration */}
             <div className="space-y-1">
-              <span className="text-[10px] font-mono tracking-[0.2em] text-emerald-400/70 uppercase font-semibold pl-2 mb-2 select-none block">
+              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 select-none block">
                 CONFIGURATION
               </span>
               <Link
                 href="/dashboard/settings"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
                   isActive("/dashboard/settings")
-                    ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white border border-transparent"
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
                 }`}
               >
                 <Sliders strokeWidth={2} size={18} />
-                <span>Alerts & Settings</span>
+                <span>Settings &amp; Alerts</span>
               </Link>
               <Link
                 href="/dashboard/billing"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 font-medium ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
                   isActive("/dashboard/billing")
-                    ? "text-emerald-400 bg-emerald-500/[0.08] border border-emerald-500/20"
-                    : "text-zinc-400 hover:text-white border border-transparent"
+                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
                 }`}
               >
                 <CreditCard strokeWidth={2} size={18} />
-                <span>Billing Portal</span>
+                <span>Subscription &amp; Usage</span>
               </Link>
             </div>
           </div>
         </div>
 
-        {/* Bottom User Profile, Operational Status & Sign Out */}
+        {/* Compact Single-Row User Profile & Operational Footer */}
         <div className="pt-3 border-t border-white/[0.08] space-y-2 font-sans text-xs">
           <div className="flex items-center justify-between px-1">
             <BackendStatusBadge />
@@ -295,30 +295,34 @@ export default function DashboardLayout({
             </Link>
           </div>
 
-          <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0 font-mono">
-                {userEmail ? userEmail.charAt(0).toUpperCase() : "M"}
+          {/* Consolidated Compact Profile Bar */}
+          <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/[0.06] gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono">
+                  {userEmail ? userEmail.charAt(0).toUpperCase() : "M"}
+                </div>
+                {/* Inline green pulse dot for active monitoring */}
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-[#0A0A0C] animate-pulse" />
               </div>
-              <div className="min-w-0 flex flex-col">
-                <span className="text-xs font-semibold text-white truncate">
-                  {userEmail ? userEmail.split("@")[0] : "Merchant Account"}
-                </span>
-                <span className="text-[10px] text-zinc-400 truncate font-mono">
-                  {userEmail || "Connected"}
+              <div className="min-w-0">
+                <span className="block max-w-[120px] truncate text-xs font-medium text-zinc-300">
+                  {userEmail ? userEmail.split("@")[0] : "Merchant"}
                 </span>
               </div>
             </div>
-          </div>
 
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-zinc-400 hover:text-red-400 rounded-lg hover:bg-white/[0.02] transition-colors duration-150 cursor-pointer text-xs font-sans"
-          >
-            <LogOut strokeWidth={2} size={15} />
-            <span>Logout</span>
-          </button>
+            {/* Compact logout icon button */}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              title="Sign Out"
+              aria-label="Sign Out"
+              className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-white/[0.04] rounded-md transition-colors cursor-pointer shrink-0"
+            >
+              <LogOut strokeWidth={2} size={15} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -339,7 +343,7 @@ export default function DashboardLayout({
         </main>
 
         {/* Full-Screen Non-Dismissible Obsidian Paywall Modal on Expiration */}
-        {subscription?.subscription_status === "expired" && (
+        {subscription?.subscription_status === "expired" && pathname !== "/dashboard/billing" && (
           <ObsidianPaywallModal />
         )}
       </div>

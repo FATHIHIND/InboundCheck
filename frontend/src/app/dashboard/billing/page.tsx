@@ -354,10 +354,10 @@ export default function BillingPortalPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <CreditCard className="w-5 h-5 text-emerald-400" />
-            Stripe Billing & Subscription Governance
+            Subscription &amp; Usage
           </h1>
-          <p className="text-xs text-zinc-400 mt-0.5 font-mono">
-            Manage your merchant tier, sending domain quotas, and Stripe customer portal settings.
+          <p className="text-xs text-zinc-400 mt-1">
+            Manage your merchant plan, monitored domain quotas, and Stripe customer portal settings.
           </p>
         </div>
 

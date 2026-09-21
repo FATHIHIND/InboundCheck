@@ -24,6 +24,7 @@ import {
   Globe,
   Layers,
   Radio,
+  Cpu,
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
@@ -451,10 +452,10 @@ function DNSInspectorContent() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <Terminal className="w-6 h-6 text-emerald-400" />
-            Domain Health &amp; Deliverability Inspector
+            Domain Health Inspector
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Google &amp; Yahoo 2024 Bulk Sender Compliance (US &amp; EU) — Closed-loop record generation, live propagation verification, and automated Telegram incident alerting.
+            Audit your store DNS protocols (SPF, DKIM, DMARC, BIMI) and verify live mailbox deliverability readiness.
           </p>
         </div>
 
@@ -511,679 +512,791 @@ function DNSInspectorContent() {
         </div>
       </div>
 
-      {/* 2. Target Domain Input Bar (Sticky at Top) */}
-      <div className="sticky top-0 z-20 bg-[#08080A]/95 backdrop-blur-md pb-1">
-        <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shadow-lg">
-          <div className="flex-1 flex items-center gap-2 bg-[#08080A] border border-zinc-800 rounded-lg px-3.5 py-2 font-mono text-xs focus-within:border-emerald-500/50 transition-colors">
-            <Search className="w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              value={domainInput}
-              onChange={(e) => setDomainInput(e.target.value)}
-              placeholder="Select or enter your store domain (e.g. store.com)"
-              className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs"
-            />
-          </div>
-
-          <div className="w-full sm:w-64 bg-[#08080A] border border-zinc-800 rounded-lg px-3.5 py-2 font-mono text-xs focus-within:border-emerald-500/50 transition-colors">
-            <input
-              type="text"
-              value={customSelectors}
-              onChange={(e) => setCustomSelectors(e.target.value)}
-              placeholder="Selectors: shopify, google, k1"
-              className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs"
-            />
-          </div>
-
-          <EmeraldHoverButton
-            onClick={() => {
-              handleRunAudit();
-              handleGenerateRecords();
-            }}
-            isLoading={isLoading}
-            loadingText="Querying..."
-            icon={<Zap className="w-3.5 h-3.5 fill-current" />}
-            size="sm"
-            variant="primary"
-          >
-            Query DNS
-          </EmeraldHoverButton>
-        </div>
-      </div>
-
-      {auditError && (
-        <OperationalErrorCard
-          title="DNS Audit Resolution Failed"
-          error={auditError}
-          onRetry={() => {
-            handleRunAudit();
-            handleGenerateRecords();
-          }}
-          retryLabel="Retry Diagnostic Scan"
-        />
-      )}
-
-      {/* 3. Main Generator / Inspector Content */}
-      {activeTab === "generator" && (
-        <div className="space-y-5">
-          {/* STEP 1 & 2 CLOSED-LOOP BANNER */}
-          {hasCopiedRecords && (
-            <div className="p-4 bg-[#0E0E12]/80 backdrop-blur-md border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn font-mono text-xs">
-              <div className="flex items-center gap-2.5 text-zinc-200">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>
-                  Records copied. Paste them into your DNS provider (Cloudflare, GoDaddy, Namecheap), then click{" "}
-                  <strong className="text-emerald-400">&ldquo;Verify Records Live&rdquo;</strong>.
-                </span>
-              </div>
-              <EmeraldHoverButton
-                onClick={handleVerifyRecordsLive}
-                isLoading={isVerifyingLive}
-                loadingText="Resolving Live..."
-                icon={<Zap className="w-3.5 h-3.5 fill-current" />}
-                size="sm"
-                variant="primary"
-                className="flex-shrink-0"
-              >
-                Verify Records Live
-              </EmeraldHoverButton>
+      {/* 2. Balanced Full-Height Multi-Column Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-h-[calc(100vh-12rem)]">
+        {/* Left Workspace: Control Panel (Col 5) */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Domain Query Bar & Selector Badges */}
+          <div className="bg-[#0E0E12]/80 backdrop-blur-md p-5 rounded-2xl border border-zinc-800/80 shadow-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-emerald-400" />
+                Target Sending Domain
+              </span>
+              <span className="text-[10px] font-mono text-zinc-500">RFC 1035 UDP</span>
             </div>
-          )}
 
-          {/* REAL-TIME POLLING / PROGRESS STATE */}
-          {verifyPollingText && (
-            <div className="p-3.5 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-emerald-400 flex items-center gap-2.5 animate-fadeIn">
-              <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
-              <span>{verifyPollingText}</span>
+            {/* Domain Input */}
+            <div className="flex items-center gap-2 bg-[#08080A] border border-zinc-800 rounded-lg px-3.5 h-10 font-mono text-xs focus-within:border-emerald-500/50 transition-colors">
+              <Globe className="w-4 h-4 text-zinc-500 shrink-0" />
+              <input
+                type="text"
+                value={domainInput}
+                onChange={(e) => setDomainInput(e.target.value)}
+                placeholder="Enter store domain (e.g. store.com)"
+                className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs leading-none"
+              />
             </div>
-          )}
 
-          {/* VERIFY OUTCOME NOTIFICATIONS */}
-          {verifyOutcome === "success" && (
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2 animate-fadeIn font-mono text-xs">
+            {/* Custom Selectors Input & Presets */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-emerald-400 flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  ✓ All DNS records successfully verified & propagated live!
+                <span className="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                  <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                  DKIM Selectors
                 </span>
-                <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Score: 100/100 • Optimal
-                </span>
+                <span className="text-[10px] font-mono text-zinc-500">Comma separated</span>
               </div>
-              {telegramAlertDispatched && (
-                <div className="text-xs text-zinc-300 flex items-center gap-2 pt-1 border-t border-emerald-500/20">
-                  <Send className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>
-                    Alert delivery sent to Telegram for <strong className="text-white">@inboundcheck_alerts</strong>: Domain <code className="text-emerald-300">{domainInput}</code> DNS active.
-                  </span>
+
+              <div className="flex items-center gap-2 bg-[#08080A] border border-zinc-800 rounded-lg px-3.5 h-10 font-mono text-xs focus-within:border-emerald-500/50 transition-colors">
+                <input
+                  type="text"
+                  value={customSelectors}
+                  onChange={(e) => setCustomSelectors(e.target.value)}
+                  placeholder="e.g. shopify, google, kl"
+                  className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs leading-none"
+                />
+              </div>
+
+              {/* Quick Selector Presets - cleanly positioned below input */}
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="text-[11px] text-zinc-500 font-medium">Quick Selector Presets:</span>
+                <div className="flex items-center gap-1.5">
+                  {[
+                    { id: "shopify", label: "shopify" },
+                    { id: "google", label: "google" },
+                    { id: "kl", label: "kl" },
+                  ].map(({ id, label }) => {
+                    const isSelected = customSelectors
+                      .split(",")
+                      .map((s) => s.trim().toLowerCase())
+                      .includes(id);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          const parts = customSelectors
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          if (parts.includes(id)) {
+                            setCustomSelectors(parts.filter((s) => s !== id).join(", "));
+                          } else {
+                            setCustomSelectors(parts.length > 0 ? `${parts.join(", ")}, ${id}` : id);
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold shadow-sm shadow-emerald-500/10"
+                            : "bg-zinc-900/90 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700"
+                        }`}
+                        title={`Toggle ${label} selector`}
+                      >
+                        +{label}
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <EmeraldHoverButton
+              onClick={() => {
+                handleRunAudit();
+                handleGenerateRecords();
+              }}
+              isLoading={isLoading}
+              loadingText="Querying DNS..."
+              icon={<Zap className="w-3.5 h-3.5 fill-current" />}
+              size="sm"
+              variant="primary"
+              className="w-full h-10 text-xs font-semibold flex items-center justify-center shadow-sm"
+            >
+              Query DNS &amp; Generate Records
+            </EmeraldHoverButton>
+          </div>
+
+          {/* Authorized Sending Stack Card */}
+          <GlassEmeraldCard
+            title="Authorized Sending Stack"
+            subtitle="Toggle services to build an aligned SPF record"
+            icon={<Server className="w-5 h-5 text-emerald-400" />}
+            className="space-y-4"
+          >
+            <div className="space-y-2.5 font-sans text-xs">
+              {[
+                { label: "Shopify Transactional", val: includeShopify, set: setIncludeShopify },
+                { label: "Google Workspace (Gmail)", val: includeGoogle, set: setIncludeGoogle },
+                { label: "Microsoft 365 (Outlook)", val: includeMicrosoft, set: setIncludeMicrosoft },
+                { label: "Klaviyo Marketing & Flow", val: includeKlaviyo, set: setIncludeKlaviyo },
+                { label: "SendGrid Relay", val: includeSendgrid, set: setIncludeSendgrid },
+              ].map((item, i) => (
+                <label
+                  key={i}
+                  className="flex items-center justify-between p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80 text-zinc-300 hover:border-emerald-500/30 cursor-pointer transition"
+                >
+                  <span className="font-medium text-xs text-white">{item.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={item.val}
+                    onChange={(e) => {
+                      item.set(e.target.checked);
+                      setTimeout(handleGenerateRecords, 50);
+                    }}
+                    className="rounded bg-[#14141A] border-zinc-700 text-emerald-400 w-4 h-4 cursor-pointer focus:ring-emerald-500"
+                  />
+                </label>
+              ))}
+            </div>
+          </GlassEmeraldCard>
+
+          {/* Target DMARC Policy Enforcement Card */}
+          <GlassEmeraldCard
+            title="Target DMARC Enforcement"
+            subtitle="Configure mailbox protection and abuse reporting"
+            icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
+            className="space-y-4"
+          >
+            <div className="space-y-2 font-sans">
+              {[
+                { id: "reject", label: "Reject (Strict)", desc: "Completely block unauthorized emails (Google/Yahoo 2024)" },
+                { id: "quarantine", label: "Quarantine", desc: "Route unauthorized emails to Spam folder" },
+                { id: "none", label: "None (Monitoring)", desc: "Observe delivery reports without blocking traffic" },
+              ].map((pol) => (
+                <label
+                  key={pol.id}
+                  className={`block p-2.5 rounded-lg border text-xs cursor-pointer transition ${
+                    dmarcPolicy === pol.id
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-white"
+                      : "bg-[#08080A] border-zinc-800/80 text-zinc-400 hover:border-zinc-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="dmarc_policy"
+                    value={pol.id}
+                    checked={dmarcPolicy === pol.id}
+                    onChange={() => {
+                      setDmarcPolicy(pol.id as any);
+                      setTimeout(handleGenerateRecords, 50);
+                    }}
+                    className="sr-only"
+                  />
+                  <span className="font-bold text-white block">{pol.label}</span>
+                  <span className="text-[11px] text-zinc-400">{pol.desc}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* RUA Reporting Email */}
+            <div className="space-y-1.5 pt-2 border-t border-zinc-800/80">
+              <label className="text-xs font-bold text-white uppercase block font-mono">
+                Email Abuse Inbox (DMARC RUA)
+              </label>
+              <input
+                type="email"
+                value={dmarcReportEmail}
+                onChange={(e) => {
+                  setDmarcReportEmail(e.target.value);
+                  setTimeout(handleGenerateRecords, 50);
+                }}
+                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-emerald-500/50"
+              />
+            </div>
+          </GlassEmeraldCard>
+        </div>
+
+        {/* Right Workspace: Stage & Results Panel (Col 7) */}
+        <div className="lg:col-span-7 space-y-6">
+          {/* Operational Error Notification */}
+          {auditError && (
+            <OperationalErrorCard
+              title="DNS Audit Resolution Failed"
+              error={auditError}
+              onRetry={() => {
+                handleRunAudit();
+                handleGenerateRecords();
+              }}
+              retryLabel="Retry Diagnostic Scan"
+            />
+          )}
+
+          {/* VIEW A: 1-Click Generator Results */}
+          {activeTab === "generator" && (
+            <div className="space-y-5">
+              {/* STEP 1 & 2 CLOSED-LOOP BANNER */}
+              {hasCopiedRecords && (
+                <div className="p-4 bg-[#0E0E12]/80 backdrop-blur-md border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn font-mono text-xs">
+                  <div className="flex items-center gap-2.5 text-zinc-200">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>
+                      Records copied. Paste them into your DNS provider (Cloudflare, GoDaddy, Namecheap), then click{" "}
+                      <strong className="text-emerald-400">&ldquo;Verify Records Live&rdquo;</strong>.
+                    </span>
+                  </div>
+                  <EmeraldHoverButton
+                    onClick={handleVerifyRecordsLive}
+                    isLoading={isVerifyingLive}
+                    loadingText="Resolving Live..."
+                    icon={<Zap className="w-3.5 h-3.5 fill-current" />}
+                    size="sm"
+                    variant="primary"
+                    className="flex-shrink-0"
+                  >
+                    Verify Records Live
+                  </EmeraldHoverButton>
+                </div>
+              )}
+
+              {/* REAL-TIME POLLING / PROGRESS STATE */}
+              {verifyPollingText && (
+                <div className="p-3.5 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-emerald-400 flex items-center gap-2.5 animate-fadeIn">
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                  <span>{verifyPollingText}</span>
+                </div>
+              )}
+
+              {/* VERIFY OUTCOME NOTIFICATIONS */}
+              {verifyOutcome === "success" && (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2 animate-fadeIn font-mono text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-400 flex items-center gap-2 text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ✓ All DNS records successfully verified &amp; propagated live!
+                    </span>
+                    <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Score: 100/100 • Optimal
+                    </span>
+                  </div>
+                  {telegramAlertDispatched && (
+                    <div className="text-xs text-zinc-300 flex items-center gap-2 pt-1 border-t border-emerald-500/20">
+                      <Send className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>
+                        Alert delivery sent to Telegram for <strong className="text-white">@inboundcheck_alerts</strong>: Domain <code className="text-emerald-300">{domainInput}</code> DNS active.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Verify Error State */}
+              {verifyOutcome === "error" && (
+                <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2 animate-fadeIn font-mono text-xs">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span className="font-bold text-rose-300 text-sm">
+                      Live verification failed — DNS records could not be confirmed.
+                    </span>
+                  </div>
+                  <p className="text-rose-300/80 font-sans text-xs pl-6">
+                    Check your authoritative nameserver propagation and retry. Records may take up to 48h to propagate globally.
+                  </p>
+                </div>
+              )}
+
+              {/* Generated DNS Records List */}
+              {generatedRecords.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-tight uppercase font-mono">Generated DNS Records</h3>
+                      <span className="text-xs text-zinc-400">
+                        Ready to copy into Cloudflare, GoDaddy, or Namecheap
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={copyAllRecords}
+                        className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedAll ? "All Copied!" : "Copy All Records"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadZoneFile}
+                        className="min-h-[44px] bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-xl text-xs px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)] font-mono active:scale-95"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Official Domain DNS Records (.zone)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Bounded Scrollable Record Container */}
+                  <div className="overflow-y-auto max-h-[580px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 pr-1 space-y-4">
+                    {generatedRecords.map((fix) => {
+                      const isExpanded = !!expandedRecordIds[fix.id];
+
+                      return (
+                        <div
+                          key={fix.id}
+                          className="obsidian-panel p-5 font-mono space-y-3"
+                        >
+                          {/* Header Summary Row */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
+                                {fix.record_type}
+                              </span>
+                              <span className="text-xs font-bold text-white">{fix.category}</span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* 1-Click Auto-Insert to Cloudflare / GoDaddy */}
+                              {hasProviderConnected ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleApplyAutoFix(fix)}
+                                  disabled={fixStatus[fix.id] === "applying" || fixStatus[fix.id] === "applied"}
+                                  className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                                    fixStatus[fix.id] === "applied"
+                                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 cursor-default"
+                                      : fixStatus[fix.id] === "applying"
+                                      ? "bg-[#0E1217] text-zinc-400 border border-white/10 cursor-wait"
+                                      : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                                  }`}
+                                >
+                                  {fixStatus[fix.id] === "applied" ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>✓ Injected to Zone</span>
+                                    </>
+                                  ) : fixStatus[fix.id] === "applying" ? (
+                                    <>
+                                      <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                                      <span>Injecting...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20" />
+                                      <span>Auto-Insert to {activeProviderName === "godaddy" ? "GoDaddy" : "Cloudflare"}</span>
+                                    </>
+                                  )}
+                                </button>
+                              ) : (
+                                <Link
+                                  href="/dashboard/settings?tab=providers"
+                                  className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-emerald-400 bg-[#0A0A0C] hover:bg-[#0E1217] border border-white/[0.08] hover:border-emerald-500/30 transition flex items-center gap-1.5"
+                                  title="Connect Cloudflare or GoDaddy in Settings to enable 1-click zone auto-insertion"
+                                >
+                                  <Zap className="w-3.5 h-3.5 text-zinc-500" />
+                                  <span>Connect Cloudflare to Auto-Insert</span>
+                                </Link>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(fix.value, fix.id)}
+                                className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              >
+                                {copiedIdx === fix.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                {copiedIdx === fix.id ? "Copied!" : "Copy Value"}
+                              </button>
+
+                              {/* Chevron Accordion Trigger */}
+                              <button
+                                type="button"
+                                onClick={() => toggleRecordExpansion(fix.id)}
+                                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-white/[0.08] bg-[#0A0A0C] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition cursor-pointer"
+                                title={isExpanded ? "Collapse Details" : "Expand Details"}
+                              >
+                                <ChevronDown
+                                  className={`w-4 h-4 transition-transform duration-200 ${
+                                    isExpanded ? "rotate-180 text-emerald-400" : ""
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Optional Error notification if auto-fix fails */}
+                          {fixErrorMsg[fix.id] && (
+                            <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-mono text-rose-400 flex items-center justify-between gap-2 animate-fadeIn">
+                              <span>{fixErrorMsg[fix.id]}</span>
+                              {fixErrorMsg[fix.id].includes("plan required") && (
+                                <Link href="/dashboard/billing" className="underline hover:text-white text-[11px] font-bold">
+                                  Upgrade to Growth
+                                </Link>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Record Content Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs bg-[#08080A] p-3 rounded-lg border border-zinc-800/80">
+                            <div>
+                              <span className="text-[10px] text-zinc-500 uppercase block font-mono">Host / Name</span>
+                              <code className="text-white font-bold block mt-0.5 text-xs">{fix.host}</code>
+                            </div>
+                            <div className="md:col-span-3">
+                              <span className="text-[10px] text-zinc-500 uppercase block font-mono">Record Content / Value</span>
+                              <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white break-all block mt-0.5 text-xs font-mono">
+                                {fix.value}
+                              </code>
+                            </div>
+                          </div>
+
+                          {/* Collapsible Expanded Accordion Drawer */}
+                          {isExpanded && (
+                            <div className="pt-3 border-t border-zinc-800/80 space-y-3 animate-fadeIn text-xs">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono">
+                                <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Live Propagation</span>
+                                  <span className="text-xs font-bold text-emerald-400 block mt-0.5 flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> 100% Verified
+                                  </span>
+                                </div>
+                                <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Target TTL</span>
+                                  <span className="text-xs font-bold text-white block mt-0.5">{fix.ttl}</span>
+                                </div>
+                                <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
+                                  <span className="text-[10px] text-zinc-500 uppercase block">Compliance Standard</span>
+                                  <span className="text-xs font-bold text-emerald-400 block mt-0.5">{fix.compliance_spec}</span>
+                                </div>
+                              </div>
+
+                              <div className="p-3 bg-[#08080A] rounded-lg border border-zinc-800/80 space-y-1">
+                                <span className="text-[10px] text-zinc-500 uppercase block font-mono">Destination DNS Provider / Target Server</span>
+                                <code className="text-zinc-300 font-mono text-xs block">{fix.authoritative_target}</code>
+                                <p className="text-xs text-zinc-400 font-sans mt-1">{fix.explanation}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Prominent Verification Trigger directly below records */}
+                  <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 flex items-center justify-between gap-4 font-mono text-xs">
+                    <div>
+                      <span className="font-bold text-white block text-sm">Step 2: Instant DNS Verification</span>
+                      <span className="text-zinc-400 text-xs">
+                        Probes authoritative resolvers to ensure record propagation.
+                      </span>
+                    </div>
+                    <EmeraldHoverButton
+                      onClick={handleVerifyRecordsLive}
+                      isLoading={isVerifyingLive}
+                      loadingText="Verifying..."
+                      icon={<Zap className="w-4 h-4 fill-current" />}
+                      size="md"
+                      variant="primary"
+                    >
+                      Verify Records Live
+                    </EmeraldHoverButton>
+                  </div>
+                </div>
+              ) : (
+                /* Etched OperationalEmptyState prevents layout collapse */
+                <OperationalEmptyState
+                  icon={<Terminal className="w-8 h-8 text-emerald-400" />}
+                  badge="Awaiting Domain Query"
+                  title="No DNS Records Generated"
+                  description={
+                    domainInput
+                      ? `Click 'Query DNS & Generate Records' on the left to build RFC-compliant records for ${domainInput}.`
+                      : "Enter your store sending domain and configure sending stack on the left, then click 'Query DNS & Generate Records'."
+                  }
+                  action={{
+                    label: "Generate Records",
+                    onClick: () => {
+                      handleRunAudit();
+                      handleGenerateRecords();
+                    },
+                  }}
+                />
               )}
             </div>
           )}
 
-          {/* Verify Error State */}
-          {verifyOutcome === "error" && (
-            <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2 animate-fadeIn font-mono text-xs">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span className="font-bold text-rose-300 text-sm">
-                  Live verification failed — DNS records could not be confirmed.
-                </span>
-              </div>
-              <p className="text-rose-300/80 font-sans text-xs pl-6">
-                Check your authoritative nameserver propagation and retry. Records may take up to 48h to propagate globally.
-              </p>
-            </div>
-          )}
+          {/* VIEW B: Detailed Raw Inspector View */}
+          {activeTab === "inspector" && (
+            auditData ? (
+              <div className="space-y-5">
+                {/* Top Diagnostic KPI Tiles */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="obsidian-panel p-4 space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">Health Score</span>
+                    <span className="text-2xl font-extrabold text-emerald-400 block font-mono tabular-nums">{auditData.health_score}%</span>
+                    <span className={`text-[10px] font-mono uppercase font-semibold ${
+                      auditData.health_score >= 90 ? "text-emerald-400" : auditData.health_score >= 60 ? "text-amber-400" : "text-rose-400"
+                    }`}>
+                      • {auditData.status.toUpperCase()}
+                    </span>
+                  </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column: Stack Config Options */}
-            <GlassEmeraldCard
-              title="Authorized Sending Stack"
-              subtitle="Toggle services to build an aligned SPF record"
-              icon={<Server className="w-5 h-5 text-emerald-400" />}
-              className="lg:col-span-4 space-y-6"
-            >
-              <div className="space-y-2.5 font-sans text-xs">
-                {[
-                  { label: "Shopify Transactional", val: includeShopify, set: setIncludeShopify },
-                  { label: "Google Workspace (Gmail)", val: includeGoogle, set: setIncludeGoogle },
-                  { label: "Microsoft 365 (Outlook)", val: includeMicrosoft, set: setIncludeMicrosoft },
-                  { label: "Klaviyo Marketing & Flow", val: includeKlaviyo, set: setIncludeKlaviyo },
-                  { label: "SendGrid Relay", val: includeSendgrid, set: setIncludeSendgrid },
-                ].map((item, i) => (
-                  <label
-                    key={i}
-                    className="flex items-center justify-between p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80 text-zinc-300 hover:border-emerald-500/30 cursor-pointer transition"
-                  >
-                    <span className="font-medium text-xs text-white">{item.label}</span>
-                    <input
-                      type="checkbox"
-                      checked={item.val}
-                      onChange={(e) => {
-                        item.set(e.target.checked);
-                        setTimeout(handleGenerateRecords, 50);
-                      }}
-                      className="rounded bg-[#14141A] border-zinc-700 text-emerald-400 w-4 h-4 cursor-pointer focus:ring-emerald-500"
-                    />
-                  </label>
-                ))}
-              </div>
+                  <div className="obsidian-panel p-4 space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">SPF Lookup Barrier</span>
+                    <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
+                      {auditData.summary.spf.dns_lookup_count} of 10 Used
+                    </span>
+                    <span className={`text-[10px] font-mono ${auditData.summary.spf.dns_lookup_count <= 10 ? "text-emerald-400" : "text-rose-400"}`}>
+                      {auditData.summary.spf.dns_lookup_count <= 10 ? "RFC 7208 Compliant" : "PermError Exceeded"}
+                    </span>
+                  </div>
 
-              {/* DMARC Policy Selection */}
-              <div className="space-y-2.5 mt-5">
-                <label className="text-xs font-bold text-white uppercase block font-mono">Target DMARC Enforcement</label>
-                <div className="space-y-2 font-sans">
-                  {[
-                    { id: "reject", label: "Reject (Strict)", desc: "Completely block unauthorized emails (Google/Yahoo 2024)" },
-                    { id: "quarantine", label: "Quarantine", desc: "Route unauthorized emails to Spam folder" },
-                    { id: "none", label: "None (Monitoring)", desc: "Observe delivery reports without blocking traffic" },
-                  ].map((pol) => (
-                    <label
-                      key={pol.id}
-                      className={`block p-2.5 rounded-lg border text-xs cursor-pointer transition ${
-                        dmarcPolicy === pol.id
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-white"
-                          : "bg-[#08080A] border-zinc-800/80 text-zinc-400 hover:border-zinc-700"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="dmarc_policy"
-                        value={pol.id}
-                        checked={dmarcPolicy === pol.id}
-                        onChange={() => {
-                          setDmarcPolicy(pol.id as any);
-                          setTimeout(handleGenerateRecords, 50);
-                        }}
-                        className="sr-only"
-                      />
-                      <span className="font-bold text-white block">{pol.label}</span>
-                      <span className="text-[11px] text-zinc-400">{pol.desc}</span>
-                    </label>
-                  ))}
+                  <div className="obsidian-panel p-4 space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DKIM Cryptography</span>
+                    <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
+                      {auditData.summary.dkim.found_selectors.length} Selectors
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono">2048-bit RSA Aligned</span>
+                  </div>
+
+                  <div className="obsidian-panel p-4 space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DMARC Policy Posture</span>
+                    <span className="text-lg font-extrabold text-emerald-400 block font-mono">
+                      p={auditData.summary.dmarc.policy || "none"}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
+                        ? "Enforced (Google/Yahoo 2024)"
+                        : "Monitoring Only (Action Needed)"}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* RUA Reporting Email */}
-              <div className="space-y-1.5 mt-5">
-                <label className="text-xs font-bold text-white uppercase block font-mono">Email Fraud &amp; Abuse Report Inbox (DMARC RUA)</label>
-                <input
-                  type="email"
-                  value={dmarcReportEmail}
-                  onChange={(e) => {
-                    setDmarcReportEmail(e.target.value);
-                    setTimeout(handleGenerateRecords, 50);
-                  }}
-                  className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-emerald-500/50"
-                />
-              </div>
-            </GlassEmeraldCard>
+                {/* Carbon-Grade DNS Record Verification Matrix */}
+                <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] overflow-hidden shadow-fluent-elevation">
+                  <div className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#0E1217]">
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        DNS Protocol Verification &amp; Merchant Diagnostics
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Deep inspection across SPF, DKIM, DMARC, and BIMI records with Polaris merchant impact analysis.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono font-semibold text-emerald-400 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                      Authoritative Multi-Resolver
+                    </span>
+                  </div>
 
-            {/* Right Column: Generated DNS Records List (Bounded Scroll Container) */}
-            <div className="lg:col-span-8 space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white tracking-tight uppercase font-mono">Generated DNS Records</h3>
-                  <span className="text-xs text-zinc-400">
-                    Ready to copy into Cloudflare, GoDaddy, or Namecheap
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={copyAllRecords}
-                    className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
-                  >
-                    {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedAll ? "All Copied!" : "Copy All Records"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={downloadZoneFile}
-                    className="min-h-[44px] bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-xl text-xs px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)] font-mono active:scale-95"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Official Domain DNS Records (.zone)
-                  </button>
-                </div>
-              </div>
-
-              {/* Bounded Scrollable Record Container */}
-              <div className="overflow-y-auto max-h-[580px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 pr-1 space-y-4">
-                {generatedRecords.map((fix) => {
-                  const isExpanded = !!expandedRecordIds[fix.id];
-
-                  return (
-                    <div
-                      key={fix.id}
-                      className="obsidian-panel p-5 font-mono space-y-3"
-                    >
-                      {/* Header Summary Row */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
-                            {fix.record_type}
-                          </span>
-                          <span className="text-xs font-bold text-white">{fix.category}</span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          {/* 1-Click Auto-Insert to Cloudflare / GoDaddy or subtle CTA */}
-                          {hasProviderConnected ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-mono border-collapse" role="grid">
+                      <thead className="bg-[#0E1217] border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-zinc-400">
+                        <tr>
+                          <th scope="col" className="py-2.5 px-4 font-semibold text-left">Protocol</th>
+                          <th scope="col" className="py-2.5 px-4 font-semibold text-left">Published Value / Selectors</th>
+                          <th scope="col" className="py-2.5 px-3 font-semibold text-left">Technical Standard</th>
+                          <th scope="col" className="py-2.5 px-3 font-semibold text-center">Status</th>
+                          <th scope="col" className="py-2.5 px-4 font-semibold text-left">Merchant Impact &amp; Why It Matters</th>
+                          <th scope="col" className="py-2.5 px-4 font-semibold text-right">Remediation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.05] text-zinc-300">
+                        {/* Row 1: SPF */}
+                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              SPF
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 max-w-[200px]">
+                            <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.spf.raw_record}>
+                              {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
+                            </code>
+                          </td>
+                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                            RFC 7208 ({auditData.summary.spf.dns_lookup_count}/10 Lookups)
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              auditData.summary.spf.dns_lookup_count <= 10
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                            }`}>
+                              {auditData.summary.spf.dns_lookup_count <= 10 ? "OPTIMAL" : "CRITICAL"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                            {auditData.summary.spf.dns_lookup_count <= 10 ? (
+                              <span>Transactional order receipts authenticated across all configured store senders.</span>
+                            ) : (
+                              <span className="text-rose-300 font-medium">
+                                <strong>Why this matters:</strong> Exceeds the 10 DNS lookup limit. Gmail and Yahoo may reject checkout receipts and order tracking emails.
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
                             <button
                               type="button"
-                              onClick={() => handleApplyAutoFix(fix)}
-                              disabled={fixStatus[fix.id] === "applying" || fixStatus[fix.id] === "applied"}
-                              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                                fixStatus[fix.id] === "applied"
-                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 cursor-default"
-                                  : fixStatus[fix.id] === "applying"
-                                  ? "bg-[#0E1217] text-zinc-400 border border-white/10 cursor-wait"
-                                  : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
-                              }`}
+                              onClick={() => setActiveTab("spf-merge")}
+                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
                             >
-                              {fixStatus[fix.id] === "applied" ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span>✓ Injected to Zone</span>
-                                </>
-                              ) : fixStatus[fix.id] === "applying" ? (
-                                <>
-                                  <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
-                                  <span>Injecting...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20" />
-                                  <span>Auto-Insert to {activeProviderName === "godaddy" ? "GoDaddy" : "Cloudflare"}</span>
-                                </>
-                              )}
+                              Merge &amp; Fix SPF
                             </button>
-                          ) : (
-                            <Link
-                              href="/dashboard/settings?tab=providers"
-                              className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-emerald-400 bg-[#0A0A0C] hover:bg-[#0E1217] border border-white/[0.08] hover:border-emerald-500/30 transition flex items-center gap-1.5"
-                              title="Connect Cloudflare or GoDaddy in Settings to enable 1-click zone auto-insertion"
+                          </td>
+                        </tr>
+
+                        {/* Row 2: DKIM */}
+                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              DKIM
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 max-w-[200px]">
+                            <div className="flex flex-wrap gap-1">
+                              {auditData.summary.dkim.found_selectors.map((s, i) => (
+                                <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                            RFC 6376 (2048-bit RSA)
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              OPTIMAL
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                            Cryptographic signatures verified. Protects order emails from in-flight tampering or forgery.
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab("generator")}
+                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-zinc-300 hover:text-white transition"
                             >
-                              <Zap className="w-3.5 h-3.5 text-zinc-500" />
-                              <span>Connect Cloudflare to Auto-Insert</span>
-                            </Link>
-                          )}
+                              Selectors
+                            </button>
+                          </td>
+                        </tr>
 
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(fix.value, fix.id)}
-                            className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
-                          >
-                            {copiedIdx === fix.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                            {copiedIdx === fix.id ? "Copied!" : "Copy Value"}
-                          </button>
-
-                          {/* Chevron Accordion Trigger */}
-                          <button
-                            type="button"
-                            onClick={() => toggleRecordExpansion(fix.id)}
-                            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-white/[0.08] bg-[#0A0A0C] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition cursor-pointer"
-                            title={isExpanded ? "Collapse Details" : "Expand Details"}
-                          >
-                            <ChevronDown
-                              className={`w-4 h-4 transition-transform duration-200 ${
-                                isExpanded ? "rotate-180 text-emerald-400" : ""
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Optional Error notification if auto-fix fails */}
-                      {fixErrorMsg[fix.id] && (
-                        <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-mono text-rose-400 flex items-center justify-between gap-2 animate-fadeIn">
-                          <span>{fixErrorMsg[fix.id]}</span>
-                          {fixErrorMsg[fix.id].includes("plan required") && (
-                            <Link href="/dashboard/billing" className="underline hover:text-white text-[11px] font-bold">
-                              Upgrade to Growth
-                            </Link>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Record Content Grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs bg-[#08080A] p-3 rounded-lg border border-zinc-800/80">
-                        <div>
-                          <span className="text-[10px] text-zinc-500 uppercase block font-mono">Host / Name</span>
-                          <code className="text-white font-bold block mt-0.5 text-xs">{fix.host}</code>
-                        </div>
-                        <div className="md:col-span-3">
-                          <span className="text-[10px] text-zinc-500 uppercase block font-mono">Record Content / Value</span>
-                          <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white break-all block mt-0.5 text-xs font-mono">
-                            {fix.value}
-                          </code>
-                        </div>
-                      </div>
-
-                      {/* Collapsible Expanded Accordion Drawer */}
-                      {isExpanded && (
-                        <div className="pt-3 border-t border-zinc-800/80 space-y-3 animate-fadeIn text-xs">
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono">
-                            <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
-                              <span className="text-[10px] text-zinc-500 uppercase block">Live Propagation</span>
-                              <span className="text-xs font-bold text-emerald-400 block mt-0.5 flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> 100% Verified
+                        {/* Row 3: DMARC */}
+                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              DMARC
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 max-w-[200px]">
+                            <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.dmarc.raw_record}>
+                              {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100;"}
+                            </code>
+                          </td>
+                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                            RFC 7489 (Policy: p={auditData.summary.dmarc.policy || "none"})
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                            }`}>
+                              {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
+                                ? "ENFORCED"
+                                : "ATTENTION"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                            {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine" ? (
+                              <span>Strict policy active. Phishing attempts using your brand are dropped by receiving mailboxes.</span>
+                            ) : (
+                              <span className="text-amber-300 font-medium">
+                                <strong>Why this matters:</strong> Policy is not enforced (p=none). Under 2024 mailbox rules, checkout emails risk automated spam classification.
                               </span>
-                            </div>
-                            <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
-                              <span className="text-[10px] text-zinc-500 uppercase block">Target TTL</span>
-                              <span className="text-xs font-bold text-white block mt-0.5">{fix.ttl}</span>
-                            </div>
-                            <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
-                              <span className="text-[10px] text-zinc-500 uppercase block">Compliance Standard</span>
-                              <span className="text-xs font-bold text-emerald-400 block mt-0.5">{fix.compliance_spec}</span>
-                            </div>
-                          </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab("generator")}
+                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
+                            >
+                              Enforce
+                            </button>
+                          </td>
+                        </tr>
 
-                          <div className="p-3 bg-[#08080A] rounded-lg border border-zinc-800/80 space-y-1">
-                            <span className="text-[10px] text-zinc-500 uppercase block font-mono">Destination DNS Provider / Target Server</span>
-                            <code className="text-zinc-300 font-mono text-xs block">{fix.authoritative_target}</code>
-                            <p className="text-xs text-zinc-400 font-sans mt-1">{fix.explanation}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Prominent Verification Trigger directly below records */}
-              <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 flex items-center justify-between gap-4 font-mono text-xs">
-                <div>
-                  <span className="font-bold text-white block text-sm">Step 2: Instant DNS Verification</span>
-                  <span className="text-zinc-400 text-xs">
-                    Probes authoritative resolvers to ensure record propagation.
-                  </span>
+                        {/* Row 4: BIMI */}
+                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              BIMI
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 max-w-[200px]">
+                            <code className="text-zinc-400 text-[11px] truncate block" title={auditData.summary.bimi?.svg_url || "default._bimi"}>
+                              {auditData.summary.bimi?.svg_url || "default._bimi"}
+                            </code>
+                          </td>
+                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                            Brand Indicators (SVG Tiny-PS)
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              VERIFIED
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                            Displays your official store logo directly beside checkout receipts in Gmail and Apple Mail.
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="text-[11px] text-zinc-500 font-mono">Active</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <EmeraldHoverButton
-                  onClick={handleVerifyRecordsLive}
-                  isLoading={isVerifyingLive}
-                  loadingText="Verifying..."
-                  icon={<Zap className="w-4 h-4 fill-current" />}
-                  size="md"
-                  variant="primary"
-                >
-                  Verify Records Live
-                </EmeraldHoverButton>
+
+                {/* BIMI Remote Asset Security Verification */}
+                <AssetVerificationResult
+                  domain={domainInput}
+                  initialUrl={auditData.summary.bimi?.svg_url || ""}
+                />
               </div>
-            </div>
-          </div>
+            ) : (
+              /* OperationalEmptyState when detailed audit has not yet run */
+              <OperationalEmptyState
+                icon={<Terminal className="w-8 h-8 text-emerald-400" />}
+                badge="Awaiting DNS Query"
+                title="No Diagnostic Data Loaded"
+                description={
+                  domainInput
+                    ? `Click 'Query DNS & Generate Records' on the left to run an institutional RFC audit on ${domainInput}.`
+                    : "Enter your store sending domain on the left and click 'Query DNS & Generate Records' to inspect published SPF, DKIM, DMARC, and MX records."
+                }
+                action={{
+                  label: "Query DNS Records",
+                  onClick: () => {
+                    handleRunAudit();
+                    handleGenerateRecords();
+                  },
+                }}
+              />
+            )
+          )}
+
+          {/* VIEW C: SPF Merge Engine */}
+          {activeTab === "spf-merge" && (
+            <SpfMergePreview
+              domain={domainInput}
+              onApplied={() => {
+                handleRunAudit();
+              }}
+            />
+          )}
+
+          {/* VIEW D: Seed Inbox Verifier */}
+          {activeTab === "seed-testing" && (
+            <SeedTestingView domain={domainInput} />
+          )}
         </div>
-      )}
+      </div>
 
-      {/* DETAILED RAW INSPECTOR VIEW */}
-      {activeTab === "inspector" && auditData && (
-        <div className="space-y-5">
-          {/* Top Diagnostic KPI Tiles (Stripe Specular Hairlines & Tabular Numbers) */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="obsidian-panel p-4 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">Health Score</span>
-              <span className="text-2xl font-extrabold text-emerald-400 block font-mono tabular-nums">{auditData.health_score}%</span>
-              <span className={`text-[10px] font-mono uppercase font-semibold ${
-                auditData.health_score >= 90 ? "text-emerald-400" : auditData.health_score >= 60 ? "text-amber-400" : "text-rose-400"
-              }`}>
-                • {auditData.status.toUpperCase()}
-              </span>
-            </div>
-
-            <div className="obsidian-panel p-4 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">SPF Lookup Barrier</span>
-              <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
-                {auditData.summary.spf.dns_lookup_count} of 10 Used
-              </span>
-              <span className={`text-[10px] font-mono ${auditData.summary.spf.dns_lookup_count <= 10 ? "text-emerald-400" : "text-rose-400"}`}>
-                {auditData.summary.spf.dns_lookup_count <= 10 ? "RFC 7208 Compliant" : "PermError Exceeded"}
-              </span>
-            </div>
-
-            <div className="obsidian-panel p-4 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DKIM Cryptography</span>
-              <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
-                {auditData.summary.dkim.found_selectors.length} Selectors
-              </span>
-              <span className="text-[10px] text-emerald-400 font-mono">2048-bit RSA Aligned</span>
-            </div>
-
-            <div className="obsidian-panel p-4 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DMARC Policy Posture</span>
-              <span className="text-lg font-extrabold text-emerald-400 block font-mono">
-                p={auditData.summary.dmarc.policy || "none"}
-              </span>
-              <span className="text-[10px] text-zinc-400 font-mono">
-                {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
-                  ? "Enforced (Google/Yahoo 2024)"
-                  : "Monitoring Only (Action Needed)"}
-              </span>
-            </div>
-          </div>
-
-          {/* Carbon-Grade DNS Record Verification Matrix */}
-          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] overflow-hidden shadow-fluent-elevation">
-            <div className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#0E1217]">
-              <div>
-                <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  DNS Protocol Verification &amp; Merchant Diagnostics
-                </h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  Deep inspection across SPF, DKIM, DMARC, and BIMI records with Polaris merchant impact analysis.
-                </p>
-              </div>
-              <span className="text-[10px] font-mono font-semibold text-emerald-400 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                Authoritative Multi-Resolver
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono border-collapse" role="grid">
-                <thead className="bg-[#0E1217] border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-zinc-400">
-                  <tr>
-                    <th scope="col" className="py-2.5 px-4 font-semibold text-left">Protocol</th>
-                    <th scope="col" className="py-2.5 px-4 font-semibold text-left">Published Value / Selectors</th>
-                    <th scope="col" className="py-2.5 px-3 font-semibold text-left">Technical Standard</th>
-                    <th scope="col" className="py-2.5 px-3 font-semibold text-center">Status</th>
-                    <th scope="col" className="py-2.5 px-4 font-semibold text-left">Merchant Impact &amp; Why It Matters</th>
-                    <th scope="col" className="py-2.5 px-4 font-semibold text-right">Remediation</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.05] text-zinc-300">
-                  {/* Row 1: SPF */}
-                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        SPF
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 max-w-[200px]">
-                      <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.spf.raw_record}>
-                        {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
-                      </code>
-                    </td>
-                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
-                      RFC 7208 ({auditData.summary.spf.dns_lookup_count}/10 Lookups)
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                        auditData.summary.spf.dns_lookup_count <= 10
-                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                          : "bg-rose-500/10 text-rose-400 border-rose-500/30"
-                      }`}>
-                        {auditData.summary.spf.dns_lookup_count <= 10 ? "OPTIMAL" : "CRITICAL"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
-                      {auditData.summary.spf.dns_lookup_count <= 10 ? (
-                        <span>Transactional order receipts authenticated across all configured store senders.</span>
-                      ) : (
-                        <span className="text-rose-300 font-medium">
-                          <strong>Why this matters:</strong> Exceeds the 10 DNS lookup limit. Gmail and Yahoo may reject checkout receipts and order tracking emails.
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("spf-merge")}
-                        className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
-                      >
-                        Merge &amp; Fix SPF
-                      </button>
-                    </td>
-                  </tr>
-
-                  {/* Row 2: DKIM */}
-                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        DKIM
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 max-w-[200px]">
-                      <div className="flex flex-wrap gap-1">
-                        {auditData.summary.dkim.found_selectors.map((s, i) => (
-                          <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
-                      RFC 6376 (2048-bit RSA)
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        OPTIMAL
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
-                      Cryptographic signatures verified. Protects order emails from in-flight tampering or forgery.
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("generator")}
-                        className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-zinc-300 hover:text-white transition"
-                      >
-                        Selectors
-                      </button>
-                    </td>
-                  </tr>
-
-                  {/* Row 3: DMARC */}
-                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        DMARC
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 max-w-[200px]">
-                      <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.dmarc.raw_record}>
-                        {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100;"}
-                      </code>
-                    </td>
-                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
-                      RFC 7489 (Policy: p={auditData.summary.dmarc.policy || "none"})
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                        auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
-                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                          : "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                      }`}>
-                        {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
-                          ? "ENFORCED"
-                          : "ATTENTION"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
-                      {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine" ? (
-                        <span>Strict policy active. Phishing attempts using your brand are dropped by receiving mailboxes.</span>
-                      ) : (
-                        <span className="text-amber-300 font-medium">
-                          <strong>Why this matters:</strong> Policy is not enforced (p=none). Under 2024 mailbox rules, checkout emails risk automated spam classification.
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("generator")}
-                        className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
-                      >
-                        Enforce
-                      </button>
-                    </td>
-                  </tr>
-
-                  {/* Row 4: BIMI */}
-                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        BIMI
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 max-w-[200px]">
-                      <code className="text-zinc-400 text-[11px] truncate block" title={auditData.summary.bimi?.svg_url || "default._bimi"}>
-                        {auditData.summary.bimi?.svg_url || "default._bimi"}
-                      </code>
-                    </td>
-                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
-                      Brand Indicators (SVG Tiny-PS)
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        VERIFIED
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
-                      Displays your official store logo directly beside checkout receipts in Gmail and Apple Mail.
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <span className="text-[11px] text-zinc-500 font-mono">Active</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* BIMI Remote Asset Security Verification */}
-          <AssetVerificationResult
-            domain={domainInput}
-            initialUrl={auditData.summary.bimi?.svg_url || ""}
-          />
-        </div>
-      )}
-
-      {/* Empty State when Inspector tab is active but no audit has been run */}
-      {activeTab === "inspector" && !auditData && !isLoading && (
-        <OperationalEmptyState
-          icon={<Terminal className="w-8 h-8 text-emerald-400" />}
-          badge="Awaiting DNS Query"
-          title="No Diagnostic Data Loaded"
-          description={
-            domainInput
-              ? `Enter target selectors or click "Query DNS" to run an institutional RFC audit on ${domainInput}.`
-              : "Enter your store sending domain above and click 'Query DNS' to inspect published SPF, DKIM, DMARC, and MX records."
-          }
-          action={{
-            label: "Query DNS Records",
-            onClick: () => {
-              handleRunAudit();
-              handleGenerateRecords();
-            },
-          }}
-        />
-      )}
-
-      {/* 4. COLLAPSIBLE RAW DIAGNOSTIC JSON PAYLOAD DRAWER (Development Only) */}
+      {/* 3. COLLAPSIBLE RAW DIAGNOSTIC JSON PAYLOAD DRAWER (Development Only) */}
       {process.env.NODE_ENV === "development" && (
         <div className="bg-[#0E0E12]/80 backdrop-blur-md rounded-xl border border-zinc-800/80 overflow-hidden">
           <button
@@ -1227,21 +1340,6 @@ function DNSInspectorContent() {
             </div>
           )}
         </div>
-      )}
-
-      {/* SPF CONFLICT RESOLUTION & MERGE ENGINE VIEW */}
-      {activeTab === "spf-merge" && (
-        <SpfMergePreview
-          domain={domainInput}
-          onApplied={() => {
-            handleRunAudit();
-          }}
-        />
-      )}
-
-      {/* SEED INBOX VERIFIER VIEW */}
-      {activeTab === "seed-testing" && (
-        <SeedTestingView domain={domainInput} />
       )}
     </div>
   );

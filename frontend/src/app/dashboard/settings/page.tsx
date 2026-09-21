@@ -31,13 +31,21 @@ import {
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 
+type SettingsTab = "store-security" | "telegram-alerts" | "dns-credentials";
+
+function normalizeTab(tab: string | null): SettingsTab {
+  if (tab === "telegram-alerts" || tab === "alerts") return "telegram-alerts";
+  if (tab === "dns-credentials" || tab === "providers") return "dns-credentials";
+  return "store-security";
+}
+
 function SettingsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   // Tab State
-  const initialTab = (searchParams?.get("tab") as "general" | "alerts" | "providers") || "general";
-  const [activeTab, setActiveTab] = useState<"general" | "alerts" | "providers">(initialTab);
+  const initialTab = normalizeTab(searchParams?.get("tab"));
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
   // Tab 1: Profile & Store Meta
   const [fullName, setFullName] = useState("");
@@ -77,63 +85,71 @@ function SettingsContent() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch real profile, alert configuration, and provider credentials on mount
+  // Fetch real profile, alert configuration, and provider credentials
+  const loadSettings = async () => {
+    try {
+      const profileRes = await apiFetch("/api/v1/settings/profile");
+      if (profileRes.ok) {
+        const data = await profileRes.json();
+        if (data?.profile) {
+          if (data.profile.full_name) setFullName(data.profile.full_name);
+          if (data.profile.email) setEmail(data.profile.email);
+          if (data.profile.company_name) setShopifyStore(data.profile.company_name);
+          if (data.profile.api_key) setApiKey(data.profile.api_key);
+        }
+      }
+
+      const alertsRes = await apiFetch("/api/v1/settings/alerts");
+      if (alertsRes.ok) {
+        const alertData = await alertsRes.json();
+        const cfg = alertData?.config || alertData;
+        if (cfg?.telegram_bot_token) setTelegramBotToken(cfg.telegram_bot_token);
+        if (cfg?.telegram_chat_id) setTelegramChatId(cfg.telegram_chat_id);
+        if (typeof cfg?.alert_on_score_drop === "boolean") setAlertScoreDrop(cfg.alert_on_score_drop);
+        if (typeof cfg?.score_threshold === "number") setScoreThreshold(cfg.score_threshold);
+        if (typeof cfg?.alert_on_dmarc_change === "boolean") setAlertDmarcChange(cfg.alert_on_dmarc_change);
+        if (typeof cfg?.alert_on_rbl_detection === "boolean") setAlertRblDetection(cfg.alert_on_rbl_detection);
+      }
+
+      const credsRes = await apiFetch("/api/v1/dns/auto-fix/credentials");
+      if (credsRes.ok) {
+        const credsData = await credsRes.json();
+        if (credsData?.credentials) {
+          const cf = credsData.credentials.cloudflare;
+          const gd = credsData.credentials.godaddy;
+          if (cf?.token_masked) {
+            setCloudflareToken(cf.token_masked);
+          }
+          if (cf?.is_active || cf?.api_token_configured) {
+            setProviderVerified(true);
+          }
+          if (gd?.token_masked) {
+            setGodaddyKey(gd.token_masked);
+          }
+        }
+      }
+    } catch {}
+  };
+
   useEffect(() => {
-    async function loadSettings() {
-      try {
-        const profileRes = await apiFetch("/api/v1/settings/profile");
-        if (profileRes.ok) {
-          const data = await profileRes.json();
-          if (data?.profile) {
-            if (data.profile.full_name) setFullName(data.profile.full_name);
-            if (data.profile.email) setEmail(data.profile.email);
-            if (data.profile.company_name) setShopifyStore(data.profile.company_name);
-            if (data.profile.api_key) setApiKey(data.profile.api_key);
-          }
-        }
-
-        const alertsRes = await apiFetch("/api/v1/settings/alerts");
-        if (alertsRes.ok) {
-          const alertData = await alertsRes.json();
-          const cfg = alertData?.config || alertData;
-          if (cfg?.telegram_bot_token) setTelegramBotToken(cfg.telegram_bot_token);
-          if (cfg?.telegram_chat_id) setTelegramChatId(cfg.telegram_chat_id);
-          if (typeof cfg?.alert_on_score_drop === "boolean") setAlertScoreDrop(cfg.alert_on_score_drop);
-          if (typeof cfg?.score_threshold === "number") setScoreThreshold(cfg.score_threshold);
-          if (typeof cfg?.alert_on_dmarc_change === "boolean") setAlertDmarcChange(cfg.alert_on_dmarc_change);
-          if (typeof cfg?.alert_on_rbl_detection === "boolean") setAlertRblDetection(cfg.alert_on_rbl_detection);
-        }
-
-        const credsRes = await apiFetch("/api/v1/dns/auto-fix/credentials");
-        if (credsRes.ok) {
-          const credsData = await credsRes.json();
-          if (credsData?.credentials) {
-            const cf = credsData.credentials.cloudflare;
-            const gd = credsData.credentials.godaddy;
-            if (cf?.token_masked) {
-              setCloudflareToken(cf.token_masked);
-            }
-            if (cf?.is_active || cf?.api_token_configured) {
-              setProviderVerified(true);
-            }
-            if (gd?.token_masked) {
-              setGodaddyKey(gd.token_masked);
-            }
-          }
-        }
-      } catch {}
-    }
     loadSettings();
   }, []);
 
+  const handleDiscard = async () => {
+    setSaveError(null);
+    setSaveSuccessMessage("Changes discarded. Configuration reloaded.");
+    await loadSettings();
+    setTimeout(() => setSaveSuccessMessage(null), 3000);
+  };
+
   useEffect(() => {
     const tabParam = searchParams?.get("tab");
-    if (tabParam && ["general", "alerts", "providers"].includes(tabParam)) {
-      setActiveTab(tabParam as any);
+    if (tabParam) {
+      setActiveTab(normalizeTab(tabParam));
     }
   }, [searchParams]);
 
-  const switchTab = (tab: "general" | "alerts" | "providers") => {
+  const switchTab = (tab: SettingsTab) => {
     setActiveTab(tab);
     router.replace(`/dashboard/settings?tab=${tab}`, { scroll: false });
   };
@@ -341,10 +357,10 @@ function SettingsContent() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <Sliders className="w-5 h-5 text-emerald-400" strokeWidth={2} />
-            Store Settings &amp; Notifications
+            Settings &amp; Alerts
           </h1>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Configure store metadata, instant Telegram incident alerts, and 1-click DNS remediation APIs.
+          <p className="text-xs text-zinc-400 mt-1">
+            Configure store metadata, instant Telegram incident alerts, and 1-click DNS remediation credentials.
           </p>
         </div>
       </div>
@@ -353,9 +369,9 @@ function SettingsContent() {
       <div className="flex items-center gap-1.5 p-1 bg-[#0E0E12]/80 backdrop-blur-md border border-white/[0.08] rounded-xl font-mono text-xs overflow-x-auto">
         <button
           type="button"
-          onClick={() => switchTab("general")}
+          onClick={() => switchTab("store-security")}
           className={`px-3.5 py-2 rounded-lg font-medium transition-all flex items-center gap-2 cursor-pointer flex-shrink-0 border ${
-            activeTab === "general"
+            activeTab === "store-security"
               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm"
               : "text-zinc-400 hover:text-white border-transparent"
           }`}
@@ -366,9 +382,9 @@ function SettingsContent() {
 
         <button
           type="button"
-          onClick={() => switchTab("alerts")}
+          onClick={() => switchTab("telegram-alerts")}
           className={`px-3.5 py-2 rounded-lg font-medium transition-all flex items-center gap-2 cursor-pointer flex-shrink-0 border ${
-            activeTab === "alerts"
+            activeTab === "telegram-alerts"
               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm"
               : "text-zinc-400 hover:text-white border-transparent"
           }`}
@@ -379,9 +395,9 @@ function SettingsContent() {
 
         <button
           type="button"
-          onClick={() => switchTab("providers")}
+          onClick={() => switchTab("dns-credentials")}
           className={`px-3.5 py-2 rounded-lg font-medium transition-all flex items-center gap-2 cursor-pointer flex-shrink-0 border ${
-            activeTab === "providers"
+            activeTab === "dns-credentials"
               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-sm"
               : "text-zinc-400 hover:text-white border-transparent"
           }`}
@@ -415,7 +431,7 @@ function SettingsContent() {
       {/* Form Container */}
       <form onSubmit={handleSaveSettings} className="space-y-6">
         {/* ================= TAB 1: STORE & SECURITY ================= */}
-        {activeTab === "general" && (
+        {activeTab === "store-security" && (
           <div className="space-y-6 animate-fadeIn">
             {/* Merchant Profile Card */}
             <GlassEmeraldCard
@@ -463,7 +479,7 @@ function SettingsContent() {
             </GlassEmeraldCard>
 
             {/* Developer & API Keys (Collapsible Accordion) */}
-            <div className="border border-white/[0.08] rounded-2xl bg-[#0E1217] overflow-hidden transition-all duration-200">
+            <div className="border border-white/[0.08] rounded-xl bg-[#0A0A0C] overflow-hidden transition-all duration-200">
               <button
                 type="button"
                 onClick={() => setIsDevAccordionOpen(!isDevAccordionOpen)}
@@ -582,7 +598,7 @@ function SettingsContent() {
         )}
 
         {/* ================= TAB 2: TELEGRAM & ALERT TRIGGERS ================= */}
-        {activeTab === "alerts" && (
+        {activeTab === "telegram-alerts" && (
           <div className="space-y-6 animate-fadeIn">
             {/* Telegram Bot Real-Time Incident Alert Engine */}
             <GlassEmeraldCard
@@ -745,7 +761,7 @@ function SettingsContent() {
         )}
 
         {/* ================= TAB 3: DNS PROVIDER INTEGRATIONS ================= */}
-        {activeTab === "providers" && (
+        {activeTab === "dns-credentials" && (
           <div className="space-y-6 animate-fadeIn">
             <GlassEmeraldCard
               title="1-Click Auto-Fixer Provider Credentials"
@@ -820,34 +836,50 @@ function SettingsContent() {
           </div>
         )}
 
-        {/* Global Save Feedback & Submit Button - Sticky bottom container */}
-        <div className="sticky bottom-4 z-20 bg-[#0A0A0C]/90 backdrop-blur-xl p-4 rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex-1">
+        {/* Global Save Feedback & Action Bar - Sticky bottom institutional bar */}
+        <div className="sticky bottom-4 z-20 mx-auto max-w-5xl rounded-xl border border-white/[0.08] bg-[#0A0A0C]/80 backdrop-blur-xl p-3 px-5 flex items-center justify-between shadow-2xl gap-4">
+          <div className="flex-1 min-w-0">
             {saveSuccessMessage && (
-              <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 font-mono flex items-center gap-2 animate-fadeIn">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>{saveSuccessMessage}</span>
+              <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 font-mono flex items-center gap-2 animate-fadeIn truncate">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="truncate">{saveSuccessMessage}</span>
               </div>
             )}
             {saveError && (
-              <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2 animate-fadeIn">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>{saveError}</span>
+              <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2 animate-fadeIn truncate">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span className="truncate">{saveError}</span>
               </div>
             )}
-          </div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-6 py-2.5 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-[0.98] transition-all text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0 min-h-[44px]"
-          >
-            {isLoading ? (
-              <RefreshCw className="w-3.5 h-3.5 text-zinc-950 animate-spin" />
-            ) : (
-              <Save className="w-3.5 h-3.5 text-zinc-950" />
+            {!saveSuccessMessage && !saveError && (
+              <span className="text-[11px] text-zinc-500 font-mono hidden sm:inline-block">
+                Unsaved changes will be lost if you leave this tab.
+              </span>
             )}
-            {isLoading ? "Saving Settings..." : "Save Settings"}
-          </button>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleDiscard}
+              disabled={isLoading}
+              className="px-4 py-2 rounded-xl border border-white/[0.08] hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] text-zinc-400 hover:text-white transition-colors text-xs font-semibold cursor-pointer active:scale-95 disabled:opacity-50 min-h-[38px]"
+            >
+              Discard
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold px-5 py-2 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-[0.98] transition-all text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0 min-h-[38px]"
+            >
+              {isLoading ? (
+                <RefreshCw className="w-3.5 h-3.5 text-zinc-950 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5 text-zinc-950" />
+              )}
+              {isLoading ? "Saving Settings..." : "Save Settings"}
+            </button>
+          </div>
         </div>
       </form>
     </div>

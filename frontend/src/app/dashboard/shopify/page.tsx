@@ -213,10 +213,10 @@ export default function ShopifyHubPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-emerald-400" />
-            Shopify Sync &amp; Inbox Protection
+            Store Fleet &amp; Inbox Protection
           </h1>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            Automated order delivery monitoring, transactional sender domain alignment, and real-time incident alerting.
+          <p className="text-xs text-zinc-400 mt-1">
+            Synchronize your Shopify stores, verify sender authentication, and monitor real-time order delivery health.
           </p>
         </div>
 
@@ -384,29 +384,6 @@ export default function ShopifyHubPage() {
             </div>
           </div>
 
-          <div className="pt-2 flex flex-col sm:flex-row gap-2">
-            <EmeraldHoverButton
-              onClick={handleAuditAlignment}
-              isLoading={isCheckingAlignment}
-              loadingText="Auditing Store Deliverability..."
-              icon={<ShieldCheck className="w-3.5 h-3.5" />}
-              size="sm"
-              variant="primary"
-              className="flex-1 py-2.5"
-            >
-              Audit Store Deliverability
-            </EmeraldHoverButton>
-
-            <button
-              type="button"
-              onClick={() => setShowSettingsDrawer(true)}
-              className="bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/60 font-medium px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-              Edit Store
-            </button>
-          </div>
-
           {alignmentError && (
             <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono">
               {alignmentError}
@@ -475,7 +452,6 @@ export default function ShopifyHubPage() {
         </GlassEmeraldCard>
       </div>
 
-      {/* Webhook & Order Activity Log */}
       {/* Webhook & Order Activity Log */}
       <GlassEmeraldCard
         title="Real-Time Telegram Incident & Failover Audit"

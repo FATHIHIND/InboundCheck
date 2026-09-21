@@ -253,10 +253,10 @@ export default function BlacklistRadarPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <Radio className="w-6 h-6 text-emerald-400 animate-pulse" />
-            Blacklist Radar & Reputation Intelligence
+            Reputation Radar &amp; Blacklist Intelligence
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Real-time blacklist monitoring across 10 major anti-spam databases with automated delisting guidance.
+            Real-time monitoring across 10 major global spam blacklists to protect sender IP and domain reputation.
           </p>
         </div>
 
@@ -427,18 +427,20 @@ export default function BlacklistRadarPage() {
       )}
 
       {/* 5. 3D Real-Time RBL Node Topology Canvas */}
-      <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 space-y-3 relative overflow-hidden">
-        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 text-xs">
-          <span className="font-mono text-emerald-400 font-bold flex items-center gap-2">
-            <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
-            GLOBAL SPAM BLACKLIST NETWORK
-          </span>
-          <span className="text-[10px] font-mono text-zinc-400">
-            {scan ? `${scan.rbl_total_count} AUTHORITATIVE LISTS` : "AWAITING SCAN"}
-          </span>
+      {scan && (
+        <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 space-y-3 relative overflow-hidden">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 text-xs">
+            <span className="font-mono text-emerald-400 font-bold flex items-center gap-2">
+              <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
+              GLOBAL SPAM BLACKLIST NETWORK
+            </span>
+            <span className="text-[10px] font-mono text-zinc-400">
+              {scan.rbl_total_count} AUTHORITATIVE LISTS
+            </span>
+          </div>
+          <RblTopology3DCanvas rbls={canvasNodes} className="h-44 w-full" />
         </div>
-        <RblTopology3DCanvas rbls={canvasNodes} className="h-44 w-full" />
-      </div>
+      )}
 
       {/* 6. Purpose-Driven Enterprise Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
