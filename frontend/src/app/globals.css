@@ -3,8 +3,55 @@
 @tailwind utilities;
 
 :root {
-  --background: #000000;
-  --foreground: #FFFFFF;
+  /* ==========================================================================
+     TIER 1: REFERENCE TOKENS (Primitive Color Scales in HSL and Hex)
+     ========================================================================== */
+  --obsidian-black: 0 0% 0%;           /* #000000 */
+  --obsidian-950: 240 10% 4%;          /* #0A0A0C */
+  --obsidian-900: 220 14% 7%;          /* #0E1217 */
+  --obsidian-850: 220 13% 9%;          /* #12161D */
+  --obsidian-800: 220 12% 14%;         /* #1C222B */
+
+  --shopify-green: 165 100% 25%;       /* #008060 */
+  --shopify-dark: 170 100% 15%;        /* #004C3F */
+  --emerald-neon: 160 84% 39%;         /* #10B981 */
+  --amber-warning: 38 92% 50%;         /* #F59E0B */
+  --crimson-danger: 0 84% 60%;         /* #EF4444 */
+
+  /* ==========================================================================
+     TIER 2: SYSTEM TOKENS (Semantic Role Mapping & Contrast Compliance)
+     ========================================================================== */
+  --sys-bg-canvas: hsl(var(--obsidian-black));
+  --sys-surface-base: hsl(var(--obsidian-950));
+  --sys-surface-raised: hsl(var(--obsidian-900));
+  --sys-surface-overlay: hsl(var(--obsidian-850));
+
+  --sys-text-primary: #FFFFFF;
+  --sys-text-secondary: #94A3B8;       /* Slate 400 - 7.1:1 Contrast on #0A0A0C */
+  --sys-text-tertiary: #64748B;        /* Slate 500 - 4.5:1 Contrast on #0A0A0C */
+  --sys-text-on-emerald: #021C14;
+
+  /* Stripe Sub-pixel Hairlines & Borders */
+  --sys-border-subtle: rgba(255, 255, 255, 0.07);
+  --sys-border-default: rgba(255, 255, 255, 0.12);
+  --sys-border-highlight: rgba(255, 255, 255, 0.18);
+  --sys-hairline-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+
+  /* Fluent Ambient + Dual-Lighting Elevation Shadows */
+  --sys-shadow-ambient: 0 20px 40px -15px rgba(0, 0, 0, 0.85);
+  --sys-shadow-emerald-glow: 0 0 35px -5px rgba(16, 185, 129, 0.15);
+
+  /* ==========================================================================
+     TIER 3: KINETIC & SPATIAL TOKENS (Apple HIG Physics)
+     ========================================================================== */
+  --ease-apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fluid: 200ms;
+
+  /* ==========================================================================
+     LEGACY COMPATIBILITY TOKENS (Preserved for existing components)
+     ========================================================================== */
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
   --canvas-base: #000000;
   --surface-primary: #0A0A0C;
   --surface-elevated: #0E1217;
@@ -13,6 +60,7 @@
   --border-card: rgba(255, 255, 255, 0.08);
   --border-elevated: rgba(255, 255, 255, 0.12);
   --surface: #0A0A0C;
+  --border: 240 3.7% 15.9%;
   --border-subtle: rgba(0, 128, 96, 0.2);
   --border-active: rgba(16, 185, 129, 0.45);
   --text-primary: #FFFFFF;
@@ -22,6 +70,8 @@
   --accent-deep: #004C3F;
   --accent-amber: #F59E0B;
   --accent-red: #EF4444;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
 }
 
 /* Obsidian Design Tokens & Base Panels */
@@ -51,6 +101,32 @@
   box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.2);
 }
 
+/* Stripe-inspired Sub-pixel Etched Panel with Fluent Dual Elevation */
+.obsidian-panel {
+  position: relative;
+  background-color: var(--sys-surface-base);
+  border: 1px solid var(--sys-border-subtle);
+  border-radius: 0.75rem; /* 12px */
+  box-shadow: var(--sys-hairline-specular), var(--sys-shadow-ambient);
+  transition: border-color var(--duration-fluid) var(--ease-apple-spring),
+              box-shadow var(--duration-fluid) var(--ease-apple-spring),
+              transform var(--duration-fluid) var(--ease-apple-spring);
+}
+
+.obsidian-panel:hover {
+  border-color: var(--sys-border-highlight);
+  box-shadow: var(--sys-hairline-specular), var(--sys-shadow-ambient), var(--sys-shadow-emerald-glow);
+}
+
+/* IBM Carbon-grade High-Density Interactive Row */
+.carbon-table-row {
+  transition: background-color 100ms ease;
+}
+
+.carbon-table-row:hover {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+
 /* Minimum Accessible Touch Target (WCAG 2.2 44x44px) */
 .touch-target-44 {
   min-height: 44px;
@@ -64,6 +140,7 @@
 .metric-value,
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 * {

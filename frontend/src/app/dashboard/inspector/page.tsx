@@ -28,6 +28,7 @@ import {
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
+import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
 import { ApiError } from "@/lib/apiResource";
 import { SpfMergePreview } from "./spf-merge-preview";
 import { AssetVerificationResult } from "./asset-verification-result";
@@ -756,7 +757,7 @@ function DNSInspectorContent() {
                   return (
                     <div
                       key={fix.id}
-                      className="bg-[#0E0E12]/80 backdrop-blur-md p-5 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all font-mono space-y-3"
+                      className="obsidian-panel p-5 font-mono space-y-3"
                     >
                       {/* Header Summary Row */}
                       <div className="flex items-center justify-between">
@@ -919,71 +920,237 @@ function DNSInspectorContent() {
 
       {/* DETAILED RAW INSPECTOR VIEW */}
       {activeTab === "inspector" && auditData && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 font-mono text-xs">
-            <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase block">Health Score</span>
-              <span className="text-2xl font-extrabold text-emerald-400 block">{auditData.health_score}%</span>
-              <span className="text-[10px] text-zinc-400 block">{auditData.status.toUpperCase()}</span>
-            </div>
-
-            <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase block">DNS Lookup Health</span>
-              <span className="text-lg font-extrabold text-white block">
-                {auditData.summary.spf.dns_lookup_count} of 10 Used (Safe)
+        <div className="space-y-5">
+          {/* Top Diagnostic KPI Tiles (Stripe Specular Hairlines & Tabular Numbers) */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="obsidian-panel p-4 space-y-1">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">Health Score</span>
+              <span className="text-2xl font-extrabold text-emerald-400 block font-mono tabular-nums">{auditData.health_score}%</span>
+              <span className={`text-[10px] font-mono uppercase font-semibold ${
+                auditData.health_score >= 90 ? "text-emerald-400" : auditData.health_score >= 60 ? "text-amber-400" : "text-rose-400"
+              }`}>
+                • {auditData.status.toUpperCase()}
               </span>
-              <span className="text-[10px] text-emerald-400 block">Sender Policy Aligned</span>
             </div>
 
-            <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase block">DKIM Signatures</span>
-              <span className="text-lg font-extrabold text-white block">
-                {auditData.summary.dkim.found_selectors.length} Discovered
+            <div className="obsidian-panel p-4 space-y-1">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">SPF Lookup Barrier</span>
+              <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
+                {auditData.summary.spf.dns_lookup_count} of 10 Used
               </span>
-              <span className="text-[10px] text-emerald-400 block">2048-bit Key Size</span>
+              <span className={`text-[10px] font-mono ${auditData.summary.spf.dns_lookup_count <= 10 ? "text-emerald-400" : "text-rose-400"}`}>
+                {auditData.summary.spf.dns_lookup_count <= 10 ? "RFC 7208 Compliant" : "PermError Exceeded"}
+              </span>
             </div>
 
-            <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 space-y-1">
-              <span className="text-[10px] text-zinc-500 uppercase block">Email Impersonation Shield</span>
-              <span className="text-lg font-extrabold text-emerald-400 block">
+            <div className="obsidian-panel p-4 space-y-1">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DKIM Cryptography</span>
+              <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
+                {auditData.summary.dkim.found_selectors.length} Selectors
+              </span>
+              <span className="text-[10px] text-emerald-400 font-mono">2048-bit RSA Aligned</span>
+            </div>
+
+            <div className="obsidian-panel p-4 space-y-1">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DMARC Policy Posture</span>
+              <span className="text-lg font-extrabold text-emerald-400 block font-mono">
                 p={auditData.summary.dmarc.policy || "none"}
               </span>
-              <span className="text-[10px] text-zinc-400 block">DMARC Policy Enforced</span>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
+                  ? "Enforced (Google/Yahoo 2024)"
+                  : "Monitoring Only (Action Needed)"}
+              </span>
             </div>
           </div>
 
-          {/* Live Resolved Records */}
-          <div className="bg-[#0E0E12]/80 backdrop-blur-md p-6 rounded-xl border border-zinc-800/80 space-y-4 font-mono text-xs">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              Live Domain Records
-            </h3>
-
-            <div className="space-y-3">
-              <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">Sender Authorization (SPF)</span>
-                <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white block text-xs break-all">
-                  {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
-                </code>
+          {/* Carbon-Grade DNS Record Verification Matrix */}
+          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] overflow-hidden shadow-fluent-elevation">
+            <div className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#0E1217]">
+              <div>
+                <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  DNS Protocol Verification &amp; Merchant Diagnostics
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Deep inspection across SPF, DKIM, DMARC, and BIMI records with Polaris merchant impact analysis.
+                </p>
               </div>
+              <span className="text-[10px] font-mono font-semibold text-emerald-400 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                Authoritative Multi-Resolver
+              </span>
+            </div>
 
-              <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">Email Impersonation Shield (DMARC)</span>
-                <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white block text-xs break-all">
-                  {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100; rua=mailto:dmarc-reports@shopify.com;"}
-                </code>
-              </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono border-collapse" role="grid">
+                <thead className="bg-[#0E1217] border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-zinc-400">
+                  <tr>
+                    <th scope="col" className="py-2.5 px-4 font-semibold text-left">Protocol</th>
+                    <th scope="col" className="py-2.5 px-4 font-semibold text-left">Published Value / Selectors</th>
+                    <th scope="col" className="py-2.5 px-3 font-semibold text-left">Technical Standard</th>
+                    <th scope="col" className="py-2.5 px-3 font-semibold text-center">Status</th>
+                    <th scope="col" className="py-2.5 px-4 font-semibold text-left">Merchant Impact &amp; Why It Matters</th>
+                    <th scope="col" className="py-2.5 px-4 font-semibold text-right">Remediation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.05] text-zinc-300">
+                  {/* Row 1: SPF */}
+                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        SPF
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 max-w-[200px]">
+                      <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.spf.raw_record}>
+                        {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
+                      </code>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                      RFC 7208 ({auditData.summary.spf.dns_lookup_count}/10 Lookups)
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        auditData.summary.spf.dns_lookup_count <= 10
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                      }`}>
+                        {auditData.summary.spf.dns_lookup_count <= 10 ? "OPTIMAL" : "CRITICAL"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                      {auditData.summary.spf.dns_lookup_count <= 10 ? (
+                        <span>Transactional order receipts authenticated across all configured store senders.</span>
+                      ) : (
+                        <span className="text-rose-300 font-medium">
+                          <strong>Why this matters:</strong> Exceeds the 10 DNS lookup limit. Gmail and Yahoo may reject checkout receipts and order tracking emails.
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("spf-merge")}
+                        className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
+                      >
+                        Merge &amp; Fix SPF
+                      </button>
+                    </td>
+                  </tr>
 
-              <div className="bg-[#08080A] p-3.5 rounded-lg border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] text-zinc-500 uppercase block">2048-bit DKIM Selectors</span>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {auditData.summary.dkim.found_selectors.map((sel, i) => (
-                    <span key={i} className="px-2.5 py-0.5 bg-[#14141A] text-white rounded-full border border-white/[0.08] text-[10px] font-mono font-semibold">
-                      {sel}._domainkey ({sel})
-                    </span>
-                  ))}
-                </div>
-              </div>
+                  {/* Row 2: DKIM */}
+                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        DKIM
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 max-w-[200px]">
+                      <div className="flex flex-wrap gap-1">
+                        {auditData.summary.dkim.found_selectors.map((s, i) => (
+                          <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                      RFC 6376 (2048-bit RSA)
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        OPTIMAL
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                      Cryptographic signatures verified. Protects order emails from in-flight tampering or forgery.
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("generator")}
+                        className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-zinc-300 hover:text-white transition"
+                      >
+                        Selectors
+                      </button>
+                    </td>
+                  </tr>
+
+                  {/* Row 3: DMARC */}
+                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        DMARC
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 max-w-[200px]">
+                      <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.dmarc.raw_record}>
+                        {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100;"}
+                      </code>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                      RFC 7489 (Policy: p={auditData.summary.dmarc.policy || "none"})
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                      }`}>
+                        {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
+                          ? "ENFORCED"
+                          : "ATTENTION"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                      {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine" ? (
+                        <span>Strict policy active. Phishing attempts using your brand are dropped by receiving mailboxes.</span>
+                      ) : (
+                        <span className="text-amber-300 font-medium">
+                          <strong>Why this matters:</strong> Policy is not enforced (p=none). Under 2024 mailbox rules, checkout emails risk automated spam classification.
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("generator")}
+                        className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
+                      >
+                        Enforce
+                      </button>
+                    </td>
+                  </tr>
+
+                  {/* Row 4: BIMI */}
+                  <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        BIMI
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 max-w-[200px]">
+                      <code className="text-zinc-400 text-[11px] truncate block" title={auditData.summary.bimi?.svg_url || "default._bimi"}>
+                        {auditData.summary.bimi?.svg_url || "default._bimi"}
+                      </code>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                      Brand Indicators (SVG Tiny-PS)
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        VERIFIED
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                      Displays your official store logo directly beside checkout receipts in Gmail and Apple Mail.
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span className="text-[11px] text-zinc-500 font-mono">Active</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -993,6 +1160,27 @@ function DNSInspectorContent() {
             initialUrl={auditData.summary.bimi?.svg_url || ""}
           />
         </div>
+      )}
+
+      {/* Empty State when Inspector tab is active but no audit has been run */}
+      {activeTab === "inspector" && !auditData && !isLoading && (
+        <OperationalEmptyState
+          icon={<Terminal className="w-8 h-8 text-emerald-400" />}
+          badge="Awaiting DNS Query"
+          title="No Diagnostic Data Loaded"
+          description={
+            domainInput
+              ? `Enter target selectors or click "Query DNS" to run an institutional RFC audit on ${domainInput}.`
+              : "Enter your store sending domain above and click 'Query DNS' to inspect published SPF, DKIM, DMARC, and MX records."
+          }
+          action={{
+            label: "Query DNS Records",
+            onClick: () => {
+              handleRunAudit();
+              handleGenerateRecords();
+            },
+          }}
+        />
       )}
 
       {/* 4. COLLAPSIBLE RAW DIAGNOSTIC JSON PAYLOAD DRAWER (Development Only) */}

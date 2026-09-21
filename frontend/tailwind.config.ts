@@ -10,7 +10,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        border: "hsl(var(--border))",
+        border: {
+          DEFAULT: "hsl(var(--border))",
+          subtle: "var(--sys-border-subtle)",
+          default: "var(--sys-border-default)",
+          highlight: "var(--sys-border-highlight)",
+        },
+        obsidian: {
+          canvas: "hsl(var(--obsidian-black))",
+          950: "hsl(var(--obsidian-950))",
+          900: "hsl(var(--obsidian-900))",
+          850: "hsl(var(--obsidian-850))",
+          800: "hsl(var(--obsidian-800))",
+        },
+        shopify: {
+          DEFAULT: "#008060",
+          green: "hsl(var(--shopify-green))",
+          dark: "hsl(var(--shopify-dark))",
+        },
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: "hsl(var(--card))",
@@ -31,6 +48,14 @@ const config: Config = {
           DEFAULT: "#f59e0b",
           foreground: "#000000",
         }
+      },
+      boxShadow: {
+        "stripe-hairline": "var(--sys-hairline-specular)",
+        "fluent-elevation": "var(--sys-hairline-specular), var(--sys-shadow-ambient)",
+        "emerald-radar": "0 0 25px -4px rgba(16, 185, 129, 0.25)",
+      },
+      transitionTimingFunction: {
+        "apple-spring": "cubic-bezier(0.16, 1, 0.3, 1)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],

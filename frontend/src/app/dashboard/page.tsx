@@ -36,6 +36,9 @@ import CheckHistoryChart, { IMAPCheckLog } from "./components/CheckHistoryChart"
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityRiskBanner";
+import { MerchantHealthBanner } from "@/components/dashboard/MerchantHealthBanner";
+import { StripeMetricTile } from "@/components/dashboard/StripeMetricTile";
+import { DomainMatrixTable } from "@/components/dashboard/DomainMatrixTable";
 import { ZeroSpamWizardModal } from "./shopify/zero-spam-wizard";
 
 const ScoreGauge3DCanvas = dynamic(() => import("./components/ScoreGauge3DCanvas"), { ssr: false });
@@ -654,60 +657,25 @@ export default function DashboardOverviewPage() {
         />
       )}
 
-      {/* 1b. Instant Action Warning Banner: Critical SPF/DMARC Misalignment */}
+      {/* 1b. Polaris-Grade Merchant Health & Risk Banner */}
       {hasCriticalMisalignment && atRiskOrders > 0 ? (
-        <div className="relative overflow-hidden rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 via-[#0E1217] to-rose-950/20 p-5 shadow-[0_0_30px_rgba(244,63,94,0.15)] backdrop-blur-xl animate-fadeIn">
-          <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full blur-3xl pointer-events-none opacity-20 bg-rose-500" />
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-3.5">
-              <div className="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(244,63,94,0.2)]">
-                <AlertTriangle className="w-5 h-5 text-rose-400 animate-pulse" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm sm:text-base font-extrabold text-white tracking-tight flex items-center gap-1.5">
-                    <span>⚠️</span>
-                    <span>{atRiskOrders.toLocaleString()} order confirmation emails at risk of silent drop</span>
-                  </h2>
-                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 font-bold">
-                    Critical Misalignment
-                  </span>
-                </div>
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  Critical SPF/DMARC misalignment detected on{" "}
-                  <span className="font-mono text-white font-semibold">
-                    {misalignedStores.length > 0
-                      ? misalignedStores.map((s) => s.domain_name).join(", ")
-                      : activeDomain || "store sending domain"}
-                  </span>
-                  . Google and Yahoo 2024 mailbox filters are rejecting unauthenticated checkout receipts and order tracking updates.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-2 lg:pt-0">
-              <button
-                type="button"
-                onClick={() => setShowWizardModal(true)}
-                className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer"
-              >
-                <Zap className="w-3.5 h-3.5 fill-current" />
-                1-Click Auto-Remediation
-              </button>
-              <Link
-                href={
-                  misalignedStores.length > 0
-                    ? `/dashboard/inspector?domain=${encodeURIComponent(misalignedStores[0].domain_name)}`
-                    : "/dashboard/inspector"
-                }
-                className="inline-flex items-center gap-1.5 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.1] text-zinc-200 font-semibold px-4 py-2.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer"
-              >
-                <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                Open DNS Inspector
-              </Link>
-            </div>
-          </div>
-        </div>
+        <MerchantHealthBanner
+          severity="critical"
+          domainName={
+            misalignedStores.length > 0
+              ? misalignedStores.map((s) => s.domain_name).join(", ")
+              : activeDomain || "store sending domain"
+          }
+          atRiskOrders={atRiskOrders}
+          atRiskGmvFormatted={effectiveRevenueRisk?.expected_risk_formatted}
+          misalignedStoresCount={misalignedStores.length}
+          onOpenWizard={() => setShowWizardModal(true)}
+          inspectorHref={
+            misalignedStores.length > 0
+              ? `/dashboard/inspector?domain=${encodeURIComponent(misalignedStores[0].domain_name)}`
+              : "/dashboard/inspector"
+          }
+        />
       ) : (
         /* Deliverability Revenue-at-Risk Diagnostic Banner */
         <DeliverabilityRiskBanner
@@ -716,114 +684,69 @@ export default function DashboardOverviewPage() {
         />
       )}
 
-      {/* 2. Top Metric Cards */}
+      {/* 2. Top Metric Cards (Stripe-Grade Financial Typography & Specular Hairlines) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Deliverability Health Status */}
-        <div className="obsidian-card p-5 rounded-2xl border border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden shadow-[0_0_25px_rgba(16,185,129,0.12)] min-h-[160px] h-full">
-          <div className="flex items-center justify-between relative z-10">
-            <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              Deliverability Health Status
-            </span>
-            {stores.length > 0 && healthScore !== null ? (
-              <span
-                className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded-full font-bold border ${
-                  healthStatusTier === "Optimal"
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                    : healthStatusTier === "Warning"
-                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                    : "bg-rose-500/10 text-rose-400 border-rose-500/30"
-                }`}
-              >
-                {healthStatusTier}
-              </span>
-            ) : (
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
-                Setup Required
-              </span>
-            )}
-          </div>
+        <StripeMetricTile
+          label="Deliverability Health Status"
+          value={stores.length > 0 && healthScore !== null ? `${healthScore}` : "--"}
+          unit={stores.length > 0 && healthScore !== null ? "/ 100 HEALTH" : undefined}
+          badgeText={stores.length > 0 && healthScore !== null ? healthStatusTier : "Setup Required"}
+          badgeVariant={
+            healthStatusTier === "Optimal"
+              ? "emerald"
+              : healthStatusTier === "Warning"
+              ? "amber"
+              : healthStatusTier === "Critical"
+              ? "rose"
+              : "neutral"
+          }
+          highlightText={
+            stores.length > 0 && healthScore !== null
+              ? `• ${healthStatusTier} Risk Tier (${stores.length} ${stores.length === 1 ? "domain" : "domains"})`
+              : "Awaiting First Store Scan"
+          }
+          highlightVariant={
+            healthStatusTier === "Optimal"
+              ? "emerald"
+              : healthStatusTier === "Warning"
+              ? "amber"
+              : healthStatusTier === "Critical"
+              ? "rose"
+              : "neutral"
+          }
+        >
           {stores.length > 0 ? (
             <ScoreGauge3DCanvas score={healthScore} className="h-28 w-full relative z-10" />
           ) : (
-            <div className="h-28 w-full flex flex-col items-center justify-center text-center relative z-10">
+            <div className="h-28 w-full flex flex-col items-center justify-center text-center">
               <span className="text-4xl font-extrabold text-white font-mono tracking-tight drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]">
                 --
               </span>
-              <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase mt-1">
-                / 100 HEALTH
-              </span>
             </div>
           )}
-          <div className="text-[11px] text-zinc-400 text-center relative z-10 font-mono">
-            {stores.length > 0 && healthScore !== null ? (
-              <>
-                <span
-                  className={`font-semibold ${
-                    healthStatusTier === "Optimal"
-                      ? "text-emerald-400"
-                      : healthStatusTier === "Warning"
-                      ? "text-amber-400"
-                      : "text-rose-400"
-                  }`}
-                >
-                  • {healthStatusTier} Risk Tier
-                </span>{" "}
-                ({stores.length} {stores.length === 1 ? "domain" : "domains"} audited)
-              </>
-            ) : (
-              <span className="text-zinc-400 font-medium">Awaiting First Store Scan</span>
-            )}
-          </div>
-        </div>
+        </StripeMetricTile>
 
         {/* KPI 2: Protected Monthly GMV vs At-Risk GMV */}
         {hasValidRevenueData ? (
-          <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300 min-h-[160px] h-full">
+          <StripeMetricTile
+            label="Protected Monthly GMV"
+            value={protectedGmvFormatted}
+            unit="/ mo"
+            badgeText={expectedRiskCents > 0 ? `${effectiveRevenueRisk?.expected_risk_formatted || "$0.00"} At Risk` : "100% Protected"}
+            badgeVariant={expectedRiskCents > 0 ? "amber" : "emerald"}
+            highlightText={
+              expectedRiskCents > 0
+                ? `${effectiveRevenueRisk?.expected_risk_formatted} at silent drop risk`
+                : "Zero detected checkout drops"
+            }
+            highlightVariant={expectedRiskCents > 0 ? "rose" : "emerald"}
+          >
             <InboxWitnessCanvas />
-            <div className="flex items-center justify-between relative z-10">
-              <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-                Protected Monthly GMV
-              </span>
-              {expectedRiskCents > 0 ? (
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 text-amber-400" />
-                  {effectiveRevenueRisk?.expected_risk_formatted || "$0.00"} At Risk
-                </span>
-              ) : (
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                  100% Protected
-                </span>
-              )}
-            </div>
-            <div className="space-y-1 relative z-10">
-              <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2 tabular-nums">
-                <span className="tabular-nums">{protectedGmvFormatted}</span>
-                <span className="text-xs font-mono text-zinc-400 font-normal">/ mo</span>
-              </div>
-              <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
-                <span>
-                  {expectedRiskCents > 0 ? (
-                    <span className="text-rose-400 font-semibold">
-                      {effectiveRevenueRisk?.expected_risk_formatted} at silent drop risk
-                    </span>
-                  ) : (
-                    <span className="text-emerald-400 font-semibold">
-                      Zero detected checkout drops
-                    </span>
-                  )}
-                </span>
-                {effectiveRevenueRisk?.confidence_band && (
-                  <span className="text-emerald-400 font-mono text-[10px]">
-                    High Statistical Confidence (95% Accuracy)
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+          </StripeMetricTile>
         ) : (
           /* KPI 2 Zero-State / Fallback Onboarding Prompt */
-          <div className="obsidian-card p-5 rounded-2xl border border-dashed border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden bg-gradient-to-br from-[#0E1217] to-[#121A15] min-h-[160px] h-full">
+          <div className="obsidian-card p-5 rounded-2xl border border-dashed border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden bg-gradient-to-br from-[#0E1217] to-[#121A15] min-h-[160px] h-full shadow-fluent-elevation">
             <div className="flex items-center justify-between relative z-10">
               <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
                 Protected Monthly GMV
@@ -843,7 +766,7 @@ export default function DashboardOverviewPage() {
             <div className="relative z-10 pt-1">
               <Link
                 href="/dashboard/shopify"
-                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer min-h-[38px]"
               >
                 <span>Connect Shopify</span>
                 <ArrowRight className="w-3 h-3" />
@@ -853,107 +776,69 @@ export default function DashboardOverviewPage() {
         )}
 
         {/* KPI 3: Blacklist Radar Coverage */}
-        <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300 min-h-[160px] h-full">
+        <StripeMetricTile
+          label="Blacklist Radar Coverage"
+          value={stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10 RBL Feeds Monitored"}
+          badgeText={stores.length > 0 && hasValidDomain ? "Active Radar" : "Configured"}
+          badgeVariant={stores.length > 0 && hasValidDomain ? "emerald" : "neutral"}
+          icon={Radio}
+          iconColor="text-emerald-400"
+          subtext={
+            isTelegramActive
+              ? "✓ Telegram Alerts Active"
+              : "Telegram: Disconnected (1-Click Setup)"
+          }
+        >
           <RadarBeamCanvas />
-          <div className="flex items-center justify-between relative z-10">
-            <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              Blacklist Radar Coverage
-            </span>
-            <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-          </div>
-          <div className="space-y-1 relative z-10">
-            <div className="text-2xl sm:text-3xl font-bold text-white font-mono tracking-tight flex items-baseline gap-2 tabular-nums">
-              <span className="tabular-nums">{stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10 RBL Feeds Monitored"}</span>
-            </div>
-            <div className="text-[11px] text-zinc-400 font-mono space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                {stores.length > 0 && hasValidDomain ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    <span className="text-emerald-400 font-semibold">Active Radar Monitoring</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-                    <span className="text-zinc-400 font-semibold">Radar Feeds Configured</span>
-                  </>
-                )}
-              </div>
-              <div className="text-zinc-400 text-[10px]">
-                {isTelegramActive ? (
-                  <span className="text-emerald-400 font-medium flex items-center gap-1">
-                    ✓ Telegram Alerts Active
-                  </span>
-                ) : (
-                  <Link
-                    href="/dashboard/shopify"
-                    className="text-amber-400 hover:text-amber-300 underline font-medium flex items-center gap-1"
-                  >
-                    Telegram: Disconnected (1-Click Setup)
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        </StripeMetricTile>
 
         {/* KPI 4: 48–72h Risk Forecast */}
-        <div className="obsidian-card p-5 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 relative overflow-hidden group hover:border-emerald-500/30 transition-all duration-300 min-h-[160px] h-full">
+        <StripeMetricTile
+          label="48–72h Risk Forecast"
+          value={forecastRiskDisplay}
+          badgeText={
+            healthScore !== null && healthScore >= 90
+              ? "Optimal Trajectory"
+              : healthScore !== null && healthScore >= 60
+              ? "Moderate Risk"
+              : healthScore !== null
+              ? "Elevated Risk"
+              : "Predictive Model"
+          }
+          badgeVariant={
+            healthScore === null || healthScore >= 90
+              ? "emerald"
+              : healthScore >= 60
+              ? "amber"
+              : "rose"
+          }
+          highlightText={
+            healthScore !== null && healthScore >= 90
+              ? "Optimal Delivery Trajectory"
+              : healthScore !== null && healthScore >= 60
+              ? "Moderate Attrition Exposure"
+              : healthScore !== null
+              ? "Elevated Dispute Risk"
+              : "Predictive Risk Model"
+          }
+          highlightVariant={
+            healthScore === null || healthScore >= 90
+              ? "emerald"
+              : healthScore >= 60
+              ? "amber"
+              : "rose"
+          }
+          icon={Activity}
+          iconColor={
+            healthScore === null || healthScore >= 90
+              ? "text-emerald-400"
+              : healthScore >= 60
+              ? "text-amber-400"
+              : "text-rose-400"
+          }
+        >
           <Sparkline3DCanvas />
-          <div className="flex items-center justify-between relative z-10">
-            <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
-              48–72h Risk Forecast
-            </span>
-            <Activity className={`w-4 h-4 ${
-              healthScore === null
-                ? "text-emerald-400"
-                : healthScore >= 90
-                ? "text-emerald-400"
-                : healthScore >= 60
-                ? "text-amber-400"
-                : "text-rose-400"
-            }`} />
-          </div>
-          <div className="space-y-1 relative z-10">
-            <div className={`text-3xl font-bold font-mono tracking-tight tabular-nums ${
-              healthScore === null
-                ? "text-emerald-400"
-                : healthScore >= 90
-                ? "text-emerald-400"
-                : healthScore >= 60
-                ? "text-amber-400"
-                : "text-rose-400"
-            }`}>
-              {forecastRiskDisplay}
-            </div>
-            <div className="text-[11px] text-zinc-400 font-mono flex items-center justify-between">
-              <span
-                className={`font-semibold ${
-                  healthScore === null
-                    ? "text-zinc-400"
-                    : healthScore >= 90
-                    ? "text-emerald-400"
-                    : healthScore >= 60
-                    ? "text-amber-400"
-                    : "text-rose-400"
-                }`}
-              >
-                {healthScore !== null && healthScore >= 90
-                  ? "Optimal Delivery Trajectory"
-                  : healthScore !== null && healthScore >= 60
-                  ? "Moderate Attrition Exposure"
-                  : healthScore !== null
-                  ? "Elevated Dispute Risk"
-                  : "Predictive Risk Model"}
-              </span>
-              {effectiveRevenueRisk?.confidence_band && (
-                <span className="text-zinc-500 font-mono text-[10px]">
-                  95% Confidence
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+        </StripeMetricTile>
       </div>
 
       {/* 2b. Feature Highlights */}
@@ -1129,204 +1014,16 @@ export default function DashboardOverviewPage() {
       )}
 
       {(domainsResource.state === "ready" || isDemoActive) && (
-        <div className="obsidian-card rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl">
-          {/* Live Mock Simulation Header Banner */}
-          {isDemoActive && (
-            <div className="p-4 border-b border-emerald-500/20 bg-gradient-to-r from-emerald-950/40 via-[#0A0A0C] to-cyan-950/40 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-2">
-                    <span>Interactive Simulation Mode: {DEMO_STORE_RECORD.domain_name}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
-                      Live Mock Scenario
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Simulating store DNS audit scenario: 3 misconfigured records, estimated $2,400/wk delivery risk, and 1-click repair triggers.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(true)}
-                  className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.25)] min-h-[44px]"
-                >
-                  Add Real Store Domain →
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsDemoActive(false)}
-                  className="px-3 py-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-mono text-xs rounded-xl border border-white/10 transition-colors min-h-[44px]"
-                >
-                  Exit Demo
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="p-5 border-b border-white/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                <Shield className="w-4 h-4 text-emerald-400" />
-                Monitored Stores &amp; Verified Sending Domains
-              </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Live DNS records, customer inbox placement status, and on-demand diagnostic inspector.
-              </p>
-            </div>
-            <span className="text-[10px] font-mono font-semibold text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#0E1217] border border-white/[0.08]">
-              {filteredStores.length} Active Stores
-            </span>
-          </div>
-
-          <div className="overflow-x-auto max-h-[560px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
-            <table className="w-full text-left text-xs font-mono border-collapse">
-              <thead className="sticky top-0 z-10 bg-[#0E1217]/95 backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                <tr>
-                  <th className="py-3 px-4 font-semibold text-left">Domain Name</th>
-                  <th className="py-3 px-4 font-semibold text-left">Shopify Store</th>
-                  <th className="py-3 px-4 font-semibold text-left">Inbox Placement</th>
-                  <th className="py-3 px-4 font-semibold text-left">SPF</th>
-                  <th className="py-3 px-4 font-semibold text-left">DKIM</th>
-                  <th className="py-3 px-4 font-semibold text-left">DMARC</th>
-                  <th className="py-3 px-4 font-semibold text-left">Health Score</th>
-                  <th className="py-3 px-4 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.05] text-zinc-300">
-                {filteredStores.map((store) => (
-                  <tr
-                    key={store.id}
-                    className={`transition-colors ${
-                      auditingId === store.id
-                        ? "bg-emerald-500/5 border-l-2 border-l-emerald-500/40"
-                        : "hover:bg-white/[0.02]"
-                    }`}
-                  >
-                    <td className="py-3.5 px-4 text-xs font-mono font-bold text-white flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                      <span className="truncate max-w-[180px] sm:max-w-[300px] inline-block" title={store.domain_name}>
-                        {store.domain_name}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs font-mono text-zinc-400 text-[11px]">{store.shopify_store}</td>
-                    <td className="py-3.5 px-4 text-xs font-mono">
-                      {store.unified_score >= 85 ? (
-                        <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 w-fit">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          <Inbox className="w-3 h-3" />
-                          INBOX
-                        </span>
-                      ) : store.unified_score >= 60 ? (
-                        <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 w-fit">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                          <AlertTriangle className="w-3 h-3" />
-                          AT RISK
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 w-fit">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
-                          <XCircle className="w-3 h-3" />
-                          FAILING
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
-                        store.spf_status === "optimal"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${store.spf_status === "optimal" ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
-                        {store.spf_status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
-                        store.dkim_status === "optimal"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                          : store.dkim_status === "missing" || store.dkim_status === "failed"
-                          ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                          store.dkim_status === "optimal"
-                            ? "bg-emerald-400"
-                            : store.dkim_status === "missing" || store.dkim_status === "failed"
-                            ? "bg-rose-400"
-                            : "bg-amber-400"
-                        }`} />
-                        {store.dkim_status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className={`text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
-                        store.dmarc_status === "optimal"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                          : store.dmarc_status === "warn"
-                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                          : "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                          store.dmarc_status === "optimal"
-                            ? "bg-emerald-400"
-                            : store.dmarc_status === "warn"
-                            ? "bg-amber-400"
-                            : "bg-rose-400"
-                        }`} />
-                        {store.dmarc_status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs font-mono">
-                      <span className={`font-bold text-xs flex items-center gap-1.5 ${
-                        store.unified_score >= 85 ? "text-emerald-400" :
-                        store.unified_score >= 60 ? "text-amber-400" : "text-rose-400"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          store.unified_score >= 85 ? "bg-emerald-400" :
-                          store.unified_score >= 60 ? "bg-amber-400" : "bg-rose-400"
-                        }`} />
-                        {store.unified_score}%
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs font-mono text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleReAudit(store.id, store.domain_name)}
-                          disabled={auditingId === store.id}
-                          className="min-h-[44px] px-3 py-2 bg-[#0E1217] hover:bg-[#121820] border border-white/[0.08] hover:border-emerald-500/40 text-zinc-300 font-bold rounded-xl transition-all duration-150 hover:scale-105 active:scale-95 text-xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${auditingId === store.id ? "animate-spin text-emerald-400" : ""}`} />
-                          <span>Audit</span>
-                        </button>
-                        <Link
-                          href={`/dashboard/inspector?domain=${encodeURIComponent(store.domain_name)}`}
-                          className="min-h-[44px] px-3 py-2 bg-[#0E1217] hover:bg-[#121820] border border-white/[0.08] hover:border-emerald-500/40 text-emerald-400 font-bold rounded-xl transition-all duration-150 hover:scale-105 active:scale-95 text-xs inline-flex items-center gap-1.5"
-                        >
-                          <Terminal className="w-3.5 h-3.5" />
-                          <span>Inspect DNS</span>
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDeleteModal(store.id, store.domain_name)}
-                          className="min-h-[44px] min-w-[44px] p-2 bg-[#0E1217] hover:bg-red-500/10 border border-white/[0.08] hover:border-red-500/30 text-zinc-500 hover:text-red-400 rounded-xl transition inline-flex items-center justify-center cursor-pointer"
-                          title="Delete record"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DomainMatrixTable
+          stores={filteredStores}
+          isDemoActive={isDemoActive}
+          auditingId={auditingId}
+          onReAudit={handleReAudit}
+          onInspect={(domainName) => router.push(`/dashboard/inspector?domain=${encodeURIComponent(domainName)}`)}
+          onOpenDeleteModal={handleOpenDeleteModal}
+          onAddStore={() => setShowAddModal(true)}
+          onExitDemo={() => setIsDemoActive(false)}
+        />
       )}
 
       {/* Add Store Modal */}

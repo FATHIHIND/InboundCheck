@@ -588,16 +588,16 @@ export default function BlacklistRadarPage() {
           icon={<Activity className="w-5 h-5 text-emerald-400" />}
           disableGrid
         >
-          <div className="overflow-y-auto max-h-[360px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 rounded-lg">
-            <table className="w-full text-left text-xs font-mono border-collapse">
-              <thead className="sticky top-0 z-10 bg-[#0E1217]/95 backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+          <div className="overflow-y-auto max-h-[460px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 rounded-xl border border-white/[0.08] bg-[#0A0A0C]">
+            <table className="w-full text-left text-xs font-mono border-collapse" role="grid">
+              <thead className="sticky top-0 z-10 bg-[#0E1217] backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                 <tr>
-                  <th className="py-3 px-4 font-semibold text-left">Reputation Provider</th>
-                  <th className="py-3 px-4 font-semibold text-left">Reputation Network</th>
-                  <th className="py-3 px-4 font-semibold text-left">Target Type</th>
-                  <th className="py-3 px-4 font-semibold text-left">Measured Status</th>
-                  <th className="py-3 px-4 font-semibold text-left">Latency</th>
-                  <th className="py-3 px-4 font-semibold text-right">Delisting Portal</th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-left">Reputation Provider</th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-left">Reputation Zone</th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-left">Target Type</th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-left">Measured Status</th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-center">Latency</th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-right">Delisting Portal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.05] text-zinc-300">
@@ -610,10 +610,16 @@ export default function BlacklistRadarPage() {
                   return (
                     <Fragment key={rbl.provider_id}>
                       <tr
-                        className="hover:bg-white/[0.02] transition-colors cursor-pointer"
+                        className="carbon-table-row hover:bg-white/[0.02] transition-colors cursor-pointer"
                         onClick={() => toggleRow(rbl.provider_id)}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            toggleRow(rbl.provider_id);
+                          }
+                        }}
                       >
-                        <td className="py-3.5 px-4 text-xs font-mono">
+                        <td className="py-2.5 px-3 text-xs font-mono">
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -626,7 +632,7 @@ export default function BlacklistRadarPage() {
                               title={isExpanded ? "Collapse Row" : "Expand Row"}
                             >
                               <ChevronDown
-                                className={`w-4 h-4 transition-transform duration-200 ${
+                                className={`w-3.5 h-3.5 transition-transform duration-200 ${
                                   isExpanded ? "rotate-180 text-emerald-400" : "text-zinc-400"
                                 }`}
                               />
@@ -635,50 +641,50 @@ export default function BlacklistRadarPage() {
                               <div className="font-bold text-white text-xs font-sans flex items-center gap-1.5">
                                 {rbl.provider_name}
                               </div>
-                              <div className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1 font-sans">
+                              <div className="text-[10px] text-zinc-400 font-mono mt-0.5 line-clamp-1">
                                 Target: {rbl.queried_target}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-mono text-zinc-300">{rbl.zone}</td>
-                        <td className="py-3.5 px-4 text-xs font-mono">
-                          <span className="text-[11px] font-mono uppercase tracking-wider font-semibold px-2.5 py-0.5 rounded-md bg-zinc-800/80 text-zinc-300 border border-white/[0.08]">
+                        <td className="py-2.5 px-3 text-xs font-mono text-zinc-400">{rbl.zone}</td>
+                        <td className="py-2.5 px-3 text-xs font-mono">
+                          <span className="text-[10px] font-mono uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 border border-white/[0.08]">
                             {rbl.target_type}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-mono">
+                        <td className="py-2.5 px-3 text-xs font-mono">
                           {isListed ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/30">
-                              <XCircle className="w-3.5 h-3.5" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/30">
+                              <XCircle className="w-3 h-3" />
                               LISTED
                             </span>
                           ) : isUnknown ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30">
-                              <AlertCircle className="w-3.5 h-3.5" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30">
+                              <AlertCircle className="w-3 h-3" />
                               UNKNOWN
                             </span>
                           ) : isError ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-zinc-400 bg-zinc-800 border border-zinc-700">
-                              <HelpCircle className="w-3.5 h-3.5" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-zinc-400 bg-zinc-800 border border-zinc-700">
+                              <HelpCircle className="w-3 h-3" />
                               ERROR
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono uppercase tracking-wider font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3 h-3" />
                               CLEAN
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-mono text-zinc-300 tabular-nums">
+                        <td className="py-2.5 px-3 text-xs font-mono text-zinc-300 tabular-nums text-center">
                           {rbl.latency_ms ?? "--"}ms
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-mono text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-2.5 px-3 text-xs font-mono text-right" onClick={(e) => e.stopPropagation()}>
                           <a
                             href={rbl.delisting_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-zinc-400 hover:text-emerald-400 font-mono text-xs inline-flex items-center gap-1 transition-colors"
+                            className="text-zinc-400 hover:text-emerald-400 font-mono text-xs inline-flex items-center gap-1 transition-colors min-h-[32px] px-2 py-1 rounded hover:bg-white/[0.04]"
                           >
                             Lookup <ExternalLink className="w-3 h-3" />
                           </a>
