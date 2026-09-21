@@ -74,7 +74,7 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`group relative overflow-hidden rounded-2xl border border-emerald-500/15 bg-[#0A0A0C]/90 backdrop-blur-md p-6 transition-all duration-300 hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)] ${
+      className={`group relative overflow-hidden rounded-xl border border-white/[0.08] bg-[#0A0A0C] backdrop-blur-md p-6 transition-all duration-300 hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)] ${
         onClick ? "cursor-pointer" : ""
       } ${className}`}
     >

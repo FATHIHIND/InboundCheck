@@ -173,7 +173,7 @@ export default function DashboardLayout({
                   PRO
                 </span>
               </div>
-              <span className="text-[10px] text-emerald-400/90 font-mono tracking-wide font-medium">Shopify Email Shield</span>
+              <span className="text-xs font-semibold text-emerald-400 font-mono tracking-normal">Shopify Email Shield</span>
             </div>
           </Link>
 
@@ -181,7 +181,7 @@ export default function DashboardLayout({
           <div className="space-y-6">
             {/* Group 1: Store Protection */}
             <div className="space-y-1">
-              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 select-none block">
+              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 block">
                 STORE PROTECTION
               </span>
               <Link
@@ -210,7 +210,7 @@ export default function DashboardLayout({
 
             {/* Group 2: Diagnostics & Radar */}
             <div className="space-y-1">
-              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 select-none block">
+              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 block">
                 DIAGNOSTICS &amp; RADAR
               </span>
               <Link
@@ -253,7 +253,7 @@ export default function DashboardLayout({
 
             {/* Group 3: Configuration */}
             <div className="space-y-1">
-              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 select-none block">
+              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 block">
                 CONFIGURATION
               </span>
               <Link

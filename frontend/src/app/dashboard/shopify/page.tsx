@@ -357,7 +357,7 @@ export default function ShopifyHubPage() {
                 value={storeDomain}
                 onChange={(e) => setStoreDomain(e.target.value)}
                 placeholder="store.myshopify.com"
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
 
@@ -368,7 +368,7 @@ export default function ShopifyHubPage() {
                 value={customDomain}
                 onChange={(e) => setCustomDomain(e.target.value)}
                 placeholder="store.com"
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
 
@@ -379,7 +379,7 @@ export default function ShopifyHubPage() {
                 value={senderEmail}
                 onChange={(e) => setSenderEmail(e.target.value)}
                 placeholder="orders@store.com"
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-emerald-400 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>

@@ -255,8 +255,8 @@ export default function BlacklistRadarPage() {
             <Radio className="w-6 h-6 text-emerald-400 animate-pulse" />
             Reputation Radar &amp; Blacklist Intelligence
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
-            Real-time monitoring across 10 major global spam blacklists to protect sender IP and domain reputation.
+          <p className="text-sm text-zinc-400 font-normal mt-1">
+            Monitor sender domain and IP reputation across 10 global RBL feeds.
           </p>
         </div>
 
@@ -281,6 +281,7 @@ export default function BlacklistRadarPage() {
             icon={<RefreshCw className="w-3.5 h-3.5" />}
             size="sm"
             variant="primary"
+            className="h-10 px-5 text-xs font-semibold rounded-lg shadow-sm"
           >
             {rateLimitCountdown !== null
               ? `Cooldown (${rateLimitCountdown}s)`
@@ -334,7 +335,7 @@ export default function BlacklistRadarPage() {
       )}
 
       {/* 2. Target Search & Control Bar */}
-      <div className="bg-[#0E0E12]/80 backdrop-blur-md p-5 rounded-2xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="bg-[#0A0A0C] backdrop-blur-md p-5 rounded-xl border border-white/[0.08] hover:border-emerald-500/30 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-96">
           <Globe className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -345,7 +346,7 @@ export default function BlacklistRadarPage() {
               if (e.key === "Enter") runScan();
             }}
             placeholder="Enter domain, e.g. store.com"
-            className="w-full pl-9 pr-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500/50 transition-colors"
+            className="w-full pl-9 pr-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500/50 transition-colors"
           />
         </div>
 
@@ -428,7 +429,7 @@ export default function BlacklistRadarPage() {
 
       {/* 5. 3D Real-Time RBL Node Topology Canvas */}
       {scan && (
-        <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all duration-200 space-y-3 relative overflow-hidden">
+        <div className="bg-[#0A0A0C] backdrop-blur-md p-4 rounded-xl border border-white/[0.08] hover:border-emerald-500/30 transition-all duration-200 space-y-3 relative overflow-hidden">
           <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 text-xs">
             <span className="font-mono text-emerald-400 font-bold flex items-center gap-2">
               <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
@@ -545,7 +546,7 @@ export default function BlacklistRadarPage() {
 
       {/* 7. Loading Skeleton State */}
       {isLoading && !scan && (
-        <div className="bg-[#0E0E12]/80 backdrop-blur-md p-8 rounded-xl border border-zinc-800/80 animate-pulse space-y-4">
+        <div className="bg-[#0A0A0C] backdrop-blur-md p-8 rounded-xl border border-white/[0.08] animate-pulse space-y-4">
           <div className="h-4 bg-zinc-800 rounded w-1/4"></div>
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (

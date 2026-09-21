@@ -147,7 +147,7 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
             placeholder={`Auto-discover from default._bimi.${domain || "brand.com"} or enter custom https://...`}
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
-            className="flex-1 px-3.5 py-2 rounded-lg bg-[#0E0E14] border border-zinc-800 text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500 text-xs"
+            className="flex-1 px-3.5 py-2 rounded-lg bg-[#0E0E14] border border-zinc-800 text-zinc-100 placeholder:text-zinc-500 font-medium focus:outline-none focus:border-emerald-500 text-xs"
           />
           <EmeraldHoverButton
             size="sm"

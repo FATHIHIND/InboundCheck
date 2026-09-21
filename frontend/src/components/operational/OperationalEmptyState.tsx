@@ -26,9 +26,9 @@ export function OperationalEmptyState({
 }: OperationalEmptyStateProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl bg-[#0E0E12]/80 border border-white/10 p-8 md:p-12 text-center backdrop-blur-xl shadow-xl flex flex-col items-center justify-center ${className}`}
+      className={`relative overflow-hidden rounded-xl bg-[#0A0A0C] border border-white/[0.08] p-8 md:p-12 text-center backdrop-blur-xl shadow-xl flex flex-col items-center justify-center ${className}`}
     >
-      <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 text-zinc-400 mb-4 shadow-inner">
+      <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 text-zinc-400 mb-4 shadow-inner">
         {icon || <FolderX className="w-8 h-8 text-zinc-500" />}
       </div>
 
@@ -48,7 +48,7 @@ export function OperationalEmptyState({
         action.href ? (
           <a
             href={action.href}
-            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer text-xs"
+            className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold h-10 px-5 rounded-lg transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer text-xs"
           >
             <PlusCircle className="w-4 h-4" />
             {action.label}
@@ -58,7 +58,7 @@ export function OperationalEmptyState({
           <button
             type="button"
             onClick={action.onClick}
-            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer text-xs"
+            className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold h-10 px-5 rounded-lg transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer text-xs"
           >
             <PlusCircle className="w-4 h-4" />
             {action.label}

@@ -454,8 +454,8 @@ function DNSInspectorContent() {
             <Terminal className="w-6 h-6 text-emerald-400" />
             Domain Health Inspector
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
-            Audit your store DNS protocols (SPF, DKIM, DMARC, BIMI) and verify live mailbox deliverability readiness.
+          <p className="text-sm text-zinc-400 font-normal mt-1">
+            Verify DNS records and protect customer order receipts from spam.
           </p>
         </div>
 
@@ -517,7 +517,7 @@ function DNSInspectorContent() {
         {/* Left Workspace: Control Panel (Col 5) */}
         <div className="lg:col-span-5 space-y-6">
           {/* Domain Query Bar & Selector Badges */}
-          <div className="bg-[#0E0E12]/80 backdrop-blur-md p-5 rounded-2xl border border-zinc-800/80 shadow-lg space-y-4">
+          <div className="bg-[#0A0A0C] backdrop-blur-md p-5 rounded-xl border border-white/[0.08] shadow-lg space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
                 <Search className="w-3.5 h-3.5 text-emerald-400" />
@@ -534,7 +534,7 @@ function DNSInspectorContent() {
                 value={domainInput}
                 onChange={(e) => setDomainInput(e.target.value)}
                 placeholder="Enter store domain (e.g. store.com)"
-                className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs leading-none"
+                className="bg-transparent text-zinc-100 placeholder:text-zinc-500 font-medium w-full focus:outline-none font-mono text-xs leading-none"
               />
             </div>
 
@@ -554,7 +554,7 @@ function DNSInspectorContent() {
                   value={customSelectors}
                   onChange={(e) => setCustomSelectors(e.target.value)}
                   placeholder="e.g. shopify, google, kl"
-                  className="bg-transparent text-white w-full focus:outline-none placeholder-zinc-600 font-mono text-xs leading-none"
+                  className="bg-transparent text-zinc-100 placeholder:text-zinc-500 font-medium w-full focus:outline-none font-mono text-xs leading-none"
                 />
               </div>
 
@@ -612,7 +612,7 @@ function DNSInspectorContent() {
               icon={<Zap className="w-3.5 h-3.5 fill-current" />}
               size="sm"
               variant="primary"
-              className="w-full h-10 text-xs font-semibold flex items-center justify-center shadow-sm"
+              className="w-full h-10 px-5 text-xs font-semibold rounded-lg flex items-center justify-center shadow-sm"
             >
               Query DNS &amp; Generate Records
             </EmeraldHoverButton>
@@ -635,7 +635,7 @@ function DNSInspectorContent() {
               ].map((item, i) => (
                 <label
                   key={i}
-                  className="flex items-center justify-between p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80 text-zinc-300 hover:border-emerald-500/30 cursor-pointer transition"
+                  className="flex items-center justify-between p-3 rounded-lg border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.04] transition-colors cursor-pointer"
                 >
                   <span className="font-medium text-xs text-white">{item.label}</span>
                   <input
@@ -645,7 +645,7 @@ function DNSInspectorContent() {
                       item.set(e.target.checked);
                       setTimeout(handleGenerateRecords, 50);
                     }}
-                    className="rounded bg-[#14141A] border-zinc-700 text-emerald-400 w-4 h-4 cursor-pointer focus:ring-emerald-500"
+                    className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/20 cursor-pointer"
                   />
                 </label>
               ))}
@@ -702,7 +702,7 @@ function DNSInspectorContent() {
                   setDmarcReportEmail(e.target.value);
                   setTimeout(handleGenerateRecords, 50);
                 }}
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-emerald-500/50"
+                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-zinc-100 placeholder:text-zinc-500 font-medium focus:outline-none focus:border-emerald-500/50"
               />
             </div>
           </GlassEmeraldCard>
@@ -728,7 +728,7 @@ function DNSInspectorContent() {
             <div className="space-y-5">
               {/* STEP 1 & 2 CLOSED-LOOP BANNER */}
               {hasCopiedRecords && (
-                <div className="p-4 bg-[#0E0E12]/80 backdrop-blur-md border border-emerald-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn font-mono text-xs">
+                <div className="p-4 bg-[#0A0A0C] backdrop-blur-md border border-white/[0.08] rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn font-mono text-xs">
                   <div className="flex items-center gap-2.5 text-zinc-200">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>
@@ -972,7 +972,7 @@ function DNSInspectorContent() {
                   </div>
 
                   {/* Prominent Verification Trigger directly below records */}
-                  <div className="bg-[#0E0E12]/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800/80 flex items-center justify-between gap-4 font-mono text-xs">
+                  <div className="bg-[#0A0A0C] backdrop-blur-md p-4 rounded-xl border border-white/[0.08] flex items-center justify-between gap-4 font-mono text-xs">
                     <div>
                       <span className="font-bold text-white block text-sm">Step 2: Instant DNS Verification</span>
                       <span className="text-zinc-400 text-xs">
@@ -1298,7 +1298,7 @@ function DNSInspectorContent() {
 
       {/* 3. COLLAPSIBLE RAW DIAGNOSTIC JSON PAYLOAD DRAWER (Development Only) */}
       {process.env.NODE_ENV === "development" && (
-        <div className="bg-[#0E0E12]/80 backdrop-blur-md rounded-xl border border-zinc-800/80 overflow-hidden">
+        <div className="bg-[#0A0A0C] backdrop-blur-md rounded-xl border border-white/[0.08] overflow-hidden">
           <button
             type="button"
             onClick={() => setShowRawDrawer(!showRawDrawer)}

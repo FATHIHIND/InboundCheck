@@ -209,8 +209,8 @@ export default function AIContentLabPage() {
             <Sparkles className="w-5 h-5 text-emerald-400 fill-current" />
             Template Optimizer &amp; Content Intelligence
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
-            Scan order receipts and marketing templates for spam friction and generate Liquid-safe copy variations.
+          <p className="text-sm text-zinc-400 font-normal mt-1">
+            Scan order receipts for spam triggers and generate Liquid-safe variants.
           </p>
         </div>
 
@@ -289,7 +289,7 @@ export default function AIContentLabPage() {
                   setSelectedPreset("");
                 }}
                 placeholder="e.g. Order {{ order.name }} confirmed - Receipt & details"
-                className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
 
@@ -311,7 +311,7 @@ export default function AIContentLabPage() {
                   setSelectedPreset("");
                 }}
                 placeholder="<p>Hi {{ customer.first_name }},</p><p>Thank you for buying from our store! ACT NOW to claim 100% FREE shipping on your next purchase...</p>"
-                className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-200 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/30 focus:border-emerald-500/60 leading-relaxed transition-all resize-y min-h-[180px]"
+                className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/30 focus:border-emerald-500/60 leading-relaxed transition-all resize-y min-h-[180px]"
               />
             </div>
 
