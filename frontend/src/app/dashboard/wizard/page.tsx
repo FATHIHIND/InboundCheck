@@ -58,6 +58,45 @@ const CHECK_ICONS: Record<string, React.ReactNode> = {
   shared_pool_exposure: <FileCode className="w-5 h-5" />,
 };
 
+const ONBOARDING_CHECKS = [
+  {
+    check_id: "custom_sending_domain",
+    title: "1. Custom Sending Domain",
+    subtitle: "Custom Brand Domain Alignment",
+    finding: "Verifies customer receipts send from your authenticated brand domain (@yourbrand.com) rather than generic shared pools.",
+  },
+  {
+    check_id: "shopify_dkim",
+    title: "2. Shopify DKIM CNAME Routing",
+    subtitle: "2048-Bit Cryptographic Authentication",
+    finding: "Validates active DKIM public keys and CNAME selector routing ensuring message authenticity and zero forgery risk.",
+  },
+  {
+    check_id: "spf_alignment",
+    title: "3. SPF Alignment & Mechanism",
+    subtitle: "Sender Policy Framework RFC 7208",
+    finding: "Checks that SPF records authorize Shopify and ESP infrastructure without exceeding RFC character and mechanism constraints.",
+  },
+  {
+    check_id: "dmarc_policy",
+    title: "4. DMARC Governance Policy",
+    subtitle: "Domain-based Message Authentication",
+    finding: "Confirms strict _dmarc TXT record enforcement (p=none/quarantine/reject) required by Google & Yahoo 2024 mandates.",
+  },
+  {
+    check_id: "spf_conflict",
+    title: "5. SPF 10-Lookup Limit Guard",
+    subtitle: "DNS Query Limitation Protection",
+    finding: "Prevents silent deliverability dropouts caused by exceeding the 10 DNS lookup limit across integrated eCommerce apps.",
+  },
+  {
+    check_id: "shared_pool_exposure",
+    title: "6. Shared Pool & Reputation Isolation",
+    subtitle: "Reputation & Noisy Neighbor Defense",
+    finding: "Ensures high-converting transactional order receipts are isolated from shared marketing IP blacklists.",
+  },
+];
+
 function SetupWizardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -79,18 +118,29 @@ function SetupWizardContent() {
 
   const runEvaluation = useCallback(
     async (overrideDomain?: string) => {
+      const target = overrideDomain !== undefined ? overrideDomain : domainInput;
+      const cleanDomain = (target || "")
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, "")
+        .replace(/\/.*$/, "");
+
+      if (!cleanDomain) {
+        setError("Please enter a sending domain (e.g. yourbrand.com or store.myshopify.com) to start the deliverability audit.");
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
       setFixSuccessMessage(null);
       setFixErrorMessage(null);
 
       try {
-        const targetDomain = overrideDomain !== undefined ? overrideDomain : domainInput;
         const res = await apiFetch("/api/v1/shopify/deliverability-readiness", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            domain: targetDomain.trim() || undefined,
+            domain: cleanDomain,
           }),
         });
 
@@ -101,9 +151,7 @@ function SetupWizardContent() {
 
         const json: ShopifyReadinessData = await res.json();
         setData(json);
-        if (!domainInput && json.domain) {
-          setDomainInput(json.domain);
-        }
+        setDomainInput(json.domain || cleanDomain);
       } catch (err: unknown) {
         console.error("Readiness evaluation error:", err);
         const msg = err instanceof Error ? err.message : "Failed to evaluate deliverability readiness";
@@ -115,9 +163,11 @@ function SetupWizardContent() {
     [domainInput]
   );
 
-  // Initial load
+  // Initial load: Only auto-run if an explicit domain is supplied via URL query parameter
   useEffect(() => {
-    runEvaluation(queryDomain || undefined);
+    if (queryDomain && queryDomain.trim()) {
+      runEvaluation(queryDomain.trim());
+    }
   }, [queryDomain, runEvaluation]);
 
   const handleCopy = (text: string) => {
@@ -294,35 +344,129 @@ function SetupWizardContent() {
 
         {/* Loading State */}
         {isLoading && !data && (
-          <div className="py-24 flex flex-col items-center justify-center space-y-4">
-            <RefreshCw className="w-10 h-10 text-emerald-600 animate-spin" />
-            <p className="text-xs text-slate-600 font-mono">
-              Auditing DNS resolvers &amp; Shopify sender alignment...
-            </p>
+          <div className="py-20 flex flex-col items-center justify-center space-y-4 animate-fadeIn">
+            <RefreshCw className="w-9 h-9 text-emerald-600 animate-spin" />
+            <div className="text-center space-y-1">
+              <p className="text-sm font-semibold text-slate-900 font-mono">
+                Running Multi-Resolver Deliverability Audit...
+              </p>
+              <p className="text-xs text-slate-500 font-mono">
+                Auditing authoritative DNS, SPF syntax, 2048-bit DKIM selectors, and DMARC enforcement.
+              </p>
+            </div>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="p-6 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 space-y-3 font-mono text-xs animate-fadeIn">
-            <div className="flex items-center gap-2 font-semibold text-sm">
-              <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
-              <span>Diagnostic Pipeline Error</span>
+          <div className="p-4 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 space-y-2 font-mono text-xs animate-fadeIn shadow-2xs">
+            <div className="flex items-center gap-2 font-semibold text-xs">
+              <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>Diagnostic Pipeline Notice</span>
             </div>
-            <p className="text-slate-700">{error}</p>
-            <div className="pt-2">
-              <EmeraldHoverButton
-                size="sm"
-                variant="secondary"
-                onClick={() => runEvaluation()}
-              >
-                Retry Pipeline
-              </EmeraldHoverButton>
+            <p className="text-slate-700 font-sans text-xs">{error}</p>
+          </div>
+        )}
+
+        {/* ================= ONBOARDING ZERO STATE (NO STORE/DOMAIN CONNECTED YET) ================= */}
+        {!data && !isLoading && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Prominent Domain Input Bar */}
+            <div className="p-6 rounded-lg border border-slate-200 bg-slate-50/80 space-y-3.5 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <label htmlFor="wizard-domain-input" className="text-xs font-semibold text-slate-800 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-emerald-600" />
+                  <span>Enter Store Sending Domain or Shopify URL</span>
+                </label>
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">
+                  Zero-Spam Compliance Engine
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                <div className="relative w-full sm:flex-1">
+                  <Globe className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    id="wizard-domain-input"
+                    type="text"
+                    placeholder="e.g. yourbrand.com or store.myshopify.com"
+                    value={domainInput}
+                    onChange={(e) => {
+                      setDomainInput(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") runEvaluation(domainInput);
+                    }}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white border border-slate-300 text-xs font-mono text-slate-900 placeholder:text-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => runEvaluation(domainInput)}
+                  disabled={isLoading}
+                  className="h-10 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer text-xs shrink-0 disabled:opacity-50 active:scale-[0.98] w-full sm:w-auto"
+                >
+                  <Zap className="w-4 h-4 fill-current" />
+                  <span>Start Deliverability Audit</span>
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-500 font-sans">
+                Tests multi-resolver SPF alignment, DKIM 2048-bit selectors, DMARC policies, and shared pool risk without modifying DNS zones.
+              </p>
+            </div>
+
+            {/* Onboarding Guide Card explaining 6 essential checks */}
+            <div className="p-6 rounded-lg border border-slate-200 bg-white space-y-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    Google &amp; Yahoo 2024 Bulk Sender Mandate Readiness
+                  </h3>
+                  <p className="text-xs text-slate-600">
+                    6 automated checks required to eliminate spam classification and guarantee primary inbox placement.
+                  </p>
+                </div>
+                <span className="self-start sm:self-auto text-[10px] font-mono font-semibold uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  6 Checks Awaiting Audit
+                </span>
+              </div>
+
+              {/* 6 Neutral Check Cards in Awaiting Audit State */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {ONBOARDING_CHECKS.map((check) => (
+                  <div
+                    key={check.check_id}
+                    className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 flex items-start gap-3.5 shadow-2xs"
+                  >
+                    <div className="p-2.5 rounded-lg shrink-0 bg-white text-slate-500 border border-slate-200 shadow-2xs">
+                      {CHECK_ICONS[check.check_id] || <ShieldCheck className="w-5 h-5" />}
+                    </div>
+
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-xs font-semibold text-slate-900 truncate">
+                          {check.title}
+                        </h4>
+                        <span className="text-[10px] uppercase px-2 py-0.5 rounded font-mono font-semibold bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                          Awaiting Audit
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                        {check.finding}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Content Body */}
+        {/* Content Body: Only rendered AFTER an audit is explicitly initiated */}
         {data && !isLoading && (
           <>
             {/* ================= STEP 0: OVERVIEW DASHBOARD ================= */}
@@ -663,7 +807,7 @@ export default function SetupWizardPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-12 text-center text-xs font-mono text-zinc-500">
+        <div className="p-12 text-center text-xs font-mono text-slate-500">
           Loading deliverability setup wizard...
         </div>
       }
