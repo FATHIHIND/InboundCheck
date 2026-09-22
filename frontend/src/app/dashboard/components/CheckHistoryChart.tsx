@@ -27,7 +27,7 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
 
   if (logs.length === 0) {
     return (
-      <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-5 shadow-2xl">
+      <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-5 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
           <div>
             <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
@@ -54,7 +54,7 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
   }
 
   return (
-    <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-5 shadow-2xl">
+    <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-5 shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
         <div>

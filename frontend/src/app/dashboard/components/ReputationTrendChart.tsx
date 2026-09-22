@@ -21,7 +21,7 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
 
   if (!data || data.length === 0) {
     return (
-      <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] flex flex-col justify-between space-y-4 shadow-2xl">
+      <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-4 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
           <div>
             <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
@@ -83,7 +83,7 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
   const hoveredPoint = hoveredIndex !== null ? points[hoveredIndex] : null;
 
   return (
-    <div className="obsidian-card p-6 rounded-2xl border border-white/[0.08] relative space-y-5 shadow-2xl">
+    <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 relative space-y-5 shadow-2xl">
       {/* Header with V2 Unified Scoring Context */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
         <div>

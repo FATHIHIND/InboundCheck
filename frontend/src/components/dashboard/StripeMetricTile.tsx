@@ -54,14 +54,14 @@ export function StripeMetricTile({
 
   return (
     <div
-      className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0A0A0C] p-5 shadow-fluent-elevation transition-all duration-200 hover:border-white/[0.16] hover:bg-[#0E1015] min-h-[160px] h-full ${className}`}
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 shadow-fluent-elevation transition-all duration-200 hover:border-white/[0.16] hover:bg-[#0E1015] min-h-[160px] h-full ${className}`}
     >
       {/* Specular Top Edge (Stripe Hairline) */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.14] to-transparent" />
 
       {/* Header Row: Label + Badge or Icon */}
       <div className="flex items-center justify-between relative z-10">
-        <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
+        <span className="text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-400">
           {label}
         </span>
         {badgeText ? (
@@ -85,11 +85,11 @@ export function StripeMetricTile({
       {/* Metric Value & Dynamics */}
       <div className="space-y-1 relative z-10 mt-auto pt-2">
         <div className="flex items-baseline gap-2">
-          <span className="font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-white tabular-nums">
+          <span className="text-2xl font-bold font-mono text-zinc-100 tracking-tight tabular-nums">
             {value}
           </span>
           {unit && (
-            <span className="font-mono text-xs text-zinc-500 font-normal">
+            <span className="font-mono text-xs text-zinc-400 font-normal">
               {unit}
             </span>
           )}

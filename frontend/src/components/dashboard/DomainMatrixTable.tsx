@@ -89,7 +89,7 @@ export function DomainMatrixTable({
   };
 
   return (
-    <div className="obsidian-card rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl">
+    <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] overflow-hidden shadow-2xl">
       {/* Live Mock Simulation Header Banner */}
       {isDemoActive && (
         <div className="p-4 border-b border-emerald-500/20 bg-gradient-to-r from-emerald-950/40 via-[#0A0A0C] to-cyan-950/40 flex flex-col sm:flex-row items-center justify-between gap-3">

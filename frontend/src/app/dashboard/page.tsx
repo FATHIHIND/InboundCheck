@@ -586,11 +586,11 @@ export default function DashboardOverviewPage() {
       {/* 1. Header: Store Selector + Run Live Diagnostic Pipeline */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+          <h1 className="text-2xl font-bold text-zinc-100 tracking-tight flex items-center gap-2.5">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             Shopify Store Deliverability &amp; Revenue Shield
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-sm text-zinc-400 font-normal mt-1">
             Monitor store deliverability, protect customer order receipts, and prevent silent spam placement across your fleet.
           </p>
         </div>
@@ -601,7 +601,7 @@ export default function DashboardOverviewPage() {
               <select
                 value={selectedStore}
                 onChange={(e) => setSelectedStore(e.target.value)}
-                className="bg-[#0E0E12] border border-white/[0.08] text-xs font-mono text-zinc-300 rounded-xl px-3 py-2 pr-8 appearance-none focus:outline-none focus:border-emerald-500 cursor-pointer"
+                className="bg-[#0E0E12] border border-white/[0.08] text-xs font-mono text-zinc-300 rounded-lg px-3 py-2 pr-8 appearance-none focus:outline-none focus:border-emerald-500 cursor-pointer"
               >
                 <option value="all">All Connected Stores ({stores.length})</option>
                 {stores.map((s) => (
@@ -631,7 +631,7 @@ export default function DashboardOverviewPage() {
               setAddError(null);
               setShowAddModal(true);
             }}
-            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2.5 bg-[#0E0E12] hover:bg-[#14141A] border border-white/[0.08] text-white rounded-xl transition cursor-pointer"
+            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center p-2.5 bg-[#0E0E12] hover:bg-[#14141A] border border-white/[0.08] text-white rounded-lg transition cursor-pointer"
             aria-label="Add Monitored Store"
             title="Add Monitored Store"
           >
@@ -760,9 +760,9 @@ export default function DashboardOverviewPage() {
           </StripeMetricTile>
         ) : (
           /* KPI 2 Zero-State / Fallback Onboarding Prompt */
-          <div className="obsidian-card p-5 rounded-2xl border border-dashed border-emerald-500/30 flex flex-col justify-between space-y-3 relative overflow-hidden bg-gradient-to-br from-[#0E1217] to-[#121A15] min-h-[160px] h-full shadow-fluent-elevation">
+          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-3 relative overflow-hidden min-h-[160px] h-full shadow-fluent-elevation">
             <div className="flex items-center justify-between relative z-10">
-              <span className="text-xs uppercase tracking-widest text-zinc-400 font-mono font-semibold">
+              <span className="text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-400">
                 Protected Monthly GMV
               </span>
               <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
@@ -780,10 +780,10 @@ export default function DashboardOverviewPage() {
             <div className="relative z-10 pt-1">
               <Link
                 href="/dashboard/shopify"
-                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer min-h-[38px]"
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold h-10 px-5 rounded-lg text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
               >
                 <span>Connect Shopify</span>
-                <ArrowRight className="w-3 h-3" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </div>
@@ -899,24 +899,24 @@ export default function DashboardOverviewPage() {
       )}
 
       {domainsResource.state === "empty" && !isDemoActive && (
-        <div className="obsidian-card p-6 sm:p-8 rounded-2xl border border-emerald-500/20 relative overflow-hidden shadow-2xl space-y-6">
+        <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 relative overflow-hidden shadow-2xl space-y-6">
           <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                 <ShieldCheck className="w-6 h-6 text-emerald-400" />
               </div>
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                  <h3 className="text-base sm:text-lg font-bold text-zinc-100 tracking-tight">
                     Instant Activation: Protect Your Shopify Transactional Deliverability
                   </h3>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold uppercase tracking-wider">
                     &lt; 60s TTV
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
+                <p className="text-sm text-zinc-400 font-normal max-w-2xl leading-relaxed">
                   Google and Yahoo 2024 mailbox rules silently classify unaligned store emails as spam. Eliminate order receipt drops, cut chargeback disputes, and protect your GMV in under 60 seconds.
                 </p>
               </div>
@@ -967,7 +967,7 @@ export default function DashboardOverviewPage() {
               <button
                 type="button"
                 onClick={() => setIsDemoActive(true)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-emerald-500/40 text-xs font-semibold transition-all active:scale-95 cursor-pointer min-h-[44px]"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-200 border border-white/10 hover:border-emerald-500/40 text-xs font-semibold transition-all active:scale-95 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Simulate Audit with Demo Store</span>
@@ -976,7 +976,7 @@ export default function DashboardOverviewPage() {
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95 cursor-pointer min-h-[44px]"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-10 px-5 text-xs font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/20"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Add Your Store Domain</span>
@@ -1010,9 +1010,9 @@ export default function DashboardOverviewPage() {
           }}
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="obsidian-card rounded-2xl max-w-md w-full p-6 space-y-4 animate-fadeIn">
+          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] max-w-md w-full p-6 space-y-4 animate-fadeIn shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-              <h3 id="add-domain-modal-title" className="text-base font-bold text-white">Add Monitored Store Domain</h3>
+              <h3 id="add-domain-modal-title" className="text-base font-bold text-zinc-100">Add Monitored Store Domain</h3>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
@@ -1024,7 +1024,7 @@ export default function DashboardOverviewPage() {
             </div>
 
             {addError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-300 font-mono">
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono">
                 {addError}
               </div>
             )}
@@ -1037,7 +1037,7 @@ export default function DashboardOverviewPage() {
                   value={newDomainInput}
                   onChange={(e) => setNewDomainInput(e.target.value)}
                   placeholder="e.g. store.com"
-                  className="w-full px-3 py-2 bg-[#08080A] border border-white/[0.08] rounded-xl text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 bg-[#08080A] border border-white/[0.08] rounded-lg text-zinc-100 font-mono text-xs placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500"
                   required
                 />
               </div>
@@ -1045,14 +1045,14 @@ export default function DashboardOverviewPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2 rounded-lg text-xs text-zinc-400 hover:text-white cursor-pointer font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isAdding}
-                  className="px-4 py-2 bg-emerald-500 text-black font-bold rounded-xl text-xs hover:bg-emerald-400 transition cursor-pointer"
+                  className="h-10 px-5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isAdding ? "Registering..." : "Add Store"}
                 </button>
@@ -1073,11 +1073,11 @@ export default function DashboardOverviewPage() {
           }}
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="obsidian-card rounded-2xl max-w-md w-full p-6 space-y-4 animate-fadeIn border border-rose-500/20 shadow-2xl">
+          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] max-w-md w-full p-6 space-y-4 animate-fadeIn border-rose-500/20 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
               <div className="flex items-center gap-2 text-rose-400">
                 <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-                <h3 id="delete-domain-modal-title" className="text-base font-bold text-white">
+                <h3 id="delete-domain-modal-title" className="text-base font-bold text-zinc-100">
                   Remove Sending Domain
                 </h3>
               </div>
@@ -1110,7 +1110,7 @@ export default function DashboardOverviewPage() {
                 type="button"
                 onClick={() => setStoreToDelete(null)}
                 disabled={isDeletingStore}
-                className="px-4 py-2 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.08] text-zinc-300 rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+                className="h-10 px-4 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.08] text-zinc-300 rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
               >
                 Cancel
               </button>
@@ -1118,7 +1118,7 @@ export default function DashboardOverviewPage() {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeletingStore}
-                className="px-4 py-2 bg-rose-500 hover:bg-rose-600 active:scale-[0.98] text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)] disabled:opacity-50 cursor-pointer"
+                className="h-10 px-5 bg-rose-500 hover:bg-rose-600 active:scale-[0.98] text-white font-semibold rounded-lg text-xs transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)] disabled:opacity-50 cursor-pointer"
               >
                 {isDeletingStore ? (
                   <>
