@@ -278,14 +278,16 @@ export default function ShopifyHubPage() {
         </div>
       </div>
 
-      {/* Deliverability Revenue-at-Risk Diagnostic Banner */}
-      <DeliverabilityRiskBanner
-        domain={customDomain || storeDomain || undefined}
-        onOpenWizard={() => {
-          const target = customDomain || storeDomain;
-          router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
-        }}
-      />
+      {/* Deliverability Revenue-at-Risk Diagnostic Banner (Only shown when a store is configured) */}
+      {storesResource.state === "ready" && storesResource.data.length > 0 && (customDomain || storeDomain) && (
+        <DeliverabilityRiskBanner
+          domain={customDomain || storeDomain}
+          onOpenWizard={() => {
+            const target = customDomain || storeDomain;
+            router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
+          }}
+        />
+      )}
 
       {simulationError && (
         <OperationalErrorCard
@@ -316,12 +318,12 @@ export default function ShopifyHubPage() {
 
       {storesResource.state === "empty" && (
         <OperationalEmptyState
-          icon={<ShoppingBag className="w-8 h-8 text-emerald-400" />}
-          badge="Awaiting Store Configuration"
+          icon={<ShoppingBag className="w-8 h-8 text-emerald-600" />}
+          badge="Awaiting Store Connection"
           title="No Shopify Stores Configured Yet"
-          description="Configure your Shopify Plus or DTC store sending domain to enable automatic Google & Yahoo 2024 Sender Compliance monitoring, protect Order Confirmation Receipts, and avoid customer chargebacks."
+          description="Connect your Shopify store or register your sending domain to audit SPF/DKIM alignment, monitor Google & Yahoo 2024 compliance, and protect customer order receipts."
           action={{
-            label: "Configure Store",
+            label: "Configure Store Sending Domain",
             onClick: () => setShowSettingsDrawer(true),
           }}
         />
@@ -345,120 +347,132 @@ export default function ShopifyHubPage() {
         </div>
       )}
 
-      {/* 2-Column Section: Configuration Form + Alignment Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <GlassEmeraldCard
-          title="Store Sender Profile"
-          subtitle="Verify your store sending domain, sender email, and integrated ESP"
-          badgeText="Active Profile"
-          badgeVariant="emerald"
-          icon={<ShoppingBag className="w-5 h-5 text-emerald-600" />}
-          actionLabel="Configure Store"
-          onActionClick={() => setShowSettingsDrawer(true)}
-          className="space-y-4"
-        >
-          <div className="space-y-3 font-mono text-xs">
-            <div>
-              <label className="text-slate-700 font-medium block mb-1">Shopify Store Domain</label>
-              <input
-                type="text"
-                value={storeDomain}
-                onChange={(e) => setStoreDomain(e.target.value)}
-                placeholder="store.myshopify.com"
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
-              />
-            </div>
-
-            <div>
-              <label className="text-slate-700 font-medium block mb-1">Custom Sending Domain</label>
-              <input
-                type="text"
-                value={customDomain}
-                onChange={(e) => setCustomDomain(e.target.value)}
-                placeholder="store.com"
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
-              />
-            </div>
-
-            <div>
-              <label className="text-slate-700 font-medium block mb-1">Sender Email Address</label>
-              <input
-                type="email"
-                value={senderEmail}
-                onChange={(e) => setSenderEmail(e.target.value)}
-                placeholder="orders@store.com"
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
-              />
-            </div>
-          </div>
-
-          {alignmentError && (
-            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 font-mono">
-              {alignmentError}
-            </div>
-          )}
-        </GlassEmeraldCard>
-
-        {/* Transactional Sender Alignment Status */}
-        <GlassEmeraldCard
-          title="Transactional Sender Alignment Status"
-          subtitle="Google &amp; Yahoo 2024 Bulk Sender Requirements (US &amp; EU) — Protect Order Receipts &amp; Prevent Disputes"
-          badgeText="Verified"
-          badgeVariant="emerald"
-          icon={<Shield className="w-5 h-5 text-emerald-600" />}
-          className="lg:col-span-2 space-y-4"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-              <span className="text-slate-500 text-xs font-semibold block mb-1">SPF Mechanism</span>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span className="text-slate-900 font-mono text-xs font-bold">shops.shopify.com</span>
+      {/* 2-Column Section: Configuration Form + Alignment Status (Rendered strictly when a store is connected) */}
+      {storesResource.state === "ready" && storesResource.data.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <GlassEmeraldCard
+            title="Store Sender Profile"
+            subtitle="Verify your store sending domain, sender email, and integrated ESP"
+            badgeText="Active Profile"
+            badgeVariant="emerald"
+            icon={<ShoppingBag className="w-5 h-5 text-emerald-600" />}
+            actionLabel="Configure Store"
+            onActionClick={() => setShowSettingsDrawer(true)}
+            className="space-y-4"
+          >
+            <div className="space-y-3 font-mono text-xs">
+              <div>
+                <label className="text-slate-700 font-medium block mb-1">Shopify Store Domain</label>
+                <input
+                  type="text"
+                  value={storeDomain}
+                  onChange={(e) => setStoreDomain(e.target.value)}
+                  placeholder="store.myshopify.com"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
+                />
               </div>
-              <span className="text-[10px] text-slate-500 mt-1 block font-mono">Inclusion Confirmed</span>
+
+              <div>
+                <label className="text-slate-700 font-medium block mb-1">Custom Sending Domain</label>
+                <input
+                  type="text"
+                  value={customDomain}
+                  onChange={(e) => setCustomDomain(e.target.value)}
+                  placeholder="store.com"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-medium block mb-1">Sender Email Address</label>
+                <input
+                  type="email"
+                  value={senderEmail}
+                  onChange={(e) => setSenderEmail(e.target.value)}
+                  placeholder="orders@store.com"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
+                />
+              </div>
             </div>
 
-            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-              <span className="text-slate-500 text-xs font-semibold block mb-1">Shopify DKIM Signing</span>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span className="text-slate-900 font-mono text-xs font-bold">Shopify Sender Authentication</span>
+            {alignmentError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 font-mono">
+                {alignmentError}
               </div>
-              <span className="text-[10px] text-emerald-700 mt-1 block font-mono">Connected</span>
-            </div>
+            )}
+          </GlassEmeraldCard>
 
-            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-              <span className="text-slate-500 text-xs font-semibold block mb-1">DMARC Policy</span>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span className="text-slate-900 font-mono text-xs font-bold">Email Spoofing Protection</span>
-              </div>
-              <span className="text-[10px] text-emerald-700 mt-1 block font-mono">Active (Quarantine)</span>
-            </div>
-          </div>
-
-          {alignmentResult && (
-            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 font-mono text-xs">
-              <div className="flex items-center gap-2 font-bold text-emerald-800">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Sender <span className="text-slate-900 font-bold">{senderEmail}</span> evaluated:
-              </div>
-              <div className="text-slate-700">
-                Overall Alignment: <span className={alignmentResult.overall_aligned ? "text-emerald-700 font-bold" : "text-amber-700 font-bold"}>
-                  {alignmentResult.overall_aligned ? "PASSED" : "REQUIRES ATTENTION"}
+          {/* Transactional Sender Alignment Status */}
+          <GlassEmeraldCard
+            title="Transactional Sender Alignment Status"
+            subtitle="Google &amp; Yahoo 2024 Bulk Sender Requirements (US &amp; EU) — Protect Order Receipts &amp; Prevent Disputes"
+            badgeText={alignmentResult ? (alignmentResult.overall_aligned ? "Verified" : "Attention Required") : "Awaiting Audit"}
+            badgeVariant={alignmentResult ? (alignmentResult.overall_aligned ? "emerald" : "amber") : "neutral"}
+            icon={<Shield className="w-5 h-5 text-emerald-600" />}
+            actionLabel={isCheckingAlignment ? "Auditing..." : "Audit Alignment"}
+            onActionClick={handleAuditAlignment}
+            className="lg:col-span-2 space-y-4"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-slate-500 text-xs font-semibold block mb-1">SPF Mechanism</span>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${alignmentResult?.spf_aligned ? "text-emerald-600" : "text-slate-400"}`} />
+                  <span className="text-slate-900 font-mono text-xs font-bold">
+                    {customDomain ? `include:${customDomain}` : "shops.shopify.com"}
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1 block font-mono">
+                  {alignmentResult ? (alignmentResult.spf_aligned ? "Inclusion Confirmed" : "Missing or Misconfigured") : "Click Audit Alignment"}
                 </span>
               </div>
-              {alignmentResult.recommendations?.length > 0 && (
-                <ul className="text-xs text-amber-700 list-disc list-inside space-y-1 pt-1">
-                  {alignmentResult.recommendations.map((rec: string, i: number) => (
-                    <li key={i}>{rec}</li>
-                  ))}
-                </ul>
-              )}
+
+              <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-slate-500 text-xs font-semibold block mb-1">Shopify DKIM Signing</span>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${alignmentResult?.dkim_aligned ? "text-emerald-600" : "text-slate-400"}`} />
+                  <span className="text-slate-900 font-mono text-xs font-bold">Shopify Sender Authentication</span>
+                </div>
+                <span className={`text-[10px] mt-1 block font-mono ${alignmentResult?.dkim_aligned ? "text-emerald-700" : "text-slate-500"}`}>
+                  {alignmentResult ? (alignmentResult.dkim_aligned ? "Connected" : "Unverified") : "Click Audit Alignment"}
+                </span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-slate-500 text-xs font-semibold block mb-1">DMARC Policy</span>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`w-4 h-4 ${alignmentResult?.dmarc_aligned ? "text-emerald-600" : "text-slate-400"}`} />
+                  <span className="text-slate-900 font-mono text-xs font-bold">Email Spoofing Protection</span>
+                </div>
+                <span className={`text-[10px] mt-1 block font-mono ${alignmentResult?.dmarc_aligned ? "text-emerald-700" : "text-slate-500"}`}>
+                  {alignmentResult ? (alignmentResult.dmarc_aligned ? "Enforced" : "Policy Missing / p=none") : "Click Audit Alignment"}
+                </span>
+              </div>
             </div>
-          )}
-        </GlassEmeraldCard>
-      </div>
+
+            {alignmentResult && (
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 font-mono text-xs">
+                <div className="flex items-center gap-2 font-bold text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Sender <span className="text-slate-900 font-bold">{senderEmail}</span> evaluated:
+                </div>
+                <div className="text-slate-700">
+                  Overall Alignment: <span className={alignmentResult.overall_aligned ? "text-emerald-700 font-bold" : "text-amber-700 font-bold"}>
+                    {alignmentResult.overall_aligned ? "PASSED" : "REQUIRES ATTENTION"}
+                  </span>
+                </div>
+                {alignmentResult.recommendations?.length > 0 && (
+                  <ul className="text-xs text-amber-700 list-disc list-inside space-y-1 pt-1">
+                    {alignmentResult.recommendations.map((rec: string, i: number) => (
+                      <li key={i}>{rec}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </GlassEmeraldCard>
+        </div>
+      )}
 
       {/* Webhook & Order Activity Log */}
       <GlassEmeraldCard

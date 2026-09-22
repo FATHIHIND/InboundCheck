@@ -103,7 +103,7 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
 export default function BlacklistRadarPage() {
   const [target, setTarget] = useState("");
   const [scan, setScan] = useState<RblScanResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [rateLimitCountdown, setRateLimitCountdown] = useState<number | null>(null);
@@ -156,7 +156,11 @@ export default function BlacklistRadarPage() {
   const runScan = async (domainOverride?: string) => {
     setExpandedRows({});
     const domainToScan = (domainOverride || target).trim();
-    if (!domainToScan) return;
+    if (!domainToScan) {
+      const input = document.querySelector<HTMLInputElement>("input[placeholder*='store.com']");
+      input?.focus();
+      return;
+    }
 
     setIsScanning(true);
     setError(null);
@@ -194,30 +198,15 @@ export default function BlacklistRadarPage() {
   };
 
   useEffect(() => {
-    async function initRadar() {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const paramDom = urlParams.get("domain");
-        if (paramDom) {
-          setTarget(paramDom);
-          loadLatest(paramDom);
-          return;
-        }
-
-        const res = await apiFetch("/api/v1/domains");
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.domains) && data.domains.length > 0) {
-            const firstDom = data.domains[0].domain_name;
-            setTarget(firstDom);
-            loadLatest(firstDom);
-            return;
-          }
-        }
-      } catch {}
-      setIsLoading(false);
-    }
-    initRadar();
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramDom = urlParams.get("domain");
+      if (paramDom && paramDom.trim()) {
+        const clean = paramDom.trim().toLowerCase();
+        setTarget(clean);
+        loadLatest(clean);
+      }
+    } catch {}
   }, [loadLatest]);
 
   const toggleRow = (id: string) => {
@@ -352,7 +341,7 @@ export default function BlacklistRadarPage() {
 
         <div className="flex items-center gap-4 text-xs font-mono text-slate-600 flex-wrap">
           <span>
-            Target: <strong className="text-emerald-700 font-bold font-mono text-xs">{scan ? scan.domain : target}</strong>
+            Target: <strong className="text-emerald-700 font-bold font-mono text-xs">{scan ? scan.domain : target || "No domain selected"}</strong>
           </span>
           {scan && scan.resolved_ips && scan.resolved_ips.length > 0 && (
             <>
@@ -575,8 +564,15 @@ export default function BlacklistRadarPage() {
               : "No spam blacklist scan has been run yet. Enter your sending domain above to check your store's reputation across 10 authoritative databases."
           }
           action={{
-            label: "Scan Reputation Lists",
-            onClick: () => runScan(),
+            label: target ? `Scan ${target}` : "Enter Sending Domain",
+            onClick: () => {
+              if (target) {
+                runScan();
+              } else {
+                const input = document.querySelector<HTMLInputElement>("input[placeholder*='store.com']");
+                input?.focus();
+              }
+            },
           }}
         />
       )}

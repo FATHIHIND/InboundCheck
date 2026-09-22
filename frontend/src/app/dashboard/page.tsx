@@ -656,8 +656,8 @@ export default function DashboardOverviewPage() {
         />
       )}
 
-      {/* 1b. Polaris-Grade Merchant Health & Risk Banner */}
-      {hasCriticalMisalignment && atRiskOrders > 0 ? (
+      {/* 1b. Polaris-Grade Merchant Health & Risk Banner (Only shown when stores are monitored) */}
+      {stores.length > 0 && hasCriticalMisalignment && atRiskOrders > 0 ? (
         <MerchantHealthBanner
           severity="critical"
           domainName={
@@ -678,7 +678,7 @@ export default function DashboardOverviewPage() {
               : "/dashboard/inspector"
           }
         />
-      ) : (
+      ) : stores.length > 0 ? (
         /* Deliverability Revenue-at-Risk Diagnostic Banner */
         <DeliverabilityRiskBanner
           domain={activeDomain}
@@ -686,7 +686,7 @@ export default function DashboardOverviewPage() {
             router.push(activeDomain ? `/dashboard/wizard?domain=${encodeURIComponent(activeDomain)}` : "/dashboard/wizard");
           }}
         />
-      )}
+      ) : null}
 
       {/* 2. Top Metric Cards (Stripe-Grade Financial Typography & Specular Hairlines) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -697,14 +697,14 @@ export default function DashboardOverviewPage() {
             stores.length > 0 && healthScore !== null ? (
               `${healthScore}`
             ) : (
-              <span className="animate-pulse text-zinc-600 font-mono">--</span>
+              <span className="text-slate-300 font-extrabold text-4xl font-mono tracking-tight">--</span>
             )
           }
           unit={stores.length > 0 && healthScore !== null ? "/ 100 HEALTH" : undefined}
-          badgeText={stores.length > 0 && healthScore !== null ? healthStatusTier : "Scan Required"}
+          badgeText={stores.length > 0 && healthScore !== null ? healthStatusTier : "Awaiting Store"}
           badgeVariant={
             stores.length === 0 || healthScore === null
-              ? "amber"
+              ? "neutral"
               : healthStatusTier === "Optimal"
               ? "emerald"
               : healthStatusTier === "Warning"
@@ -716,11 +716,11 @@ export default function DashboardOverviewPage() {
           highlightText={
             stores.length > 0 && healthScore !== null
               ? `• ${healthStatusTier} Risk Tier (${stores.length} ${stores.length === 1 ? "domain" : "domains"})`
-              : "Awaiting First Store Scan"
+              : "Awaiting store connection"
           }
           highlightVariant={
             stores.length === 0 || healthScore === null
-              ? "amber"
+              ? "neutral"
               : healthStatusTier === "Optimal"
               ? "emerald"
               : healthStatusTier === "Warning"
@@ -734,9 +734,10 @@ export default function DashboardOverviewPage() {
             <ScoreGauge3DCanvas score={healthScore} className="h-28 w-full relative z-10" />
           ) : (
             <div className="h-28 w-full flex flex-col items-center justify-center text-center">
-              <span className="text-4xl font-extrabold animate-pulse text-zinc-600 font-mono tracking-tight">
+              <span className="text-4xl font-extrabold text-slate-300 font-mono tracking-tight">
                 --
               </span>
+              <span className="text-[11px] text-slate-400 font-mono mt-1">No store connected</span>
             </div>
           )}
         </StripeMetricTile>
@@ -751,9 +752,9 @@ export default function DashboardOverviewPage() {
               ? expectedRiskCents > 0
                 ? `${effectiveRevenueRisk?.expected_risk_formatted || "$0.00"} At Risk`
                 : "100% Protected"
-              : "Action Required"
+              : "Awaiting Store"
           }
-          badgeVariant={hasValidRevenueData ? (expectedRiskCents > 0 ? "amber" : "emerald") : "amber"}
+          badgeVariant={hasValidRevenueData ? (expectedRiskCents > 0 ? "amber" : "emerald") : "neutral"}
           highlightText={
             hasValidRevenueData
               ? expectedRiskCents > 0
@@ -763,7 +764,7 @@ export default function DashboardOverviewPage() {
           }
           highlightVariant={hasValidRevenueData ? (expectedRiskCents > 0 ? "rose" : "emerald") : "neutral"}
           icon={DollarSign}
-          iconColor="text-emerald-400"
+          iconColor="text-emerald-600"
         >
           <InboxWitnessCanvas />
         </StripeMetricTile>
@@ -771,15 +772,17 @@ export default function DashboardOverviewPage() {
         {/* KPI 3: Blacklist Radar Coverage */}
         <StripeMetricTile
           label="Blacklist Radar Coverage"
-          value={stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10 RBL Feeds Monitored"}
-          badgeText={stores.length > 0 && hasValidDomain ? "Active Radar" : "Configured"}
+          value={stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10 Feeds Monitored"}
+          badgeText={stores.length > 0 && hasValidDomain ? "Active Radar" : "Standing By"}
           badgeVariant={stores.length > 0 && hasValidDomain ? "emerald" : "neutral"}
           icon={Radio}
-          iconColor="text-emerald-400"
+          iconColor="text-emerald-600"
           subtext={
             isTelegramActive
               ? "✓ Telegram Alerts Active"
-              : "Telegram Alerts: Inactive"
+              : stores.length > 0
+              ? "Telegram Alerts: Inactive"
+              : "Awaiting domain"
           }
         >
           <RadarBeamCanvas />
@@ -789,15 +792,15 @@ export default function DashboardOverviewPage() {
         <StripeMetricTile
           label="48–72h Risk Forecast"
           value={
-            forecastRiskDisplay !== "--" ? (
+            stores.length > 0 && forecastRiskDisplay !== "--" ? (
               forecastRiskDisplay
             ) : (
-              <span className="animate-pulse text-zinc-600 font-mono">--</span>
+              <span className="text-slate-300 font-extrabold text-2xl font-mono tracking-tight">--</span>
             )
           }
           badgeText={
             stores.length === 0 || healthScore === null
-              ? "Scan Required"
+              ? "Awaiting Store"
               : healthScore >= 90
               ? "Optimal Trajectory"
               : healthScore >= 60
@@ -806,7 +809,7 @@ export default function DashboardOverviewPage() {
           }
           badgeVariant={
             stores.length === 0 || healthScore === null
-              ? "amber"
+              ? "neutral"
               : healthScore >= 90
               ? "emerald"
               : healthScore >= 60
@@ -824,7 +827,7 @@ export default function DashboardOverviewPage() {
           }
           highlightVariant={
             stores.length === 0 || healthScore === null
-              ? "amber"
+              ? "neutral"
               : healthScore >= 90
               ? "emerald"
               : healthScore >= 60
@@ -833,19 +836,21 @@ export default function DashboardOverviewPage() {
           }
           icon={Activity}
           iconColor={
-            healthScore === null || healthScore >= 90
-              ? "text-emerald-400"
+            stores.length === 0
+              ? "text-emerald-600"
+              : healthScore === null || healthScore >= 90
+              ? "text-emerald-600"
               : healthScore >= 60
-              ? "text-amber-400"
-              : "text-rose-400"
+              ? "text-amber-500"
+              : "text-rose-500"
           }
         >
           <Sparkline3DCanvas />
         </StripeMetricTile>
       </div>
 
-      {/* 3. Middle Section: Telemetry Preview & Check History (Suppressed in empty state to eliminate stacked clutter) */}
-      {(reputationPointsToRender.length > 0 || imapLogs.length > 0) && (
+      {/* 3. Middle Section: Telemetry Preview & Check History (Only displayed when stores exist) */}
+      {stores.length > 0 && (reputationPointsToRender.length > 0 || imapLogs.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {reputationPointsToRender.length > 0 && (
             <div className={imapLogs.length > 0 ? "lg:col-span-7" : "lg:col-span-12"}>

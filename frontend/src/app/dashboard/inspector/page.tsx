@@ -276,42 +276,20 @@ function DNSInspectorContent() {
 
   // Initial load and URL param deep-link reactivity
   useEffect(() => {
-    async function initTargetDomain() {
-      let target = (queryDomain || "").trim().toLowerCase();
+    const target = (queryDomain || "").trim().toLowerCase();
 
-      if (!target) {
-        try {
-          const res = await apiFetch("/api/v1/domains");
-          if (res.ok) {
-            const data = await res.json();
-            const list = Array.isArray(data)
-              ? data
-              : Array.isArray(data?.domains)
-              ? data.domains
-              : [];
-            if (list.length > 0 && list[0]?.domain_name) {
-              target = list[0].domain_name.trim().toLowerCase();
-            }
-          }
-        } catch {
-          // Fallback gracefully in offline / dev mode
-        }
-      }
-
+    if (target) {
       setDomainInput(target);
-      if (target) {
-        const targetEmail = `dmarc-aggregate@${target}`;
-        setDmarcReportEmail(targetEmail);
-        handleRunAudit(target);
-        handleGenerateRecords(target, targetEmail);
-      } else {
-        setDmarcReportEmail("");
-        setGeneratedRecords([]);
-        setAuditData(null);
-      }
+      const targetEmail = `dmarc-aggregate@${target}`;
+      setDmarcReportEmail(targetEmail);
+      handleRunAudit(target);
+      handleGenerateRecords(target, targetEmail);
+    } else {
+      setDomainInput("");
+      setDmarcReportEmail("");
+      setGeneratedRecords([]);
+      setAuditData(null);
     }
-
-    initTargetDomain();
   }, [queryDomain, handleRunAudit, handleGenerateRecords]);
 
   const toggleRecordExpansion = (id: string) => {
@@ -322,6 +300,12 @@ function DNSInspectorContent() {
   };
 
   const handleVerifyRecordsLive = async () => {
+    const d = domainInput.trim().toLowerCase();
+    if (!d) {
+      setVerifyOutcome("error");
+      return;
+    }
+
     setIsVerifyingLive(true);
     setVerifyOutcome(null);
     setTelegramAlertDispatched(false);
@@ -336,7 +320,6 @@ function DNSInspectorContent() {
       setVerifyPollingText("Auditing DMARC enforcement policy and reporting targets...");
       await new Promise((r) => setTimeout(r, 500));
 
-      const d = domainInput.trim().toLowerCase() || "shopify.com";
       const selectorsList = customSelectors.split(",").map((s) => s.trim());
 
       const res = await apiFetch("/api/v1/dns/audit", {
@@ -995,18 +978,23 @@ function DNSInspectorContent() {
                 /* Etched OperationalEmptyState prevents layout collapse */
                 <OperationalEmptyState
                   icon={<Terminal className="w-8 h-8 text-emerald-600" />}
-                  badge="Awaiting Domain Query"
-                  title="No DNS Records Generated"
+                  badge="Awaiting Domain Input"
+                  title="No Domain Configured for Audit"
                   description={
                     domainInput
                       ? `Click 'Query DNS & Generate Records' on the left to build RFC-compliant records for ${domainInput}.`
-                      : "Enter your store sending domain and configure sending stack on the left, then click 'Query DNS & Generate Records'."
+                      : "Enter your store sending domain on the left and select your authorized sending stack, then click 'Query DNS & Generate Records'."
                   }
                   action={{
-                    label: "Generate Records",
+                    label: domainInput ? "Query DNS & Generate Records" : "Enter Target Domain",
                     onClick: () => {
-                      handleRunAudit();
-                      handleGenerateRecords();
+                      if (domainInput) {
+                        handleRunAudit();
+                        handleGenerateRecords();
+                      } else {
+                        const inputEl = document.querySelector<HTMLInputElement>("input[placeholder*='store domain']");
+                        inputEl?.focus();
+                      }
                     },
                   }}
                 />
