@@ -741,53 +741,32 @@ export default function DashboardOverviewPage() {
           )}
         </StripeMetricTile>
 
-        {/* KPI 2: Protected Monthly GMV vs At-Risk GMV */}
-        {hasValidRevenueData ? (
-          <StripeMetricTile
-            label="Protected Monthly GMV"
-            value={protectedGmvFormatted}
-            unit="/ mo"
-            badgeText={expectedRiskCents > 0 ? `${effectiveRevenueRisk?.expected_risk_formatted || "$0.00"} At Risk` : "100% Protected"}
-            badgeVariant={expectedRiskCents > 0 ? "amber" : "emerald"}
-            highlightText={
-              expectedRiskCents > 0
+        {/* KPI 2: Protected Monthly GMV */}
+        <StripeMetricTile
+          label="Protected Monthly GMV"
+          value={hasValidRevenueData ? protectedGmvFormatted : "$0.00"}
+          unit={hasValidRevenueData ? "/ mo" : undefined}
+          badgeText={
+            hasValidRevenueData
+              ? expectedRiskCents > 0
+                ? `${effectiveRevenueRisk?.expected_risk_formatted || "$0.00"} At Risk`
+                : "100% Protected"
+              : "Action Required"
+          }
+          badgeVariant={hasValidRevenueData ? (expectedRiskCents > 0 ? "amber" : "emerald") : "amber"}
+          highlightText={
+            hasValidRevenueData
+              ? expectedRiskCents > 0
                 ? `${effectiveRevenueRisk?.expected_risk_formatted} at silent drop risk`
                 : "Zero detected checkout drops"
-            }
-            highlightVariant={expectedRiskCents > 0 ? "rose" : "emerald"}
-          >
-            <InboxWitnessCanvas />
-          </StripeMetricTile>
-        ) : (
-          /* KPI 2 Zero-State / Fallback Onboarding Prompt */
-          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-3 relative overflow-hidden min-h-[160px] h-full shadow-fluent-elevation">
-            <div className="flex items-center justify-between relative z-10">
-              <span className="text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-400">
-                Protected Monthly GMV
-              </span>
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
-                Action Required
-              </span>
-            </div>
-            <div className="space-y-1.5 relative z-10 my-auto">
-              <p className="text-xs text-zinc-300 font-medium leading-snug">
-                Connect Shopify store to calculate protected GMV
-              </p>
-              <p className="text-[10px] text-zinc-500 leading-tight">
-                Link your Shopify store to quantify order emails protected from silent spam drop.
-              </p>
-            </div>
-            <div className="relative z-10 pt-1">
-              <Link
-                href="/dashboard/shopify"
-                className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold h-10 px-5 rounded-lg text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-              >
-                <span>Connect Shopify</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </div>
-        )}
+              : "Awaiting store connection"
+          }
+          highlightVariant={hasValidRevenueData ? (expectedRiskCents > 0 ? "rose" : "emerald") : "neutral"}
+          icon={DollarSign}
+          iconColor="text-emerald-400"
+        >
+          <InboxWitnessCanvas />
+        </StripeMetricTile>
 
         {/* KPI 3: Blacklist Radar Coverage */}
         <StripeMetricTile
@@ -800,7 +779,7 @@ export default function DashboardOverviewPage() {
           subtext={
             isTelegramActive
               ? "✓ Telegram Alerts Active"
-              : "Telegram: Disconnected (1-Click Setup)"
+              : "Telegram Alerts: Inactive"
           }
         >
           <RadarBeamCanvas />
