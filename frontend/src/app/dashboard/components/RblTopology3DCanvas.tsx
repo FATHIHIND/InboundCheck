@@ -56,14 +56,21 @@ export default function RblTopology3DCanvas({
       const cy = h / 2;
       const nodeCount = Math.max(10, rbls.length);
 
+      // Render Orbital Elliptical Ring
+      ctx.strokeStyle = "rgba(226, 232, 240, 0.85)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 140, 65, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
       // Render Central Apex Monitored Domain Node
       const centerPulse = (Math.sin(time * 3) + 1) / 2;
-      ctx.fillStyle = "rgba(16, 185, 129, 0.2)";
+      ctx.fillStyle = "rgba(16, 185, 129, 0.15)";
       ctx.beginPath();
       ctx.arc(cx, cy, 28 + centerPulse * 6, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = "#10B981";
+      ctx.fillStyle = "#059669";
       ctx.beginPath();
       ctx.arc(cx, cy, 8, 0, Math.PI * 2);
       ctx.fill();
@@ -84,10 +91,10 @@ export default function RblTopology3DCanvas({
         // Connecting Beam to Center
         ctx.lineWidth = 1 * depthScale;
         ctx.strokeStyle = isListed
-          ? `rgba(239, 68, 68, ${0.4 * depthScale})`
+          ? `rgba(220, 38, 38, ${0.4 * depthScale})`
           : isUnknown
-          ? `rgba(245, 158, 11, ${0.3 * depthScale})`
-          : `rgba(16, 185, 129, ${0.25 * depthScale})`;
+          ? `rgba(217, 119, 6, ${0.3 * depthScale})`
+          : `rgba(5, 150, 105, ${0.25 * depthScale})`;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(x, y);
@@ -98,31 +105,31 @@ export default function RblTopology3DCanvas({
         const pkX = cx + (x - cx) * pktProgress;
         const pkY = cy + (y - cy) * pktProgress;
         ctx.fillStyle = isListed
-          ? "rgba(248, 113, 113, 0.9)"
+          ? "rgba(239, 68, 68, 0.9)"
           : isUnknown
-          ? "rgba(251, 191, 36, 0.9)"
-          : "rgba(52, 211, 153, 0.9)";
+          ? "rgba(245, 158, 11, 0.9)"
+          : "rgba(16, 185, 129, 0.9)";
         ctx.beginPath();
         ctx.arc(pkX, pkY, 2.5 * depthScale, 0, Math.PI * 2);
         ctx.fill();
 
         // Satellite Node Glow & Dot
         ctx.fillStyle = isListed
-          ? "rgba(239, 68, 68, 0.3)"
+          ? "rgba(239, 68, 68, 0.25)"
           : isUnknown
-          ? "rgba(245, 158, 11, 0.25)"
-          : "rgba(16, 185, 129, 0.25)";
+          ? "rgba(245, 158, 11, 0.2)"
+          : "rgba(16, 185, 129, 0.2)";
         ctx.beginPath();
         ctx.arc(x, y, (isListed ? 10 : 7) * depthScale, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = isListed ? "#EF4444" : isUnknown ? "#F59E0B" : "#10B981";
+        ctx.fillStyle = isListed ? "#DC2626" : isUnknown ? "#D97706" : "#059669";
         ctx.beginPath();
         ctx.arc(x, y, 4 * depthScale, 0, Math.PI * 2);
         ctx.fill();
 
         // Label
-        ctx.fillStyle = isListed ? "#F87171" : isUnknown ? "#FBBF24" : "#A1A1AA";
+        ctx.fillStyle = isListed ? "#B91C1C" : isUnknown ? "#B45309" : "#475569";
         ctx.font = `${Math.round(10 * depthScale)}px monospace`;
         ctx.fillText(item.name || `RBL ${i + 1}`, x + 8, y + 3);
       }

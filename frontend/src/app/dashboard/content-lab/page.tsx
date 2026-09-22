@@ -24,11 +24,6 @@ import {
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
-import dynamic from "next/dynamic";
-
-const ParticleStreamCanvas = dynamic(() => import("../components/ParticleStreamCanvas"), {
-  ssr: false,
-});
 
 interface FlaggedEmail {
   id: string;
@@ -205,11 +200,11 @@ export default function AIContentLabPage() {
       {/* 1. Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-emerald-400 fill-current" />
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-emerald-600 fill-current" />
             Template Optimizer &amp; Content Intelligence
           </h1>
-          <p className="text-sm text-zinc-400 font-normal mt-1">
+          <p className="text-sm text-slate-500 font-normal mt-1">
             Scan order receipts for spam triggers and generate Liquid-safe variants.
           </p>
         </div>
@@ -217,16 +212,16 @@ export default function AIContentLabPage() {
         <div className="flex items-center gap-3">
           <span
             title="No customer data leaves your browser."
-            className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1.5 cursor-help"
+            className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold flex items-center gap-1.5 cursor-help"
           >
-            <Cpu className="w-3.5 h-3.5" />
+            <Cpu className="w-3.5 h-3.5 text-emerald-600" />
             Privacy-Safe Analysis Engine
           </span>
           <EmeraldHoverButton
             onClick={() => {
               directInputRef.current?.scrollIntoView({ behavior: "smooth" });
             }}
-            icon={<Wand2 className="w-4 h-4 text-slate-950" />}
+            icon={<Wand2 className="w-4 h-4 text-white" />}
             size="sm"
             variant="solid"
           >
@@ -244,12 +239,12 @@ export default function AIContentLabPage() {
             subtitle="Paste or select any transactional email template to test spam density"
             badgeText="Liquid Safe"
             badgeVariant="emerald"
-            icon={<Code2 className="w-5 h-5 text-emerald-400" />}
+            icon={<Code2 className="w-5 h-5 text-emerald-600" />}
             className="space-y-4"
           >
             {/* Preset Selector */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-zinc-300">
+              <label className="block text-xs font-semibold text-slate-700">
                 Shopify Template Presets
               </label>
               <div className="flex flex-wrap gap-2">
@@ -260,8 +255,8 @@ export default function AIContentLabPage() {
                     onClick={() => handleSelectPreset(p.id)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer flex items-center gap-1.5 border ${
                       selectedPreset === p.id
-                        ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300 font-bold"
-                        : "bg-[#08080A] border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-800 font-bold shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-300"
                     }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
@@ -274,10 +269,10 @@ export default function AIContentLabPage() {
             {/* Subject Line Input */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-zinc-300">
+                <label className="block text-xs font-semibold text-slate-700">
                   Email Subject Line
                 </label>
-                <span className="text-[10px] text-zinc-500 font-mono">
+                <span className="text-[10px] text-slate-500 font-mono">
                   Supports Liquid: {"{{ order.name }}"}
                 </span>
               </div>
@@ -289,17 +284,17 @@ export default function AIContentLabPage() {
                   setSelectedPreset("");
                 }}
                 placeholder="e.g. Order {{ order.name }} confirmed - Receipt & details"
-                className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 font-mono text-xs focus:outline-none focus:bg-white focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs transition-colors"
               />
             </div>
 
             {/* Body Content Textarea */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-zinc-300">
+                <label className="block text-xs font-semibold text-slate-700">
                   Email HTML / Text Body
                 </label>
-                <span className="text-[10px] text-zinc-500 font-mono">
+                <span className="text-[10px] text-slate-500 font-mono">
                   Preserves Liquid variables &amp; HTML
                 </span>
               </div>
@@ -311,7 +306,7 @@ export default function AIContentLabPage() {
                   setSelectedPreset("");
                 }}
                 placeholder="<p>Hi {{ customer.first_name }},</p><p>Thank you for buying from our store! ACT NOW to claim 100% FREE shipping on your next purchase...</p>"
-                className="w-full px-3.5 py-2.5 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/30 focus:border-emerald-500/60 leading-relaxed transition-all resize-y min-h-[180px]"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 font-mono text-xs focus:outline-none focus:bg-white focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 leading-relaxed transition-all resize-y min-h-[180px] shadow-2xs"
               />
             </div>
 
@@ -344,14 +339,14 @@ export default function AIContentLabPage() {
 
             {/* Error Notices */}
             {auditError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2 animate-fadeIn">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 font-mono flex items-center gap-2 animate-fadeIn">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>{auditError}</span>
               </div>
             )}
             {variantError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2 animate-fadeIn">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 font-mono flex items-center gap-2 animate-fadeIn">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>{variantError}</span>
               </div>
             )}
@@ -362,18 +357,18 @@ export default function AIContentLabPage() {
         <div className="lg:col-span-6 space-y-4">
           {/* Awaiting State when no audit has been run and no variants generated */}
           {!auditResult && variants.length === 0 && !isAuditing && !isGeneratingVariants && (
-            <div className="rounded-2xl bg-[#0A0A0C]/80 border border-zinc-800/80 backdrop-blur-xl p-8 flex flex-col items-center justify-center text-center min-h-[490px] space-y-4 shadow-xl animate-fadeIn">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+            <div className="rounded-xl bg-white border border-slate-200 p-8 flex flex-col items-center justify-center text-center min-h-[490px] space-y-4 shadow-xs animate-fadeIn">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-2xs">
                 <Sparkles className="w-7 h-7" />
               </div>
               <div className="space-y-1.5 max-w-sm">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400/80 font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 inline-block mb-1">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-800 font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 inline-block mb-1">
                   Deliverability Intelligence Engine
                 </span>
-                <h3 className="text-base font-bold text-white tracking-tight">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">
                   Awaiting Template Input
                 </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <p className="text-xs text-slate-500 leading-relaxed">
                   Select a Shopify preset on the left or paste your transactional copy to scan for 2024 spam triggers and generate Liquid-safe variants.
                 </p>
               </div>
@@ -381,7 +376,7 @@ export default function AIContentLabPage() {
                 <button
                   type="button"
                   onClick={() => handleSelectPreset("order_confirmation")}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-[0_0_15px_rgba(16,185,129,0.25)] cursor-pointer active:scale-95 min-h-[40px]"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-all shadow-xs cursor-pointer active:scale-95 min-h-[40px]"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Load Sample DTC Receipt</span>
@@ -392,13 +387,13 @@ export default function AIContentLabPage() {
 
           {/* Loading States */}
           {(isAuditing || isGeneratingVariants) && (
-            <div className="rounded-2xl bg-[#0A0A0C]/80 border border-zinc-800/80 backdrop-blur-xl p-8 flex flex-col items-center justify-center text-center min-h-[490px] space-y-4 shadow-xl animate-fadeIn font-mono text-xs">
-              <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+            <div className="rounded-xl bg-white border border-slate-200 p-8 flex flex-col items-center justify-center text-center min-h-[490px] space-y-4 shadow-xs animate-fadeIn font-mono text-xs">
+              <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" />
               <div className="space-y-1">
-                <span className="text-white font-bold block text-sm">
+                <span className="text-slate-900 font-bold block text-sm">
                   {isAuditing ? "Analyzing Template Spam Density..." : "Synthesizing Polymorphic Copy Variations..."}
                 </span>
-                <span className="text-zinc-400 text-xs">
+                <span className="text-slate-500 text-xs">
                   Validating RFC deliverability heuristics and preserving Shopify Liquid syntax.
                 </span>
               </div>
@@ -425,59 +420,59 @@ export default function AIContentLabPage() {
                     ? "amber"
                     : "emerald"
                 }
-                icon={<MailWarning className="w-5 h-5 text-emerald-400" />}
+                icon={<MailWarning className="w-5 h-5 text-emerald-600" />}
                 className="space-y-4"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-                  <div className="p-3 bg-[#08080A] rounded-xl border border-zinc-800 space-y-1">
-                    <span className="text-[10px] uppercase text-zinc-500 block">Spam Risk Score</span>
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                    <span className="text-[10px] uppercase text-slate-500 font-semibold block">Spam Risk Score</span>
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-xl font-bold ${
                           auditResult.spam_score >= 60
-                            ? "text-rose-400"
+                            ? "text-rose-600"
                             : auditResult.spam_score >= 30
-                            ? "text-amber-400"
-                            : "text-emerald-400"
+                            ? "text-amber-600"
+                            : "text-emerald-600"
                         }`}
                       >
                         {auditResult.spam_score} / 100
                       </span>
-                      <span className="text-[10px] text-zinc-400 font-sans">
+                      <span className="text-[10px] text-slate-500 font-sans">
                         {auditResult.spam_score < 30 ? "Clean" : "Spam Risk"}
                       </span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-[#08080A] rounded-xl border border-zinc-800 space-y-1">
-                    <span className="text-[10px] uppercase text-zinc-500 block">Risk Tier</span>
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                    <span className="text-[10px] uppercase text-slate-500 font-semibold block">Risk Tier</span>
                     <div className="pt-0.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide border ${
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide border ${
                         auditResult.risk_level === "critical"
-                          ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                          ? "bg-rose-50 text-rose-800 border-rose-200"
                           : auditResult.risk_level === "high"
-                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
                           : auditResult.risk_level === "medium"
-                          ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                          : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${
                           auditResult.risk_level === "critical"
-                            ? "bg-rose-400 animate-pulse"
+                            ? "bg-rose-600 animate-pulse"
                             : auditResult.risk_level === "high"
-                            ? "bg-amber-400 animate-pulse"
+                            ? "bg-amber-600 animate-pulse"
                             : auditResult.risk_level === "medium"
-                            ? "bg-amber-300 animate-pulse"
-                            : "bg-emerald-400"
+                            ? "bg-amber-500 animate-pulse"
+                            : "bg-emerald-600"
                         }`} />
                         {auditResult.risk_level}
                       </span>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-[#08080A] rounded-xl border border-zinc-800 space-y-1">
-                    <span className="text-[10px] uppercase text-zinc-500 block">Flagged Phrases</span>
-                    <div className="text-sm font-bold text-white pt-1">
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                    <span className="text-[10px] uppercase text-slate-500 font-semibold block">Flagged Phrases</span>
+                    <div className="text-sm font-bold text-slate-900 pt-1">
                       {auditResult.flagged_triggers.length} detected
                     </div>
                   </div>
@@ -486,14 +481,14 @@ export default function AIContentLabPage() {
                 {/* Flagged Triggers List */}
                 {auditResult.flagged_triggers.length > 0 && (
                   <div className="space-y-2 pt-1">
-                    <span className="text-xs font-semibold text-zinc-300 block">
+                    <span className="text-xs font-semibold text-slate-700 block">
                       Detected High-Friction Spam Triggers:
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {auditResult.flagged_triggers.map((trigger, i) => (
                         <span
                           key={i}
-                          className="px-2.5 py-1 bg-rose-500/10 border border-rose-500/25 rounded-md text-xs font-mono font-bold text-rose-300"
+                          className="px-2.5 py-1 bg-rose-50 border border-rose-200 rounded-md text-xs font-mono font-bold text-rose-800"
                         >
                           “{trigger}”
                         </span>
@@ -504,14 +499,14 @@ export default function AIContentLabPage() {
 
                 {/* Recommendations */}
                 {auditResult.recommendations.length > 0 && (
-                  <div className="space-y-2 pt-2 border-t border-zinc-800/80">
-                    <span className="text-xs font-semibold text-zinc-300 block">
+                  <div className="space-y-2 pt-2 border-t border-slate-200">
+                    <span className="text-xs font-semibold text-slate-700 block">
                       AI Deliverability Recommendations:
                     </span>
-                    <ul className="space-y-1.5 text-xs text-zinc-400 font-sans">
+                    <ul className="space-y-1.5 text-xs text-slate-600 font-sans">
                       {auditResult.recommendations.map((rec, i) => (
                         <li key={i} className="flex items-start gap-2">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                           <span>{rec}</span>
                         </li>
                       ))}
@@ -530,7 +525,7 @@ export default function AIContentLabPage() {
                 subtitle="Deliverability-optimized variations that preserve all Liquid template tags"
                 badgeText={`${variants.length} Variants Ready`}
                 badgeVariant="emerald"
-                icon={<Sparkles className="w-5 h-5 text-emerald-400 fill-current" />}
+                icon={<Sparkles className="w-5 h-5 text-emerald-600 fill-current" />}
                 className="space-y-4"
               >
                 {/* Variant Navigation Tabs */}
@@ -540,13 +535,13 @@ export default function AIContentLabPage() {
                       key={v.variant_id || idx}
                       type="button"
                       onClick={() => setSelectedVariantIdx(idx)}
-                      className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1.5 cursor-pointer border ${
                         selectedVariantIdx === idx
-                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                          : "bg-[#08080A] text-zinc-400 hover:text-white border-zinc-800"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold shadow-2xs"
+                          : "bg-slate-50 text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-100"
                       }`}
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                       {v.variant_name}
                     </button>
                   ))}
@@ -556,9 +551,9 @@ export default function AIContentLabPage() {
                 {variants[selectedVariantIdx] && (
                   <div className="space-y-4 font-mono text-xs">
                     {/* Subject Line Card */}
-                    <div className="p-3.5 bg-[#08080A] rounded-xl border border-emerald-500/20 space-y-2">
+                    <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase text-zinc-500 font-semibold block">
+                        <span className="text-[10px] uppercase text-slate-500 font-semibold block">
                           Optimized Subject Line
                         </span>
                         <button
@@ -566,28 +561,28 @@ export default function AIContentLabPage() {
                           onClick={() =>
                             handleCopy(variants[selectedVariantIdx].subject, "variant_subject")
                           }
-                          className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition cursor-pointer"
+                          className="text-xs flex items-center gap-1 text-emerald-700 hover:text-emerald-800 font-semibold transition cursor-pointer"
                         >
                           {copiedField === "variant_subject" ? (
                             <>
-                              <Check className="w-3.5 h-3.5" /> Copied Subject
+                              <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied Subject
                             </>
                           ) : (
                             <>
-                              <Copy className="w-3.5 h-3.5" /> Copy Subject
+                              <Copy className="w-3.5 h-3.5 text-emerald-600" /> Copy Subject
                             </>
                           )}
                         </button>
                       </div>
-                      <div className="p-2.5 bg-[#050507] rounded-lg border border-white/[0.04] text-white font-sans font-semibold text-sm select-all">
+                      <div className="p-2.5 bg-white rounded-md border border-slate-200 text-slate-900 font-sans font-semibold text-sm select-all shadow-2xs">
                         {variants[selectedVariantIdx].subject}
                       </div>
                     </div>
 
                     {/* Body Content Card */}
-                    <div className="p-3.5 bg-[#08080A] rounded-xl border border-emerald-500/20 space-y-2">
+                    <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase text-zinc-500 font-semibold block">
+                        <span className="text-[10px] uppercase text-slate-500 font-semibold block">
                           Liquid-Preserving Body HTML
                         </span>
                         <button
@@ -595,31 +590,31 @@ export default function AIContentLabPage() {
                           onClick={() =>
                             handleCopy(variants[selectedVariantIdx].body_html, "variant_body")
                           }
-                          className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition cursor-pointer"
+                          className="text-xs flex items-center gap-1 text-emerald-700 hover:text-emerald-800 font-semibold transition cursor-pointer"
                         >
                           {copiedField === "variant_body" ? (
                             <>
-                              <Check className="w-3.5 h-3.5" /> Copied Body HTML
+                              <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied Body HTML
                             </>
                           ) : (
                             <>
-                              <Copy className="w-3.5 h-3.5" /> Copy Body HTML
+                              <Copy className="w-3.5 h-3.5 text-emerald-600" /> Copy Body HTML
                             </>
                           )}
                         </button>
                       </div>
-                      <div className="p-2.5 bg-[#050507] rounded-lg border border-white/[0.04] text-emerald-300 text-[11px] leading-relaxed break-all max-h-52 overflow-y-auto select-all">
+                      <div className="p-2.5 bg-white rounded-md border border-slate-200 text-slate-800 font-mono text-[11px] leading-relaxed break-all max-h-52 overflow-y-auto select-all shadow-2xs">
                         {variants[selectedVariantIdx].body_html}
                       </div>
                     </div>
 
                     {/* Rationale & Metrics */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-zinc-900/40 rounded-xl border border-white/[0.04]">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold">
                           Risk: {variants[selectedVariantIdx].estimated_spam_risk}/100
                         </span>
-                        <span className="text-zinc-400 font-sans text-xs">
+                        <span className="text-slate-600 font-sans text-xs">
                           {variants[selectedVariantIdx].rationale}
                         </span>
                       </div>
@@ -629,7 +624,7 @@ export default function AIContentLabPage() {
                           const fullCopy = `Subject: ${variants[selectedVariantIdx].subject}\n\n${variants[selectedVariantIdx].body_html}`;
                           handleCopy(fullCopy, "variant_full");
                         }}
-                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-md text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0 shadow-xs"
                       >
                         {copiedField === "variant_full" ? (
                           <>

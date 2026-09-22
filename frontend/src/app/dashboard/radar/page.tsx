@@ -251,11 +251,11 @@ export default function BlacklistRadarPage() {
       {/* 1. Header with Title & Action */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <Radio className="w-6 h-6 text-emerald-400 animate-pulse" />
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Radio className="w-6 h-6 text-emerald-600 animate-pulse" />
             Reputation Radar &amp; Blacklist Intelligence
           </h1>
-          <p className="text-sm text-zinc-400 font-normal mt-1">
+          <p className="text-sm text-slate-600 font-normal mt-1">
             Monitor sender domain and IP reputation across 10 global RBL feeds.
           </p>
         </div>
@@ -265,7 +265,7 @@ export default function BlacklistRadarPage() {
             <button
               onClick={() => loadLatest()}
               disabled={isLoading || isScanning}
-              className="px-3 py-2 text-xs font-mono rounded-lg border border-zinc-800 bg-[#0E0E12] text-zinc-300 hover:text-white hover:border-zinc-700 transition flex items-center gap-1.5"
+              className="px-3 py-2 text-xs font-mono rounded-md border border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
               title="Refresh latest stored audit"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
@@ -281,7 +281,7 @@ export default function BlacklistRadarPage() {
             icon={<RefreshCw className="w-3.5 h-3.5" />}
             size="sm"
             variant="primary"
-            className="h-10 px-5 text-xs font-semibold rounded-lg shadow-sm"
+            className="h-10 px-5 text-xs font-semibold rounded-md shadow-xs"
           >
             {rateLimitCountdown !== null
               ? `Cooldown (${rateLimitCountdown}s)`
@@ -292,12 +292,12 @@ export default function BlacklistRadarPage() {
 
       {/* Rate Limit Notice Banner */}
       {rateLimitCountdown !== null && (
-        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs font-mono flex items-center justify-between animate-fadeIn">
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs font-mono flex items-center justify-between animate-fadeIn">
           <div className="flex items-center gap-2.5">
-            <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+            <Clock className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
             <span>
               <strong>Rate Limit Active:</strong> Next live scan permitted in{" "}
-              <span className="font-bold text-white underline">{rateLimitCountdown} seconds</span>.
+              <span className="font-bold text-amber-950 underline">{rateLimitCountdown} seconds</span>.
             </span>
           </div>
         </div>
@@ -305,28 +305,28 @@ export default function BlacklistRadarPage() {
 
       {/* Error Banner */}
       {error && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-mono flex items-start justify-between gap-3 animate-fadeIn">
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs font-mono flex items-start justify-between gap-3 animate-fadeIn">
           <div className="flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             <div>
-              <div className="font-bold text-rose-200">Reputation Scan Notice</div>
-              <div className="text-rose-300/90 mt-0.5 font-sans text-xs">{error.message}</div>
+              <div className="font-bold text-rose-900">Reputation Scan Notice</div>
+              <div className="text-rose-700 mt-0.5 font-sans text-xs">{error.message}</div>
               {process.env.NODE_ENV === "development" && error.code && (
-                <span className="inline-block mt-1 text-[10px] text-rose-400/70 font-mono">Debug: {error.code}</span>
+                <span className="inline-block mt-1 text-[10px] text-rose-600 font-mono">Debug: {error.code}</span>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => runScan()}
-              className="relative px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded border border-rose-500/40 text-[11px] transition before:absolute before:-inset-2 before:content-[''] cursor-pointer"
+              className="relative px-2.5 py-1 bg-white hover:bg-rose-100 text-rose-800 rounded border border-rose-300 text-[11px] transition before:absolute before:-inset-2 before:content-[''] cursor-pointer shadow-2xs"
             >
               Retry
             </button>
             <button
               onClick={() => setError(null)}
               aria-label="Dismiss error notification"
-              className="relative text-zinc-400 hover:text-white text-xs px-2 py-1 rounded before:absolute before:-inset-2 before:content-[''] cursor-pointer"
+              className="relative text-slate-500 hover:text-slate-900 text-xs px-2 py-1 rounded before:absolute before:-inset-2 before:content-[''] cursor-pointer"
             >
               ✕
             </button>
@@ -335,9 +335,9 @@ export default function BlacklistRadarPage() {
       )}
 
       {/* 2. Target Search & Control Bar */}
-      <div className="bg-[#0A0A0C] backdrop-blur-md p-5 rounded-xl border border-white/[0.08] hover:border-emerald-500/30 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-96">
-          <Globe className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Globe className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={target}
@@ -346,29 +346,29 @@ export default function BlacklistRadarPage() {
               if (e.key === "Enter") runScan();
             }}
             placeholder="Enter domain, e.g. store.com"
-            className="w-full pl-9 pr-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500/50 transition-colors"
+            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs transition-colors"
           />
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-mono text-zinc-400 flex-wrap">
+        <div className="flex items-center gap-4 text-xs font-mono text-slate-600 flex-wrap">
           <span>
-            Target: <strong className="text-emerald-400 font-mono text-xs">{scan ? scan.domain : target}</strong>
+            Target: <strong className="text-emerald-700 font-bold font-mono text-xs">{scan ? scan.domain : target}</strong>
           </span>
           {scan && scan.resolved_ips && scan.resolved_ips.length > 0 && (
             <>
-              <span className="text-zinc-700">•</span>
+              <span className="text-slate-300">•</span>
               <span>
                 Store Sending IP Addresses:{" "}
-                <strong className="text-cyan-400 font-mono text-xs">
+                <strong className="text-slate-900 font-bold font-mono text-xs">
                   {scan.resolved_ips.join(", ")}
                 </strong>
               </span>
             </>
           )}
-          <span className="text-zinc-700">•</span>
+          <span className="text-slate-300">•</span>
           <span>
             Scanned:{" "}
-            <strong className="text-white font-mono text-xs">
+            <strong className="text-slate-900 font-bold font-mono text-xs">
               {scan ? new Date(scan.scanned_at).toLocaleTimeString() : "Pending"}
             </strong>
           </span>
@@ -377,19 +377,19 @@ export default function BlacklistRadarPage() {
 
       {/* 3. Listed Incident Notification Banner if Any Provider is Listed */}
       {scan && scan.rbl_listed_count > 0 && (
-        <div className="p-4 bg-rose-950/40 border border-rose-500/50 rounded-xl animate-fadeIn">
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg animate-fadeIn">
           <div className="flex items-start gap-3">
-            <Flame className="w-5 h-5 text-rose-400 shrink-0 mt-0.5 animate-bounce" />
+            <Flame className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 animate-bounce" />
             <div className="flex-1">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-rose-200 uppercase tracking-wide flex items-center gap-2">
+                <h2 className="text-sm font-bold text-rose-900 uppercase tracking-wide flex items-center gap-2">
                   Active Blacklist Incident Detected ({scan.rbl_listed_count} of {scan.rbl_total_count} Lists)
                 </h2>
-                <span className="text-[11px] font-mono text-rose-300 font-bold px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/40">
+                <span className="text-[11px] font-mono text-rose-800 font-bold px-2 py-0.5 rounded bg-rose-100 border border-rose-300">
                   SEVERITY: {scan.highest_severity.toUpperCase()}
                 </span>
               </div>
-              <p className="text-xs text-rose-300/90 mt-1 font-sans">
+              <p className="text-xs text-rose-700 mt-1 font-sans">
                 One or more global reputation databases are flagging email traffic from this sending domain. Customer order confirmations and transactional emails risk landing in spam.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -401,11 +401,11 @@ export default function BlacklistRadarPage() {
                       href={r.delisting_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-mono border border-rose-500/40 transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-rose-100 text-rose-800 text-xs font-mono border border-rose-300 shadow-2xs transition"
                     >
                       <span>{r.provider_name}</span>
-                      <span className="text-rose-400 font-bold">[{formatRblListing(r.response_codes)}]</span>
-                      <ExternalLink className="w-3 h-3 ml-1 text-rose-300" />
+                      <span className="text-rose-600 font-bold">[{formatRblListing(r.response_codes)}]</span>
+                      <ExternalLink className="w-3 h-3 ml-1 text-rose-600" />
                     </a>
                   ))}
               </div>
@@ -416,11 +416,11 @@ export default function BlacklistRadarPage() {
 
       {/* 4. Partial Scan Warning Banner */}
       {scan && scan.overall_status === "partial" && scan.rbl_listed_count === 0 && (
-        <div className="p-4 bg-amber-950/30 border border-amber-500/40 rounded-xl text-amber-300 text-xs font-mono flex items-start gap-3 animate-fadeIn">
-          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs font-mono flex items-start gap-3 animate-fadeIn">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
-            <div className="font-bold text-amber-200">Reputation Check In Progress (Partial Response)</div>
-            <p className="text-amber-300/90 mt-0.5 font-sans">
+            <div className="font-bold text-amber-900">Reputation Check In Progress (Partial Response)</div>
+            <p className="text-amber-700 mt-0.5 font-sans">
               {scan.rbl_unknown_count} of {scan.rbl_total_count} reputation providers timed out or returned pending results. We will continue polling to verify your domain reputation status.
             </p>
           </div>
@@ -429,13 +429,13 @@ export default function BlacklistRadarPage() {
 
       {/* 5. 3D Real-Time RBL Node Topology Canvas */}
       {scan && (
-        <div className="bg-[#0A0A0C] backdrop-blur-md p-4 rounded-xl border border-white/[0.08] hover:border-emerald-500/30 transition-all duration-200 space-y-3 relative overflow-hidden">
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 text-xs">
-            <span className="font-mono text-emerald-400 font-bold flex items-center gap-2">
-              <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
+        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-3 relative overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2 text-xs">
+            <span className="font-mono text-emerald-700 font-bold flex items-center gap-2">
+              <Radio className="w-4 h-4 text-emerald-600" />
               GLOBAL SPAM BLACKLIST NETWORK
             </span>
-            <span className="text-[10px] font-mono text-zinc-400">
+            <span className="text-[10px] font-mono text-slate-500">
               {scan.rbl_total_count} AUTHORITATIVE LISTS
             </span>
           </div>
@@ -463,9 +463,9 @@ export default function BlacklistRadarPage() {
               : "rose"
           }
           metricValue={scan ? scan.rbl_listed_count : "--"}
-          icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
+          icon={<ShieldCheck className="w-5 h-5 text-emerald-600" />}
         >
-          <p className="text-xs text-zinc-400 font-mono">
+          <p className="text-xs text-slate-600 font-mono">
             {!scan
               ? "Awaiting first live reputation scan."
               : scan.rbl_listed_count === 0
@@ -492,9 +492,9 @@ export default function BlacklistRadarPage() {
               : "amber"
           }
           metricValue={scan ? `${scan.rbl_clean_count} / ${scan.rbl_total_count}` : "--"}
-          icon={<Server className="w-5 h-5 text-emerald-400" />}
+          icon={<Server className="w-5 h-5 text-emerald-600" />}
         >
-          <p className="text-xs text-zinc-400 font-mono line-clamp-1">
+          <p className="text-xs text-slate-600 font-mono line-clamp-1">
             {scan
               ? `${scan.rbl_unknown_count} unknown, ${scan.rbl_error_count} resolver error`
               : "Spamhaus, Barracuda, SpamCop, Invaluement, Mailspike."}
@@ -515,9 +515,9 @@ export default function BlacklistRadarPage() {
               : "amber"
           }
           metricValue={scan ? scan.overall_status.toUpperCase() : "--"}
-          icon={<Activity className="w-5 h-5 text-emerald-400" />}
+          icon={<Activity className="w-5 h-5 text-emerald-600" />}
         >
-          <p className="text-xs text-zinc-400 font-mono">
+          <p className="text-xs text-slate-600 font-mono">
             {!scan
               ? "Run live scan to compute overall posture."
               : scan.overall_status === "clean"
@@ -534,9 +534,9 @@ export default function BlacklistRadarPage() {
           badgeText={scan ? `${scan.execution_time_ms.toFixed(0)}ms scan` : "Real-time"}
           badgeVariant="cyan"
           metricValue={avgLatency}
-          icon={<Clock className="w-5 h-5 text-cyan-400" />}
+          icon={<Clock className="w-5 h-5 text-slate-700" />}
         >
-          <p className="text-xs text-zinc-400 font-mono">
+          <p className="text-xs text-slate-600 font-mono">
             {scan
               ? `Bounded 1.5s per-zone multi-resolver execution.`
               : "Real-time query response speed."}
@@ -546,18 +546,18 @@ export default function BlacklistRadarPage() {
 
       {/* 7. Loading Skeleton State */}
       {isLoading && !scan && (
-        <div className="bg-[#0A0A0C] backdrop-blur-md p-8 rounded-xl border border-white/[0.08] animate-pulse space-y-4">
-          <div className="h-4 bg-zinc-800 rounded w-1/4"></div>
+        <div className="bg-white p-8 rounded-lg border border-slate-200 animate-pulse space-y-4 shadow-xs">
+          <div className="h-4 bg-slate-200 rounded w-1/4"></div>
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-12 bg-zinc-900/80 rounded-lg flex items-center justify-between px-4">
-                <div className="h-3 bg-zinc-800 rounded w-1/3"></div>
-                <div className="h-3 bg-zinc-800 rounded w-1/6"></div>
-                <div className="h-3 bg-zinc-800 rounded w-1/12"></div>
+              <div key={i} className="h-12 bg-slate-50 border border-slate-200 rounded-md flex items-center justify-between px-4">
+                <div className="h-3 bg-slate-200 rounded w-1/3"></div>
+                <div className="h-3 bg-slate-200 rounded w-1/6"></div>
+                <div className="h-3 bg-slate-200 rounded w-1/12"></div>
               </div>
             ))}
           </div>
-          <p className="text-xs text-zinc-500 font-mono text-center pt-2">
+          <p className="text-xs text-slate-500 font-mono text-center pt-2">
             Scanning global reputation databases via dedicated recursive nameservers...
           </p>
         </div>
@@ -566,7 +566,7 @@ export default function BlacklistRadarPage() {
       {/* 8. True Empty State (404 / No prior scan recorded) */}
       {!isLoading && !scan && !error && (
         <OperationalEmptyState
-          icon={<Radio className="w-8 h-8 text-emerald-400" />}
+          icon={<Radio className="w-8 h-8 text-emerald-600" />}
           badge="Awaiting Reputation Scan"
           title="No Blacklist Audits Recorded"
           description={
@@ -588,12 +588,12 @@ export default function BlacklistRadarPage() {
           subtitle="Live query results across 10 authoritative anti-spam databases"
           badgeText={`${scan.rbl_total_count} Lists Monitored`}
           badgeVariant="emerald"
-          icon={<Activity className="w-5 h-5 text-emerald-400" />}
+          icon={<Activity className="w-5 h-5 text-emerald-600" />}
           disableGrid
         >
-          <div className="overflow-y-auto max-h-[460px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 rounded-xl border border-white/[0.08] bg-[#0A0A0C]">
+          <div className="overflow-y-auto max-h-[460px] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-left text-xs font-mono border-collapse" role="grid">
-              <thead className="sticky top-0 z-10 bg-[#0E1217] backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+              <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-md border-b border-slate-200 text-[10px] font-mono uppercase tracking-wider text-slate-600 font-semibold">
                 <tr>
                   <th scope="col" className="py-2.5 px-3 font-semibold text-left">Reputation Provider</th>
                   <th scope="col" className="py-2.5 px-3 font-semibold text-left">Reputation Zone</th>
@@ -603,7 +603,7 @@ export default function BlacklistRadarPage() {
                   <th scope="col" className="py-2.5 px-3 font-semibold text-right">Delisting Portal</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.05] text-zinc-300">
+              <tbody className="divide-y divide-slate-100 text-slate-800">
                 {scan.results.map((rbl) => {
                   const isListed = rbl.status === "listed";
                   const isUnknown = rbl.status === "unknown";
@@ -613,7 +613,7 @@ export default function BlacklistRadarPage() {
                   return (
                     <Fragment key={rbl.provider_id}>
                       <tr
-                        className="carbon-table-row hover:bg-white/[0.02] transition-colors cursor-pointer"
+                        className="hover:bg-slate-50/70 transition-colors cursor-pointer"
                         onClick={() => toggleRow(rbl.provider_id)}
                         tabIndex={0}
                         onKeyDown={(e) => {
@@ -630,56 +630,56 @@ export default function BlacklistRadarPage() {
                                 e.stopPropagation();
                                 toggleRow(rbl.provider_id);
                               }}
-                              className="relative p-1 rounded text-zinc-400 hover:text-emerald-400 transition cursor-pointer before:absolute before:-inset-2 before:content-['']"
+                              className="relative p-1 rounded text-slate-400 hover:text-emerald-600 transition cursor-pointer before:absolute before:-inset-2 before:content-['']"
                               aria-label={isExpanded ? "Collapse row details" : "Expand row details"}
                               title={isExpanded ? "Collapse Row" : "Expand Row"}
                             >
                               <ChevronDown
                                 className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                  isExpanded ? "rotate-180 text-emerald-400" : "text-zinc-400"
+                                  isExpanded ? "rotate-180 text-emerald-600" : "text-slate-400"
                                 }`}
                               />
                             </button>
                             <div>
-                              <div className="font-bold text-white text-xs font-sans flex items-center gap-1.5">
+                              <div className="font-bold text-slate-900 text-xs font-sans flex items-center gap-1.5">
                                 {rbl.provider_name}
                               </div>
-                              <div className="text-[10px] text-zinc-400 font-mono mt-0.5 line-clamp-1">
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5 line-clamp-1">
                                 Target: {rbl.queried_target}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="py-2.5 px-3 text-xs font-mono text-zinc-400">{rbl.zone}</td>
+                        <td className="py-2.5 px-3 text-xs font-mono text-slate-600">{rbl.zone}</td>
                         <td className="py-2.5 px-3 text-xs font-mono">
-                          <span className="text-[10px] font-mono uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 border border-white/[0.08]">
+                          <span className="text-[10px] font-mono uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                             {rbl.target_type}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-xs font-mono">
                           {isListed ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/30">
-                              <XCircle className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-rose-800 bg-rose-50 border border-rose-200">
+                              <XCircle className="w-3 h-3 text-rose-600" />
                               LISTED
                             </span>
                           ) : isUnknown ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30">
-                              <AlertCircle className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-amber-800 bg-amber-50 border border-amber-200">
+                              <AlertCircle className="w-3 h-3 text-amber-600" />
                               UNKNOWN
                             </span>
                           ) : isError ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-zinc-400 bg-zinc-800 border border-zinc-700">
-                              <HelpCircle className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-700 bg-slate-100 border border-slate-200">
+                              <HelpCircle className="w-3 h-3 text-slate-500" />
                               ERROR
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
-                              <CheckCircle2 className="w-3 h-3" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               CLEAN
                             </span>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 text-xs font-mono text-zinc-300 tabular-nums text-center">
+                        <td className="py-2.5 px-3 text-xs font-mono text-slate-700 tabular-nums text-center">
                           {rbl.latency_ms ?? "--"}ms
                         </td>
                         <td className="py-2.5 px-3 text-xs font-mono text-right" onClick={(e) => e.stopPropagation()}>
@@ -687,7 +687,7 @@ export default function BlacklistRadarPage() {
                             href={rbl.delisting_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-zinc-400 hover:text-emerald-400 font-mono text-xs inline-flex items-center gap-1 transition-colors min-h-[32px] px-2 py-1 rounded hover:bg-white/[0.04]"
+                            className="text-slate-600 hover:text-emerald-700 font-mono text-xs inline-flex items-center gap-1 transition-colors min-h-[32px] px-2 py-1 rounded hover:bg-slate-100"
                           >
                             Lookup <ExternalLink className="w-3 h-3" />
                           </a>
@@ -696,51 +696,51 @@ export default function BlacklistRadarPage() {
 
                       {/* Collapsible Accordion Drawer */}
                       {isExpanded && (
-                        <tr className="bg-[#0A0A0C]/90 border-b border-white/[0.08] animate-fadeIn">
+                        <tr className="bg-slate-50/90 border-b border-slate-200 animate-fadeIn">
                           <td colSpan={6} className="p-4">
                             <div className="space-y-3 font-mono text-xs">
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div className="p-3 bg-[#0E1217] rounded-xl border border-white/[0.08]">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Response Classification</span>
-                                  <span className="text-xs text-emerald-400 font-bold block mt-0.5">
+                                <div className="p-3 bg-white rounded-md border border-slate-200 shadow-2xs">
+                                  <span className="text-[10px] text-slate-500 uppercase block">Response Classification</span>
+                                  <span className="text-xs text-emerald-700 font-bold block mt-0.5">
                                     {rbl.response_codes.length > 0
                                       ? formatRblListing(rbl.response_codes)
                                       : "Clean (No Blacklist Entry)"}
                                   </span>
-                                  <span className="text-[10px] text-zinc-400 block mt-0.5">
+                                  <span className="text-[10px] text-slate-500 block mt-0.5">
                                     Severity: {rbl.severity.toUpperCase()}
                                   </span>
                                 </div>
 
-                                <div className="p-3 bg-[#0E1217] rounded-xl border border-white/[0.08]">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Delisting Gateway</span>
-                                  <span className="text-xs text-zinc-300 block mt-0.5 font-sans">
+                                <div className="p-3 bg-white rounded-md border border-slate-200 shadow-2xs">
+                                  <span className="text-[10px] text-slate-500 uppercase block">Delisting Gateway</span>
+                                  <span className="text-xs text-slate-700 block mt-0.5 font-sans">
                                     Direct Provider Removal Portal
                                   </span>
                                   <a
                                     href={rbl.delisting_url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[10px] text-emerald-400 hover:underline block mt-0.5"
+                                    className="text-[10px] text-emerald-700 hover:underline block mt-0.5 font-bold"
                                   >
                                     Open Delisting Portal ↗
                                   </a>
                                 </div>
 
-                                <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Monitoring Status</span>
-                                  <span className="text-[11px] text-zinc-300 block mt-0.5">
+                                <div className="p-3 bg-white rounded-md border border-slate-200 shadow-2xs">
+                                  <span className="text-[10px] text-slate-500 uppercase block">Monitoring Status</span>
+                                  <span className="text-[11px] text-slate-700 block mt-0.5">
                                     {rbl.message || "Reputation verified clean across database."}
                                   </span>
-                                  <span className="text-[10px] text-zinc-400 block mt-0.5">
+                                  <span className="text-[10px] text-slate-500 block mt-0.5">
                                     Query Latency: {rbl.latency_ms !== null ? `${rbl.latency_ms}ms` : "timeout"}
                                   </span>
                                 </div>
                               </div>
 
-                              <div className="p-3 bg-[#0E0E12] rounded-lg border border-zinc-800/80 flex items-center justify-between text-xs font-sans text-zinc-400">
+                              <div className="p-3 bg-white rounded-md border border-slate-200 flex items-center justify-between text-xs font-sans text-slate-600 shadow-2xs">
                                 <span>Zone Route: {rbl.zone}</span>
-                                <span className="font-mono text-[10px] text-zinc-500">Checked: {new Date(rbl.checked_at).toISOString()}</span>
+                                <span className="font-mono text-[10px] text-slate-500">Checked: {new Date(rbl.checked_at).toISOString()}</span>
                               </div>
                             </div>
                           </td>
