@@ -89,7 +89,7 @@ export default function ScoreGauge3DCanvas({
 
       // 2. Base Radial Gauge Track
       ctx.lineWidth = 8;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+      ctx.strokeStyle = "rgba(226, 232, 240, 0.9)";
       ctx.beginPath();
       ctx.arc(cx, cy, radius, Math.PI * 0.75, Math.PI * 2.25);
       ctx.stroke();
@@ -119,7 +119,7 @@ export default function ScoreGauge3DCanvas({
         const py = cy + Math.sin(p.angle * 0.7 + time * 0.4) * (p.radius * 0.45);
         const depthAlpha = (Math.sin(p.angle) + 1) / 2 * 0.7 + 0.3;
 
-        ctx.fillStyle = `rgba(52, 211, 153, ${depthAlpha * 0.85})`;
+        ctx.fillStyle = `rgba(16, 185, 129, ${depthAlpha * 0.75})`;
         ctx.beginPath();
         ctx.arc(px, py, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -151,10 +151,10 @@ export default function ScoreGauge3DCanvas({
     >
       <canvas ref={canvasRef} className="w-full h-full block pointer-events-none" />
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-        <span className="text-3xl font-extrabold text-white font-mono tracking-tight drop-shadow-[0_0_12px_rgba(16,185,129,0.6)]">
+        <span className="text-3xl font-extrabold text-slate-950 font-mono tracking-tight">
           {score !== null && score !== undefined ? score : "--"}
         </span>
-        <span className="text-[10px] font-mono font-bold tracking-widest text-emerald-400 uppercase">
+        <span className="text-[10px] font-mono font-bold tracking-widest text-emerald-700 uppercase">
           / 100 HEALTH
         </span>
       </div>

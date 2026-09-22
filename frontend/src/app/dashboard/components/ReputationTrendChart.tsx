@@ -21,25 +21,25 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
 
   if (!data || data.length === 0) {
     return (
-      <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 flex flex-col justify-between space-y-4 shadow-xs">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div>
-            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-400" />
-              Reputation Trajectory & 48h Radar Forecast
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-600" />
+              Reputation Trajectory &amp; 48h Radar Forecast
             </h3>
-            <p className="text-xs text-zinc-400 mt-0.5 font-normal">
+            <p className="text-xs text-slate-500 mt-0.5 font-normal">
               Continuous multi-resolver reputation checks and predictive blacklist risk scoring
             </p>
           </div>
-          <span className="text-[11px] font-mono text-zinc-400 px-2.5 py-1 rounded-full bg-zinc-800/80 border border-zinc-700/50">
+          <span className="text-[11px] font-mono text-slate-600 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
             Awaiting Data
           </span>
         </div>
         <div className="py-14 text-center space-y-2">
-          <Activity className="w-8 h-8 text-zinc-600 mx-auto animate-pulse" />
-          <div className="text-xs font-semibold text-zinc-300">No reputation history recorded yet</div>
-          <div className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+          <Activity className="w-8 h-8 text-slate-400 mx-auto animate-pulse" />
+          <div className="text-xs font-semibold text-slate-700">No reputation history recorded yet</div>
+          <div className="text-[11px] text-slate-500 max-w-sm mx-auto">
             Periodic background audit checks will compile your domain&apos;s deliverability trajectory over time.
           </div>
         </div>
@@ -83,47 +83,47 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
   const hoveredPoint = hoveredIndex !== null ? points[hoveredIndex] : null;
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 relative space-y-5 shadow-2xl">
+    <div className="rounded-lg border border-slate-200 bg-white p-6 relative space-y-5 shadow-xs">
       {/* Header with V2 Unified Scoring Context */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <h3 className="text-sm font-bold text-white tracking-tight">
-              Unified Predictive Score & RBL Timeline
+            <Activity className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+              Unified Predictive Score &amp; RBL Timeline
             </h3>
           </div>
-          <p className="text-xs text-zinc-400 mt-0.5 font-normal">
-            Continuous trajectory reading from <code className="text-emerald-400 font-mono text-[11px]">reputation_checks</code> (DNS × Blacklist Posture)
+          <p className="text-xs text-slate-500 mt-0.5 font-normal">
+            Continuous trajectory reading from <code className="text-emerald-700 font-mono text-[11px]">reputation_checks</code> (DNS × Blacklist Posture)
           </p>
         </div>
 
         {/* Real V2 Metrics Badges */}
         <div className="grid grid-cols-3 gap-2.5">
-          <div className="bg-[#08080A] px-3 py-1.5 rounded-xl border border-white/[0.06]">
-            <span className="text-[10px] uppercase font-mono text-zinc-500 block">Unified Score</span>
-            <span className="text-xs font-bold text-emerald-400 font-mono block mt-0.5">
+          <div className="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <span className="text-[10px] uppercase font-mono text-slate-500 block">Unified Score</span>
+            <span className="text-xs font-bold text-emerald-700 font-mono block mt-0.5">
               {currentPoint.unified_score}% ({scoreDelta >= 0 ? `+${scoreDelta}%` : `${scoreDelta}%`})
             </span>
           </div>
 
-          <div className="bg-[#14141A] px-3 py-1.5 rounded-xl border border-white/[0.1] shadow-inner">
-            <span className="text-[10px] uppercase font-mono text-zinc-400 block">48–72h Risk</span>
-            <span className="text-xs font-bold text-emerald-400 font-mono block mt-0.5">
+          <div className="bg-emerald-50/50 px-3 py-1.5 rounded-lg border border-emerald-200/60">
+            <span className="text-[10px] uppercase font-mono text-slate-500 block">48–72h Risk</span>
+            <span className="text-xs font-bold text-emerald-700 font-mono block mt-0.5">
               {currentPoint.spam_risk_pct}% ({currentPoint.risk_level.toUpperCase()})
             </span>
           </div>
 
-          <div className="bg-[#08080A] px-3 py-1.5 rounded-xl border border-white/[0.06]">
-            <span className="text-[10px] uppercase font-mono text-zinc-500 block">RBL Incidents</span>
-            <span className={`text-xs font-bold font-mono block mt-0.5 ${currentPoint.blacklist_count === 0 ? "text-white" : "text-red-400"}`}>
+          <div className="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <span className="text-[10px] uppercase font-mono text-slate-500 block">RBL Incidents</span>
+            <span className={`text-xs font-bold font-mono block mt-0.5 ${currentPoint.blacklist_count === 0 ? "text-slate-900" : "text-rose-600"}`}>
               {currentPoint.blacklist_count} Listed
             </span>
           </div>
         </div>
       </div>
 
-      {/* Dynamic Glowing Line SVG Graphic with Hover Crosshair */}
+      {/* Dynamic Line SVG Graphic with Hover Crosshair */}
       <div className="relative w-full overflow-hidden pt-2">
         <svg
           role="img"
@@ -133,13 +133,13 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
         >
           <defs>
             <linearGradient id="reputationWaveGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10B981" stopOpacity="0.38" />
-              <stop offset="65%" stopColor="#10B981" stopOpacity="0.08" />
-              <stop offset="100%" stopColor="#08080A" stopOpacity="0.0" />
+              <stop offset="0%" stopColor="#059669" stopOpacity="0.20" />
+              <stop offset="65%" stopColor="#059669" stopOpacity="0.04" />
+              <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.0" />
             </linearGradient>
 
             <filter id="emeraldLineGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feGaussianBlur stdDeviation="2" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -157,13 +157,13 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
                   y1={y}
                   x2={width - paddingX}
                   y2={y}
-                  stroke="rgba(255, 255, 255, 0.05)"
+                  stroke="rgba(226, 232, 240, 0.9)"
                   strokeDasharray="3 3"
                 />
                 <text
                   x={paddingX - 8}
                   y={y + 3}
-                  fill="#71717A"
+                  fill="#94A3B8"
                   fontSize="9"
                   textAnchor="end"
                   fontFamily="monospace"
@@ -174,18 +174,17 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
             );
           })}
 
-          {/* Glowing Area Fill */}
+          {/* Area Fill */}
           <path d={areaD} fill="url(#reputationWaveGradient)" />
 
-          {/* Glowing Curve Stroke */}
+          {/* Curve Stroke */}
           <path
             d={pathD}
             fill="none"
-            stroke="#10B981"
-            strokeWidth="3"
+            stroke="#059669"
+            strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            filter="url(#emeraldLineGlow)"
           />
 
           {/* Interactive Crosshair Lines on Hover */}
@@ -197,7 +196,7 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
                 y1={paddingY}
                 x2={hoveredPoint.x}
                 y2={height - paddingY}
-                stroke="rgba(16, 185, 129, 0.4)"
+                stroke="rgba(5, 150, 105, 0.4)"
                 strokeDasharray="2 2"
                 strokeWidth="1.5"
               />
@@ -207,7 +206,7 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
                 y1={hoveredPoint.y}
                 x2={width - paddingX}
                 y2={hoveredPoint.y}
-                stroke="rgba(16, 185, 129, 0.4)"
+                stroke="rgba(5, 150, 105, 0.4)"
                 strokeDasharray="2 2"
                 strokeWidth="1.5"
               />
@@ -218,10 +217,10 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
           {points.map((p) => {
             const nodeColor =
               p.data.risk_level === "high" || p.data.blacklist_count > 0
-                ? "#EF4444"
+                ? "#E11D48"
                 : p.data.risk_level === "medium"
-                ? "#F59E0B"
-                : "#10B981";
+                ? "#D97706"
+                : "#059669";
 
             const isSelected = hoveredIndex === p.index;
 
@@ -236,24 +235,24 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
                 <circle
                   cx={p.x}
                   cy={p.y}
-                  r={isSelected ? "10" : "7"}
+                  r={isSelected ? "9" : "6"}
                   fill={nodeColor}
-                  fillOpacity={isSelected ? "0.4" : "0.2"}
+                  fillOpacity={isSelected ? "0.25" : "0.12"}
                   className="transition-all duration-200"
                 />
                 <circle
                   cx={p.x}
                   cy={p.y}
-                  r="5"
+                  r="4.5"
                   fill={nodeColor}
-                  stroke="#08080A"
-                  strokeWidth="2.5"
-                  className="transition-transform group-hover:scale-150"
+                  stroke="#FFFFFF"
+                  strokeWidth="2"
+                  className="transition-transform group-hover:scale-125"
                 />
                 <text
                   x={p.x}
                   y={height - 4}
-                  fill={isSelected ? "#10B981" : "#71717A"}
+                  fill={isSelected ? "#059669" : "#94A3B8"}
                   fontSize="9"
                   fontWeight={isSelected ? "bold" : "normal"}
                   textAnchor="middle"
@@ -268,25 +267,25 @@ export default function ReputationTrendChart({ data = [] }: { data?: ReputationP
 
         {/* Hover Crosshair Tooltip Overlay */}
         {hoveredPoint && (
-          <div className="absolute top-2 right-4 bg-[#14141A]/95 backdrop-blur-md border border-emerald-500/30 p-3 rounded-xl shadow-2xl text-xs space-y-1 z-20 animate-fadeIn font-mono">
-            <div className="text-zinc-400 text-[10px] font-bold border-b border-white/[0.06] pb-1">
+          <div className="absolute top-2 right-4 bg-white/95 backdrop-blur-md border border-slate-200 p-3 rounded-lg shadow-md text-xs space-y-1 z-20 animate-fadeIn font-mono">
+            <div className="text-slate-500 text-[10px] font-bold border-b border-slate-200 pb-1">
               {hoveredPoint.data.checked_at} Audit Entry
             </div>
-            <div className="text-white font-bold flex items-center justify-between gap-4 pt-0.5">
+            <div className="text-slate-900 font-bold flex items-center justify-between gap-4 pt-0.5">
               <span>Unified Score:</span>
-              <span className="text-emerald-400">{hoveredPoint.data.unified_score}%</span>
+              <span className="text-emerald-700">{hoveredPoint.data.unified_score}%</span>
             </div>
-            <div className="text-zinc-300 flex items-center justify-between gap-4 text-[11px]">
+            <div className="text-slate-600 flex items-center justify-between gap-4 text-[11px]">
               <span>DNS Health:</span>
-              <span>{hoveredPoint.data.dns_health_score}%</span>
+              <span className="text-slate-900">{hoveredPoint.data.dns_health_score}%</span>
             </div>
-            <div className="text-zinc-300 flex items-center justify-between gap-4 text-[11px]">
+            <div className="text-slate-600 flex items-center justify-between gap-4 text-[11px]">
               <span>48h Spam Risk:</span>
-              <span className="text-emerald-400">{hoveredPoint.data.spam_risk_pct}% ({hoveredPoint.data.risk_level})</span>
+              <span className="text-emerald-700">{hoveredPoint.data.spam_risk_pct}% ({hoveredPoint.data.risk_level})</span>
             </div>
-            <div className="text-zinc-300 flex items-center justify-between gap-4 text-[11px]">
+            <div className="text-slate-600 flex items-center justify-between gap-4 text-[11px]">
               <span>Blacklist:</span>
-              <span className={hoveredPoint.data.blacklist_count > 0 ? "text-red-400" : "text-emerald-400"}>
+              <span className={hoveredPoint.data.blacklist_count > 0 ? "text-rose-600 font-semibold" : "text-emerald-700"}>
                 {hoveredPoint.data.rbl_status}
               </span>
             </div>

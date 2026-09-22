@@ -192,24 +192,24 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
 
   return (
     <div
-      className={`rounded-2xl border border-white/10 bg-[#0E0E12] p-6 shadow-2xl space-y-6 backdrop-blur-xl ${className}`}
+      className={`rounded-lg border border-slate-200 bg-white p-6 shadow-xs space-y-6 ${className}`}
     >
       {/* 1. Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
             <Layers className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
               Smart SPF Conflict Resolver
               {plan && plan.source_records.length > 1 && (
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200">
                   Multiple Records ({plan.source_records.length})
                 </span>
               )}
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-slate-600">
               Automated duplicate cleanup, DNS lookup budget protection, and safe sender consolidation.
             </p>
           </div>
@@ -218,7 +218,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
         <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
           <div className="flex flex-col items-end gap-1">
             {/* Qualifier Switcher */}
-            <div className="flex items-center rounded-lg bg-black/60 border border-white/10 p-0.5 text-xs font-mono">
+            <div className="flex items-center rounded-md bg-slate-100 border border-slate-200 p-0.5 text-xs font-mono">
               <button
                 type="button"
                 onClick={() => {
@@ -227,8 +227,8 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                 }}
                 className={`px-3 py-1.5 rounded-md transition cursor-pointer ${
                   preferredQualifier === "~all"
-                    ? "bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30"
-                    : "text-zinc-400 hover:text-white"
+                    ? "bg-white text-emerald-800 font-bold border border-slate-300 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
                 title="Flexible Delivery Mode: Permits legitimate forwarders while tagging unlisted IPs"
               >
@@ -242,15 +242,15 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                 }}
                 className={`px-3 py-1.5 rounded-md transition cursor-pointer ${
                   preferredQualifier === "-all"
-                    ? "bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30"
-                    : "text-zinc-400 hover:text-white"
+                    ? "bg-white text-emerald-800 font-bold border border-slate-300 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
                 title="Strict Blocking Mode: Commands mailbox providers to immediately reject unauthorized IPs"
               >
                 Strict Blocking Mode (-all)
               </button>
             </div>
-            <span className="text-[10px] text-zinc-500 font-sans text-right">
+            <span className="text-[10px] text-slate-500 font-sans text-right">
               {preferredQualifier === "~all"
                 ? "Recommended: SoftFail lets legitimate automated receipts pass safely without bounce risks."
                 : "Strict: HardFail requests mailboxes immediately drop unlisted sending IPs."}
@@ -261,25 +261,25 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
             type="button"
             onClick={() => generatePlan()}
             disabled={isLoading}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition disabled:opacity-50 cursor-pointer self-start sm:self-center"
+            className="p-2 rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-600 hover:text-slate-900 transition disabled:opacity-50 cursor-pointer self-start sm:self-center shadow-2xs"
             title="Recalculate Merge Plan"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-emerald-400" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-emerald-600" : ""}`} />
           </button>
         </div>
       </div>
 
       {isLoading && !plan ? (
         <div className="py-12 flex flex-col items-center justify-center space-y-3">
-          <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
-          <p className="text-xs text-zinc-400 font-mono">
-            Querying apex TXT records & analyzing recursive includes for {domain}...
+          <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" />
+          <p className="text-xs text-slate-600 font-mono">
+            Querying apex TXT records &amp; analyzing recursive includes for {domain}...
           </p>
         </div>
       ) : error ? (
-        <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 space-y-2 text-xs">
+        <div className="p-4 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 space-y-2 text-xs">
           <div className="flex items-center gap-2 font-semibold">
-            <XCircle className="w-4 h-4 text-rose-400" />
+            <XCircle className="w-4 h-4 text-rose-600" />
             <span>Merge Engine Failed</span>
           </div>
           <p>{error}</p>
@@ -289,16 +289,16 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           {/* 2. Source Records Detected */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-400 uppercase font-mono font-semibold">
+              <span className="text-slate-500 uppercase font-mono font-semibold">
                 Discovered Source Records ({plan.source_records.length})
               </span>
               {plan.source_records.length > 1 ? (
-                <span className="text-rose-400 font-mono font-semibold flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" /> Multiple SPF Records Detected (Delivery Failure)
+                <span className="text-rose-700 font-mono font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Multiple SPF Records Detected (Delivery Failure)
                 </span>
               ) : (
-                <span className="text-emerald-400 font-mono flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Single SPF Record
+                <span className="text-emerald-700 font-mono font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Single SPF Record
                 </span>
               )}
             </div>
@@ -307,13 +307,13 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
               {plan.source_records.map((rec, idx) => (
                 <div
                   key={idx}
-                  className="p-2.5 rounded-lg bg-black/60 border border-white/5 font-mono text-xs text-zinc-300 flex items-start justify-between gap-2 overflow-x-auto"
+                  className="p-2.5 rounded-md bg-slate-50 border border-slate-200 font-mono text-xs text-slate-800 flex items-start justify-between gap-2 overflow-x-auto"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-zinc-400 font-semibold shrink-0">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-200/70 text-[10px] text-slate-700 font-semibold shrink-0">
                       Record {idx + 1}
                     </span>
-                    <span className="text-zinc-200">{rec}</span>
+                    <span className="text-slate-900">{rec}</span>
                   </div>
                 </div>
               ))}
@@ -323,74 +323,74 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           {/* 3. Lookup Budget & Mechanism Analytics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* KPI: DNS Lookups Gauge */}
-            <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-2">
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs uppercase text-zinc-400 font-mono">DNS Lookup Budget</span>
+                <span className="text-xs uppercase text-slate-500 font-mono">DNS Lookup Budget</span>
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${
                     isOverLimit
-                      ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                      : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                      ? "bg-rose-50 text-rose-800 border border-rose-200"
+                      : "bg-emerald-50 text-emerald-800 border border-emerald-200"
                   }`}
                 >
                   {totalLookups}/10 Used
                 </span>
               </div>
 
-              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
                   className={`h-full transition-all duration-500 ${
-                    isOverLimit ? "bg-rose-500" : totalLookups >= 8 ? "bg-amber-500" : "bg-emerald-500"
+                    isOverLimit ? "bg-rose-600" : totalLookups >= 8 ? "bg-amber-500" : "bg-emerald-600"
                   }`}
                   style={{ width: `${Math.min(100, (totalLookups / 10) * 100)}%` }}
                 />
               </div>
 
-              <div className="flex justify-between text-[10px] font-mono text-zinc-500">
+              <div className="flex justify-between text-[10px] font-mono text-slate-500">
                 <span>Apex Lookups: {plan.lookup_budget.static_terms}</span>
                 <span>Recursive: {plan.lookup_budget.recursively_resolved_terms}</span>
               </div>
             </div>
 
             {/* KPI: Sender Rule Cleanup */}
-            <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-1">
-              <span className="text-xs uppercase text-zinc-400 font-mono block">Sender Rule Cleanup</span>
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+              <span className="text-xs uppercase text-slate-500 font-mono block">Sender Rule Cleanup</span>
               <div className="flex items-baseline gap-2">
                 {plan.removed_duplicates.length === 0 ? (
-                  <span className="text-xs font-medium text-emerald-400">
+                  <span className="text-xs font-medium text-emerald-700">
                     Clean Record: No duplicate sender rules detected
                   </span>
                 ) : (
                   <>
-                    <span className="text-xl font-bold font-mono text-emerald-400">
+                    <span className="text-xl font-bold font-mono text-slate-900">
                       {plan.removed_duplicates.length}
                     </span>
-                    <span className="text-xs text-zinc-400">duplicate sender rules cleaned</span>
+                    <span className="text-xs text-slate-600">duplicate sender rules cleaned</span>
                   </>
                 )}
               </div>
-              <p className="text-[10px] text-zinc-500 font-mono">
+              <p className="text-[10px] text-slate-500 font-mono">
                 {plan.mechanisms.length} total sender rules consolidated
               </p>
             </div>
 
             {/* KPI: Plan Safety Assessment */}
-            <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-1">
-              <span className="text-xs uppercase text-zinc-400 font-mono block">Application Gate</span>
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+              <span className="text-xs uppercase text-slate-500 font-mono block">Application Gate</span>
               <div className="flex items-center gap-2">
                 {plan.safe_to_apply ? (
                   <>
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    <span className="text-sm font-bold text-emerald-400 font-mono">Safe to Auto-Apply</span>
+                    <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    <span className="text-sm font-bold text-emerald-700 font-mono">Safe to Auto-Apply</span>
                   </>
                 ) : (
                   <>
-                    <ShieldAlert className="w-5 h-5 text-amber-400" />
-                    <span className="text-sm font-bold text-amber-400 font-mono">Manual Review Req</span>
+                    <ShieldAlert className="w-5 h-5 text-amber-600" />
+                    <span className="text-sm font-bold text-amber-700 font-mono">Manual Review Req</span>
                   </>
                 )}
               </div>
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-slate-500">
                 {plan.safe_to_apply
                   ? "Within standard 10-lookup limit & has zero syntax conflicts"
                   : "Contains warnings, lookup overflow, or modifiers"}
@@ -401,25 +401,31 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           {/* 4. Warnings and Deliverability Compliance Notices */}
           {plan.warnings.length > 0 && (
             <div className="space-y-2">
-              <span className="text-xs text-zinc-400 uppercase font-mono font-semibold">
-                Policy Warnings & Compliance Notes ({plan.warnings.length})
+              <span className="text-xs text-slate-500 uppercase font-mono font-semibold">
+                Policy Warnings &amp; Compliance Notes ({plan.warnings.length})
               </span>
               <div className="space-y-1.5">
                 {plan.warnings.map((w, idx) => (
                   <div
                     key={idx}
-                    className="p-3 rounded-lg bg-black/50 border border-white/5 flex items-start gap-2.5 text-xs"
+                    className={`p-3 rounded-md border flex items-start gap-2.5 text-xs ${
+                      w.severity === "critical"
+                        ? "bg-rose-50 border-rose-200 text-rose-800"
+                        : w.severity === "warning"
+                        ? "bg-amber-50 border-amber-200 text-amber-800"
+                        : "bg-slate-50 border-slate-200 text-slate-800"
+                    }`}
                   >
                     {w.severity === "critical" ? (
-                      <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     ) : w.severity === "warning" ? (
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     ) : (
-                      <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     )}
                     <div>
-                      <span className="font-mono text-zinc-300 font-semibold block">{w.code}</span>
-                      <span className="text-zinc-400 text-[11px] font-sans">{w.message}</span>
+                      <span className="font-mono text-slate-900 font-semibold block">{w.code}</span>
+                      <span className="text-slate-600 text-[11px] font-sans">{w.message}</span>
                     </div>
                   </div>
                 ))}
@@ -431,17 +437,17 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           {plan.proposed_record && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs uppercase text-emerald-400 font-mono font-semibold">
+                <span className="text-xs uppercase text-emerald-800 font-mono font-semibold">
                   Proposed Consolidated Record (TXT @)
                 </span>
                 <button
                   type="button"
                   onClick={() => handleCopy(plan.proposed_record!)}
-                  className="relative text-xs flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition cursor-pointer p-1.5 rounded-lg before:absolute before:-inset-2 before:content-[''] focus:outline-none"
+                  className="relative text-xs flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-semibold transition cursor-pointer p-1.5 rounded-md focus:outline-none"
                 >
                   {copied ? (
                     <>
-                      <Check className="w-3.5 h-3.5" /> Copied Record
+                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied Record
                     </>
                   ) : (
                     <>
@@ -451,7 +457,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                 </button>
               </div>
 
-              <div className="p-4 rounded-xl bg-black/80 border border-emerald-500/30 font-mono text-xs text-emerald-300 overflow-x-auto select-all selection:bg-emerald-500/30 selection:text-white">
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-300 font-mono text-xs text-slate-900 overflow-x-auto select-all selection:bg-emerald-100 selection:text-emerald-900 shadow-2xs">
                 {plan.proposed_record}
               </div>
             </div>
@@ -460,13 +466,13 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
           {/* 6. Action Footer */}
           <div className="space-y-3 pt-2">
             {applyError && (
-              <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-300 font-mono flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 font-mono flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
                 <div className="flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-semibold text-rose-300 block">{applyError}</span>
+                    <span className="font-semibold text-rose-800 block">{applyError}</span>
                     {isTierLocked && (
-                      <span className="text-[11px] text-zinc-400 block mt-0.5 font-sans">
+                      <span className="text-[11px] text-slate-600 block mt-0.5 font-sans">
                         Upgrade your plan to unlock automated 1-click zone remediation without manual DNS editing.
                       </span>
                     )}
@@ -475,7 +481,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
                 {isTierLocked && (
                   <Link
                     href="/dashboard/billing"
-                    className="shrink-0 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1 transition"
+                    className="shrink-0 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md text-xs flex items-center gap-1 transition shadow-xs"
                   >
                     Upgrade Plan <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
@@ -484,13 +490,13 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
             )}
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-[11px] text-zinc-500 font-mono">
+              <span className="text-[11px] text-slate-500 font-mono">
                 Plan ID: {plan.plan_id.slice(0, 8)}... • Valid for 24h
               </span>
 
               {applySuccess ? (
-                <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-mono font-bold animate-fadeIn">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800 font-mono font-bold animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>✓ Injected to Zone</span>
                 </div>
               ) : (

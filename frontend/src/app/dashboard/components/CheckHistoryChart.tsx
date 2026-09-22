@@ -27,25 +27,25 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
 
   if (logs.length === 0) {
     return (
-      <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-5 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 flex flex-col justify-between space-y-5 shadow-xs">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div>
-            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-              <Inbox className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Inbox className="w-4 h-4 text-emerald-600" />
               Store Inbox Deliverability Feed
             </h3>
-            <p className="text-xs text-zinc-400 mt-0.5 font-normal">
+            <p className="text-xs text-slate-500 mt-0.5 font-normal">
               Live verification of customer receipts and order notification delivery
             </p>
           </div>
-          <span className="text-xs font-mono text-zinc-400 px-3 py-1 rounded-full bg-zinc-800/80 border border-zinc-700/50">
+          <span className="text-xs font-mono text-slate-600 px-3 py-1 rounded-full bg-slate-50 border border-slate-200">
             Monitoring Store Deliverability
           </span>
         </div>
         <div className="py-12 text-center space-y-2 font-mono">
-          <Inbox className="w-7 h-7 text-zinc-600 mx-auto" />
-          <div className="text-xs font-semibold text-zinc-300">Monitoring store inbox deliverability...</div>
-          <div className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+          <Inbox className="w-7 h-7 text-slate-400 mx-auto" />
+          <div className="text-xs font-semibold text-slate-700">Monitoring store inbox deliverability...</div>
+          <div className="text-[11px] text-slate-500 max-w-sm mx-auto">
             Live order receipts and customer notification verification events will appear here as orders process.
           </div>
         </div>
@@ -54,21 +54,21 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
   }
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 flex flex-col justify-between space-y-5 shadow-2xl">
+    <div className="rounded-lg border border-slate-200 bg-white p-6 flex flex-col justify-between space-y-5 shadow-xs">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
         <div>
-          <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-            <Inbox className="w-4 h-4 text-emerald-400" />
+          <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Inbox className="w-4 h-4 text-emerald-600" />
             Store Inbox Deliverability Feed
           </h3>
-          <p className="text-xs text-zinc-400 mt-0.5 font-normal">
+          <p className="text-xs text-slate-500 mt-0.5 font-normal">
             Live verification of customer receipts and order notification delivery
           </p>
         </div>
 
-        <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_12px_rgba(16,185,129,0.15)] flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+        <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
           {inboxRate}% Primary Inbox
         </span>
       </div>
@@ -78,8 +78,8 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
         <button
           type="button"
           onClick={() => setSelectedFolder("all")}
-          className={`px-3 py-1 rounded-lg transition-all duration-200 cursor-pointer ${
-            selectedFolder === "all" ? "bg-[#1C1C24] text-white font-bold border border-white/[0.1]" : "text-zinc-400 hover:text-white"
+          className={`px-3 py-1 rounded-md transition-all duration-200 cursor-pointer ${
+            selectedFolder === "all" ? "bg-slate-100 text-slate-900 font-bold border border-slate-300" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
           }`}
         >
           All Checks ({logs.length})
@@ -87,21 +87,21 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
         <button
           type="button"
           onClick={() => setSelectedFolder("inbox")}
-          className={`px-3 py-1 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-            selectedFolder === "inbox" ? "bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30" : "text-zinc-400 hover:text-white"
+          className={`px-3 py-1 rounded-md transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+            selectedFolder === "inbox" ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-300" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
           }`}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
           Inbox ({logs.filter((l) => l.folder === "inbox").length})
         </button>
         <button
           type="button"
           onClick={() => setSelectedFolder("spam")}
-          className={`px-3 py-1 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-            selectedFolder === "spam" ? "bg-red-500/20 text-red-300 font-bold border border-red-500/30" : "text-zinc-400 hover:text-white"
+          className={`px-3 py-1 rounded-md transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+            selectedFolder === "spam" ? "bg-rose-50 text-rose-800 font-bold border border-rose-300" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
           }`}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
           Spam ({logs.filter((l) => l.folder === "spam").length})
         </button>
       </div>
@@ -116,17 +116,17 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.25, delay: idx * 0.05 }}
-              className="flex items-center justify-between p-3 bg-[#08080A] rounded-xl border border-white/[0.04] hover:border-emerald-500/30 hover:bg-[#0E0E12] transition-all duration-200 group"
+              className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-100/70 transition-all duration-150 group"
             >
               <div className="flex items-center gap-3">
                 {log.folder === "inbox" ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 ) : (
-                  <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                  <XCircle className="w-4 h-4 text-rose-600 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 )}
                 <div>
-                  <span className="font-bold text-white block text-[11px]">{log.order_id}</span>
-                  <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                  <span className="font-bold text-slate-900 block text-[11px]">{log.order_id}</span>
+                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
                     <Clock className="w-2.5 h-2.5" /> {log.received_at} • {log.latency_sec}s
                   </span>
                 </div>
@@ -134,16 +134,16 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
 
               <div className="text-right flex items-center gap-2">
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 transition-all duration-200 group-hover:scale-105 ${
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 transition-all duration-150 group-hover:scale-105 ${
                     log.folder === "inbox"
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : "bg-red-500/10 text-red-400 border border-red-500/20"
+                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                      : "bg-rose-50 text-rose-800 border border-rose-200"
                   }`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${log.folder === "inbox" ? "bg-emerald-400 animate-pulse" : "bg-red-400 animate-pulse"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${log.folder === "inbox" ? "bg-emerald-600 animate-pulse" : "bg-rose-600 animate-pulse"}`} />
                   {log.folder.toUpperCase()}
                 </span>
-                <span className="text-[10px] text-zinc-400 block font-mono">
+                <span className="text-[10px] text-slate-500 block font-mono">
                   DNS: {log.dns_subscore}%
                 </span>
               </div>
@@ -152,15 +152,15 @@ export default function CheckHistoryChart({ logs = [] }: { logs?: IMAPCheckLog[]
         </AnimatePresence>
       </div>
 
-      {/* Summary Footer with Live Glowing Pulse */}
-      <div className="pt-2 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-400">
+      {/* Summary Footer with Live Status */}
+      <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] font-mono text-slate-500">
         <span>Inbox Placement Surveillance:</span>
-        <span className="text-emerald-400 font-bold flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+        <span className="text-emerald-800 font-bold flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
           </span>
-          Synced & Listening
+          Synced &amp; Listening
         </span>
       </div>
     </div>

@@ -213,11 +213,11 @@ export default function ShopifyHubPage() {
       {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-emerald-400" />
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <ShoppingBag className="w-5 h-5 text-emerald-600" />
             Store Fleet &amp; Inbox Protection
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             Synchronize your Shopify stores, verify sender authentication, and monitor real-time order delivery health.
           </p>
         </div>
@@ -227,16 +227,16 @@ export default function ShopifyHubPage() {
             type="button"
             onClick={handleSyncStore}
             disabled={isSyncing}
-            className="bg-zinc-900/80 hover:bg-zinc-800 disabled:opacity-50 text-zinc-200 border border-zinc-700/60 font-medium px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[36px]"
+            className="bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 border border-slate-300 font-medium px-3.5 py-2 rounded-md text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed min-h-[36px] shadow-2xs"
           >
             {isSyncing ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
                 <span>Syncing Store...</span>
               </>
             ) : (
               <>
-                <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+                <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Sync Store</span>
               </>
             )}
@@ -329,18 +329,18 @@ export default function ShopifyHubPage() {
 
       {/* Simulation Result Alert */}
       {simulationResult && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2 animate-fadeIn font-mono">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2 animate-fadeIn font-mono">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" />
+            <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               Test Order {simulationResult.order_id} Verified
             </span>
-            <span className="text-[11px] text-zinc-400">
+            <span className="text-[11px] text-slate-500">
               Primary Placement: {simulationResult.placement_rate ?? 100}%
             </span>
           </div>
-          <div className="text-xs text-zinc-300">
-            Recipient: <span className="text-white">{simulationResult.customer_email}</span> | Folder: <span className="text-emerald-400 uppercase font-bold">{simulationResult.status}</span>
+          <div className="text-xs text-slate-700">
+            Recipient: <span className="text-slate-900 font-bold">{simulationResult.customer_email}</span> | Folder: <span className="text-emerald-700 uppercase font-bold">{simulationResult.status}</span>
           </div>
         </div>
       )}
@@ -352,48 +352,48 @@ export default function ShopifyHubPage() {
           subtitle="Verify your store sending domain, sender email, and integrated ESP"
           badgeText="Active Profile"
           badgeVariant="emerald"
-          icon={<ShoppingBag className="w-5 h-5 text-emerald-400" />}
+          icon={<ShoppingBag className="w-5 h-5 text-emerald-600" />}
           actionLabel="Configure Store"
           onActionClick={() => setShowSettingsDrawer(true)}
           className="space-y-4"
         >
           <div className="space-y-3 font-mono text-xs">
             <div>
-              <label className="text-zinc-400 block mb-1">Shopify Store Domain</label>
+              <label className="text-slate-700 font-medium block mb-1">Shopify Store Domain</label>
               <input
                 type="text"
                 value={storeDomain}
                 onChange={(e) => setStoreDomain(e.target.value)}
                 placeholder="store.myshopify.com"
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
               />
             </div>
 
             <div>
-              <label className="text-zinc-400 block mb-1">Custom Sending Domain</label>
+              <label className="text-slate-700 font-medium block mb-1">Custom Sending Domain</label>
               <input
                 type="text"
                 value={customDomain}
                 onChange={(e) => setCustomDomain(e.target.value)}
                 placeholder="store.com"
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
               />
             </div>
 
             <div>
-              <label className="text-zinc-400 block mb-1">Sender Email Address</label>
+              <label className="text-slate-700 font-medium block mb-1">Sender Email Address</label>
               <input
                 type="email"
                 value={senderEmail}
                 onChange={(e) => setSenderEmail(e.target.value)}
                 placeholder="orders@store.com"
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-zinc-100 placeholder:text-zinc-500 font-medium font-mono text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
               />
             </div>
           </div>
 
           {alignmentError && (
-            <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono">
+            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 font-mono">
               {alignmentError}
             </div>
           )}
@@ -402,54 +402,54 @@ export default function ShopifyHubPage() {
         {/* Transactional Sender Alignment Status */}
         <GlassEmeraldCard
           title="Transactional Sender Alignment Status"
-          subtitle="Google & Yahoo 2024 Bulk Sender Requirements (US & EU) — Protect Order Receipts & Prevent Disputes"
+          subtitle="Google &amp; Yahoo 2024 Bulk Sender Requirements (US &amp; EU) — Protect Order Receipts &amp; Prevent Disputes"
           badgeText="Verified"
           badgeVariant="emerald"
-          icon={<Shield className="w-5 h-5 text-emerald-400" />}
+          icon={<Shield className="w-5 h-5 text-emerald-600" />}
           className="lg:col-span-2 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3.5 bg-[#08080A] rounded-lg border border-zinc-800">
-              <span className="text-zinc-400 text-xs font-semibold block mb-1">SPF Mechanism</span>
+            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+              <span className="text-slate-500 text-xs font-semibold block mb-1">SPF Mechanism</span>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span className="text-white font-mono text-xs font-bold">shops.shopify.com</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-slate-900 font-mono text-xs font-bold">shops.shopify.com</span>
               </div>
-              <span className="text-[10px] text-zinc-500 mt-1 block font-mono">Inclusion Confirmed</span>
+              <span className="text-[10px] text-slate-500 mt-1 block font-mono">Inclusion Confirmed</span>
             </div>
 
-            <div className="p-3.5 bg-[#08080A] rounded-lg border border-zinc-800">
-              <span className="text-zinc-400 text-xs font-semibold block mb-1">Shopify DKIM Signing</span>
+            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+              <span className="text-slate-500 text-xs font-semibold block mb-1">Shopify DKIM Signing</span>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span className="text-white font-mono text-xs font-bold">Shopify Sender Authentication</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-slate-900 font-mono text-xs font-bold">Shopify Sender Authentication</span>
               </div>
-              <span className="text-[10px] text-emerald-400 mt-1 block font-mono">Connected</span>
+              <span className="text-[10px] text-emerald-700 mt-1 block font-mono">Connected</span>
             </div>
 
-            <div className="p-3.5 bg-[#08080A] rounded-lg border border-zinc-800">
-              <span className="text-zinc-400 text-xs font-semibold block mb-1">DMARC Policy</span>
+            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+              <span className="text-slate-500 text-xs font-semibold block mb-1">DMARC Policy</span>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span className="text-white font-mono text-xs font-bold">Email Spoofing Protection</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-slate-900 font-mono text-xs font-bold">Email Spoofing Protection</span>
               </div>
-              <span className="text-[10px] text-emerald-400 mt-1 block font-mono">Active (Quarantine)</span>
+              <span className="text-[10px] text-emerald-700 mt-1 block font-mono">Active (Quarantine)</span>
             </div>
           </div>
 
           {alignmentResult && (
-            <div className="p-4 bg-[#08080A] rounded-lg border border-zinc-800 space-y-2 font-mono text-xs">
-              <div className="flex items-center gap-2 font-bold text-emerald-400">
-                <CheckCircle2 className="w-4 h-4" />
-                Sender <span className="text-white">{senderEmail}</span> evaluated:
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 font-mono text-xs">
+              <div className="flex items-center gap-2 font-bold text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Sender <span className="text-slate-900 font-bold">{senderEmail}</span> evaluated:
               </div>
-              <div className="text-zinc-300">
-                Overall Alignment: <span className={alignmentResult.overall_aligned ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+              <div className="text-slate-700">
+                Overall Alignment: <span className={alignmentResult.overall_aligned ? "text-emerald-700 font-bold" : "text-amber-700 font-bold"}>
                   {alignmentResult.overall_aligned ? "PASSED" : "REQUIRES ATTENTION"}
                 </span>
               </div>
               {alignmentResult.recommendations?.length > 0 && (
-                <ul className="text-xs text-amber-400 list-disc list-inside space-y-1 pt-1">
+                <ul className="text-xs text-amber-700 list-disc list-inside space-y-1 pt-1">
                   {alignmentResult.recommendations.map((rec: string, i: number) => (
                     <li key={i}>{rec}</li>
                   ))}
@@ -466,11 +466,11 @@ export default function ShopifyHubPage() {
         subtitle="Live alerts sent to your Telegram whenever customer order receipts or tracking emails bounce."
         badgeText={`${failoverLogsResource.state === "ready" ? failoverLogsResource.data.length : 0} Incidents`}
         badgeVariant="emerald"
-        icon={<Activity className="w-5 h-5 text-emerald-400" />}
+        icon={<Activity className="w-5 h-5 text-emerald-600" />}
       >
         {failoverLogsResource.state === "loading" && (
           <OperationalLoadingState
-            label="Loading Telegram failover & incident logs..."
+            label="Loading Telegram failover &amp; incident logs..."
             subtext="Retrieving incident history"
             rows={4}
           />
@@ -487,7 +487,7 @@ export default function ShopifyHubPage() {
 
         {failoverLogsResource.state === "empty" && (
           <OperationalEmptyState
-            icon={<Activity className="w-8 h-8 text-emerald-400" />}
+            icon={<Activity className="w-8 h-8 text-emerald-600" />}
             badge="Incident Radar Clear"
             title="No Telegram delivery incidents recorded"
             description="No order delivery failures recorded. When order receipts or tracking emails encounter delivery issues, instant Telegram alerts will appear here."
@@ -495,9 +495,9 @@ export default function ShopifyHubPage() {
         )}
 
         {failoverLogsResource.state === "ready" && (
-          <div className="overflow-x-auto max-h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
+          <div className="overflow-x-auto max-h-[420px] overflow-y-auto scrollbar-thin">
             <table className="w-full text-left text-xs font-mono">
-              <thead className="text-zinc-400 border-b border-zinc-800 text-[10px] uppercase bg-[#0E1217]/95 backdrop-blur-md sticky top-0 z-10">
+              <thead className="text-slate-500 border-b border-slate-200 text-[10px] uppercase bg-slate-50 sticky top-0 z-10">
                 <tr>
                   <th className="px-5 py-3.5 font-semibold">Order ID</th>
                   <th className="px-5 py-3.5 font-semibold">Domain</th>
@@ -507,7 +507,7 @@ export default function ShopifyHubPage() {
                   <th className="px-5 py-3.5 font-semibold text-right">Incident Timestamp</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-900/60 text-zinc-300">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {failoverLogsResource.data.map((item) => {
                   const isDelivered = item.provider_status === "delivered";
                   const isNotified = item.status === "delivered" && !item.provider_sid;
@@ -519,42 +519,42 @@ export default function ShopifyHubPage() {
                   return (
                     <tr
                       key={item.id}
-                      className="border-b border-zinc-900/60 hover:bg-zinc-800/20 transition-all duration-150"
+                      className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors"
                     >
-                      <td className="px-5 py-3.5 font-bold text-white font-mono">
+                      <td className="px-5 py-3.5 font-bold text-slate-900 font-mono">
                         {item.order_id || "Unavailable"}
                       </td>
-                      <td className="px-5 py-3.5 text-zinc-300 font-mono text-[11px]">
+                      <td className="px-5 py-3.5 text-slate-600 font-mono text-[11px]">
                         {item.domain_name || "Unavailable"}
                       </td>
-                      <td className="px-5 py-3.5 text-amber-400 font-mono text-[11px]">
+                      <td className="px-5 py-3.5 text-amber-700 font-mono text-[11px]">
                         {item.triggered_reason || "Delivery failure"}
                       </td>
                       <td className="px-5 py-3.5 font-mono">
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] uppercase font-semibold text-emerald-400">
-                          <Radio className="w-3 h-3 text-emerald-400" />
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] uppercase font-semibold text-slate-700">
+                          <Radio className="w-3 h-3 text-slate-500" />
                           Telegram
                         </span>
                       </td>
                       <td className="px-5 py-3.5 font-mono">
                         {isDelivered ? (
-                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1 font-mono">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1 font-mono">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             Delivered
                           </span>
                         ) : isNotified ? (
-                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 font-mono">
-                            <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1 font-mono">
+                            <Check className="w-3 h-3 text-emerald-600" />
                             Notified
                           </span>
                         ) : (
-                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 inline-flex items-center gap-1 font-mono">
-                            <XCircle className="w-3 h-3 text-rose-400" />
+                          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1 font-mono">
+                            <XCircle className="w-3 h-3 text-rose-600" />
                             Failed
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 text-right text-zinc-500 text-[11px] font-mono">
+                      <td className="px-5 py-3.5 text-right text-slate-500 text-[11px] font-mono">
                         {formattedDate}
                       </td>
                     </tr>

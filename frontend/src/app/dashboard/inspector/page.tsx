@@ -450,63 +450,63 @@ function DNSInspectorContent() {
       {/* 1. Header with Navigation Mode Switcher */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <Terminal className="w-6 h-6 text-emerald-400" />
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Terminal className="w-6 h-6 text-emerald-600" />
             Domain Health Inspector
           </h1>
-          <p className="text-sm text-zinc-400 font-normal mt-1">
+          <p className="text-sm text-slate-600 font-normal mt-1">
             Verify DNS records and protect customer order receipts from spam.
           </p>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#0E0E12] border border-zinc-800/80 rounded-xl font-mono text-xs w-fit max-w-max">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-lg font-mono text-xs w-fit max-w-max">
           <button
             type="button"
             onClick={() => setActiveTab("generator")}
-            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === "generator"
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-white text-emerald-800 border border-slate-300 shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
             1-Click Record Generator
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("inspector")}
-            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === "inspector"
-                ? "bg-[#1C1C24] text-white border border-zinc-700/80"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-white text-slate-900 border border-slate-300 shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <Code2 className="w-3.5 h-3.5" />
+            <Code2 className="w-3.5 h-3.5 text-slate-600" />
             Detailed Audit
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("spf-merge")}
-            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === "spf-merge"
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-white text-emerald-800 border border-slate-300 shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Layers className="w-3.5 h-3.5 text-emerald-600" />
             SPF Merge Engine
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("seed-testing")}
-            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === "seed-testing"
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-white text-emerald-800 border border-slate-300 shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <Radio className="w-3.5 h-3.5 text-emerald-400" />
+            <Radio className="w-3.5 h-3.5 text-emerald-600" />
             Seed Inbox Verifier
           </button>
         </div>
@@ -517,50 +517,50 @@ function DNSInspectorContent() {
         {/* Left Workspace: Control Panel (Col 5) */}
         <div className="lg:col-span-5 space-y-6">
           {/* Domain Query Bar & Selector Badges */}
-          <div className="bg-[#0A0A0C] backdrop-blur-md p-5 rounded-xl border border-white/[0.08] shadow-lg space-y-4">
+          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
-                <Search className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-emerald-600" />
                 Target Sending Domain
               </span>
-              <span className="text-[10px] font-mono text-zinc-500">RFC 1035 UDP</span>
+              <span className="text-[10px] font-mono text-slate-500">RFC 1035 UDP</span>
             </div>
 
             {/* Domain Input */}
-            <div className="flex items-center gap-2 bg-[#08080A] border border-zinc-800 rounded-lg px-3.5 h-10 font-mono text-xs focus-within:border-emerald-500/50 transition-colors">
-              <Globe className="w-4 h-4 text-zinc-500 shrink-0" />
+            <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-3.5 h-10 font-mono text-xs focus-within:border-emerald-600 focus-within:ring-1 focus-within:ring-emerald-600 shadow-2xs transition-colors">
+              <Globe className="w-4 h-4 text-slate-400 shrink-0" />
               <input
                 type="text"
                 value={domainInput}
                 onChange={(e) => setDomainInput(e.target.value)}
                 placeholder="Enter store domain (e.g. store.com)"
-                className="bg-transparent text-zinc-100 placeholder:text-zinc-500 font-medium w-full focus:outline-none font-mono text-xs leading-none"
+                className="bg-transparent text-slate-900 placeholder:text-slate-400 font-medium w-full focus:outline-none font-mono text-xs leading-none"
               />
             </div>
 
             {/* Custom Selectors Input & Presets */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
-                  <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider flex items-center gap-2">
+                  <Cpu className="w-3.5 h-3.5 text-emerald-600" />
                   DKIM Selectors
                 </span>
-                <span className="text-[10px] font-mono text-zinc-500">Comma separated</span>
+                <span className="text-[10px] font-mono text-slate-500">Comma separated</span>
               </div>
 
-              <div className="flex items-center gap-2 bg-[#08080A] border border-zinc-800 rounded-lg px-3.5 h-10 font-mono text-xs focus-within:border-emerald-500/50 transition-colors">
+              <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-3.5 h-10 font-mono text-xs focus-within:border-emerald-600 focus-within:ring-1 focus-within:ring-emerald-600 shadow-2xs transition-colors">
                 <input
                   type="text"
                   value={customSelectors}
                   onChange={(e) => setCustomSelectors(e.target.value)}
                   placeholder="e.g. shopify, google, kl"
-                  className="bg-transparent text-zinc-100 placeholder:text-zinc-500 font-medium w-full focus:outline-none font-mono text-xs leading-none"
+                  className="bg-transparent text-slate-900 placeholder:text-slate-400 font-medium w-full focus:outline-none font-mono text-xs leading-none"
                 />
               </div>
 
-              {/* Quick Selector Presets - cleanly positioned below input */}
+              {/* Quick Selector Presets */}
               <div className="flex items-center gap-2 pt-0.5">
-                <span className="text-[11px] text-zinc-500 font-medium">Quick Selector Presets:</span>
+                <span className="text-[11px] text-slate-500 font-medium">Quick Selector Presets:</span>
                 <div className="flex items-center gap-1.5">
                   {[
                     { id: "shopify", label: "shopify" },
@@ -588,8 +588,8 @@ function DNSInspectorContent() {
                         }}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all cursor-pointer ${
                           isSelected
-                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold shadow-sm shadow-emerald-500/10"
-                            : "bg-zinc-900/90 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold shadow-2xs"
+                            : "bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 border border-slate-200"
                         }`}
                         title={`Toggle ${label} selector`}
                       >
@@ -612,7 +612,7 @@ function DNSInspectorContent() {
               icon={<Zap className="w-3.5 h-3.5 fill-current" />}
               size="sm"
               variant="primary"
-              className="w-full h-10 px-5 text-xs font-semibold rounded-lg flex items-center justify-center shadow-sm"
+              className="w-full h-10 px-5 text-xs font-semibold rounded-md flex items-center justify-center shadow-xs"
             >
               Query DNS &amp; Generate Records
             </EmeraldHoverButton>
@@ -622,7 +622,7 @@ function DNSInspectorContent() {
           <GlassEmeraldCard
             title="Authorized Sending Stack"
             subtitle="Toggle services to build an aligned SPF record"
-            icon={<Server className="w-5 h-5 text-emerald-400" />}
+            icon={<Server className="w-5 h-5 text-emerald-600" />}
             className="space-y-4"
           >
             <div className="space-y-2.5 font-sans text-xs">
@@ -635,9 +635,9 @@ function DNSInspectorContent() {
               ].map((item, i) => (
                 <label
                   key={i}
-                  className="flex items-center justify-between p-3 rounded-lg border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.04] transition-colors cursor-pointer"
+                  className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors cursor-pointer"
                 >
-                  <span className="font-medium text-xs text-white">{item.label}</span>
+                  <span className="font-medium text-xs text-slate-900">{item.label}</span>
                   <input
                     type="checkbox"
                     checked={item.val}
@@ -645,7 +645,7 @@ function DNSInspectorContent() {
                       item.set(e.target.checked);
                       setTimeout(handleGenerateRecords, 50);
                     }}
-                    className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/20 cursor-pointer"
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/20 cursor-pointer"
                   />
                 </label>
               ))}
@@ -656,7 +656,7 @@ function DNSInspectorContent() {
           <GlassEmeraldCard
             title="Target DMARC Enforcement"
             subtitle="Configure mailbox protection and abuse reporting"
-            icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />}
+            icon={<ShieldCheck className="w-5 h-5 text-emerald-600" />}
             className="space-y-4"
           >
             <div className="space-y-2 font-sans">
@@ -669,8 +669,8 @@ function DNSInspectorContent() {
                   key={pol.id}
                   className={`block p-2.5 rounded-lg border text-xs cursor-pointer transition ${
                     dmarcPolicy === pol.id
-                      ? "bg-emerald-500/10 border-emerald-500/30 text-white"
-                      : "bg-[#08080A] border-zinc-800/80 text-zinc-400 hover:border-zinc-700"
+                      ? "bg-emerald-50/80 border-emerald-300 text-slate-900 shadow-2xs"
+                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50/50"
                   }`}
                 >
                   <input
@@ -684,15 +684,15 @@ function DNSInspectorContent() {
                     }}
                     className="sr-only"
                   />
-                  <span className="font-bold text-white block">{pol.label}</span>
-                  <span className="text-[11px] text-zinc-400">{pol.desc}</span>
+                  <span className="font-bold text-slate-900 block">{pol.label}</span>
+                  <span className="text-[11px] text-slate-500">{pol.desc}</span>
                 </label>
               ))}
             </div>
 
             {/* RUA Reporting Email */}
-            <div className="space-y-1.5 pt-2 border-t border-zinc-800/80">
-              <label className="text-xs font-bold text-white uppercase block font-mono">
+            <div className="space-y-1.5 pt-2 border-t border-slate-200">
+              <label className="text-xs font-bold text-slate-700 uppercase block font-mono">
                 Email Abuse Inbox (DMARC RUA)
               </label>
               <input
@@ -702,7 +702,7 @@ function DNSInspectorContent() {
                   setDmarcReportEmail(e.target.value);
                   setTimeout(handleGenerateRecords, 50);
                 }}
-                className="w-full px-3 py-2 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-zinc-100 placeholder:text-zinc-500 font-medium focus:outline-none focus:border-emerald-500/50"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-xs font-mono text-slate-900 placeholder:text-slate-400 font-medium focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
               />
             </div>
           </GlassEmeraldCard>
@@ -728,12 +728,12 @@ function DNSInspectorContent() {
             <div className="space-y-5">
               {/* STEP 1 & 2 CLOSED-LOOP BANNER */}
               {hasCopiedRecords && (
-                <div className="p-4 bg-[#0A0A0C] backdrop-blur-md border border-white/[0.08] rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn font-mono text-xs">
-                  <div className="flex items-center gap-2.5 text-zinc-200">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn font-mono text-xs text-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                     <span>
                       Records copied. Paste them into your DNS provider (Cloudflare, GoDaddy, Namecheap), then click{" "}
-                      <strong className="text-emerald-400">&ldquo;Verify Records Live&rdquo;</strong>.
+                      <strong className="text-emerald-700">&ldquo;Verify Records Live&rdquo;</strong>.
                     </span>
                   </div>
                   <EmeraldHoverButton
@@ -752,29 +752,29 @@ function DNSInspectorContent() {
 
               {/* REAL-TIME POLLING / PROGRESS STATE */}
               {verifyPollingText && (
-                <div className="p-3.5 bg-[#08080A] border border-zinc-800 rounded-lg text-xs font-mono text-emerald-400 flex items-center gap-2.5 animate-fadeIn">
-                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono text-emerald-700 flex items-center gap-2.5 animate-fadeIn">
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
                   <span>{verifyPollingText}</span>
                 </div>
               )}
 
               {/* VERIFY OUTCOME NOTIFICATIONS */}
               {verifyOutcome === "success" && (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2 animate-fadeIn font-mono text-xs">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2 animate-fadeIn font-mono text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-emerald-400 flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span className="font-bold text-emerald-800 flex items-center gap-2 text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       ✓ All DNS records successfully verified &amp; propagated live!
                     </span>
-                    <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                       Score: 100/100 • Optimal
                     </span>
                   </div>
                   {telegramAlertDispatched && (
-                    <div className="text-xs text-zinc-300 flex items-center gap-2 pt-1 border-t border-emerald-500/20">
-                      <Send className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="text-xs text-slate-600 flex items-center gap-2 pt-1 border-t border-emerald-200">
+                      <Send className="w-3.5 h-3.5 text-emerald-600" />
                       <span>
-                        Alert delivery sent to Telegram for <strong className="text-white">@inboundcheck_alerts</strong>: Domain <code className="text-emerald-300">{domainInput}</code> DNS active.
+                        Alert delivery sent to Telegram for <strong className="text-slate-900">@inboundcheck_alerts</strong>: Domain <code className="text-emerald-700 font-bold">{domainInput}</code> DNS active.
                       </span>
                     </div>
                   )}
@@ -783,14 +783,14 @@ function DNSInspectorContent() {
 
               {/* Verify Error State */}
               {verifyOutcome === "error" && (
-                <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2 animate-fadeIn font-mono text-xs">
+                <div className="p-4 bg-rose-50 border border-rose-200 rounded-lg space-y-2 animate-fadeIn font-mono text-xs">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span className="font-bold text-rose-300 text-sm">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span className="font-bold text-rose-800 text-sm">
                       Live verification failed — DNS records could not be confirmed.
                     </span>
                   </div>
-                  <p className="text-rose-300/80 font-sans text-xs pl-6">
+                  <p className="text-rose-700 font-sans text-xs pl-6">
                     Check your authoritative nameserver propagation and retry. Records may take up to 48h to propagate globally.
                   </p>
                 </div>
@@ -799,10 +799,10 @@ function DNSInspectorContent() {
               {/* Generated DNS Records List */}
               {generatedRecords.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                     <div>
-                      <h3 className="text-sm font-bold text-white tracking-tight uppercase font-mono">Generated DNS Records</h3>
-                      <span className="text-xs text-zinc-400">
+                      <h3 className="text-sm font-bold text-slate-900 tracking-tight uppercase font-mono">Generated DNS Records</h3>
+                      <span className="text-xs text-slate-500">
                         Ready to copy into Cloudflare, GoDaddy, or Namecheap
                       </span>
                     </div>
@@ -810,15 +810,15 @@ function DNSInspectorContent() {
                       <button
                         type="button"
                         onClick={copyAllRecords}
-                        className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        className="min-h-[38px] border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-md text-xs font-mono px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                       >
-                        {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         {copiedAll ? "All Copied!" : "Copy All Records"}
                       </button>
                       <button
                         type="button"
                         onClick={downloadZoneFile}
-                        className="min-h-[44px] bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold rounded-xl text-xs px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)] font-mono active:scale-95"
+                        className="min-h-[38px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-md text-xs px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer shadow-xs font-mono active:scale-95"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Official Domain DNS Records (.zone)
@@ -827,22 +827,22 @@ function DNSInspectorContent() {
                   </div>
 
                   {/* Bounded Scrollable Record Container */}
-                  <div className="overflow-y-auto max-h-[580px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40 pr-1 space-y-4">
+                  <div className="overflow-y-auto max-h-[580px] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent hover:scrollbar-thumb-slate-400 pr-1 space-y-4">
                     {generatedRecords.map((fix) => {
                       const isExpanded = !!expandedRecordIds[fix.id];
 
                       return (
                         <div
                           key={fix.id}
-                          className="obsidian-panel p-5 font-mono space-y-3"
+                          className="bg-white border border-slate-200 rounded-lg p-5 font-mono space-y-3 shadow-xs"
                         >
                           {/* Header Summary Row */}
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
-                              <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
+                              <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full text-emerald-800 bg-emerald-50 border border-emerald-200">
                                 {fix.record_type}
                               </span>
-                              <span className="text-xs font-bold text-white">{fix.category}</span>
+                              <span className="text-xs font-bold text-slate-900">{fix.category}</span>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
@@ -852,27 +852,27 @@ function DNSInspectorContent() {
                                   type="button"
                                   onClick={() => handleApplyAutoFix(fix)}
                                   disabled={fixStatus[fix.id] === "applying" || fixStatus[fix.id] === "applied"}
-                                  className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                                  className={`min-h-[38px] px-3.5 py-1.5 rounded-md text-xs font-mono font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                                     fixStatus[fix.id] === "applied"
-                                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 cursor-default"
+                                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default"
                                       : fixStatus[fix.id] === "applying"
-                                      ? "bg-[#0E1217] text-zinc-400 border border-white/10 cursor-wait"
-                                      : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                                      ? "bg-slate-100 text-slate-500 border border-slate-200 cursor-wait"
+                                      : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                                   }`}
                                 >
                                   {fixStatus[fix.id] === "applied" ? (
                                     <>
-                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
                                       <span>✓ Injected to Zone</span>
                                     </>
                                   ) : fixStatus[fix.id] === "applying" ? (
                                     <>
-                                      <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                                      <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
                                       <span>Injecting...</span>
                                     </>
                                   ) : (
                                     <>
-                                      <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20" />
+                                      <Zap className="w-3.5 h-3.5 text-white fill-white/20" />
                                       <span>Auto-Insert to {activeProviderName === "godaddy" ? "GoDaddy" : "Cloudflare"}</span>
                                     </>
                                   )}
@@ -880,10 +880,10 @@ function DNSInspectorContent() {
                               ) : (
                                 <Link
                                   href="/dashboard/settings?tab=providers"
-                                  className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-mono text-zinc-400 hover:text-emerald-400 bg-[#0A0A0C] hover:bg-[#0E1217] border border-white/[0.08] hover:border-emerald-500/30 transition flex items-center gap-1.5"
+                                  className="min-h-[38px] px-3 py-1.5 rounded-md text-xs font-mono text-slate-600 hover:text-emerald-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-2xs transition flex items-center gap-1.5"
                                   title="Connect Cloudflare or GoDaddy in Settings to enable 1-click zone auto-insertion"
                                 >
-                                  <Zap className="w-3.5 h-3.5 text-zinc-500" />
+                                  <Zap className="w-3.5 h-3.5 text-slate-400" />
                                   <span>Connect Cloudflare to Auto-Insert</span>
                                 </Link>
                               )}
@@ -891,9 +891,9 @@ function DNSInspectorContent() {
                               <button
                                 type="button"
                                 onClick={() => copyToClipboard(fix.value, fix.id)}
-                                className="min-h-[44px] border border-white/[0.08] bg-[#0A0A0C] hover:bg-[#0E1217] text-zinc-300 hover:text-white rounded-xl text-xs font-mono px-3.5 py-2 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                className="min-h-[38px] border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-md text-xs font-mono px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                               >
-                                {copiedIdx === fix.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                {copiedIdx === fix.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                                 {copiedIdx === fix.id ? "Copied!" : "Copy Value"}
                               </button>
 
@@ -901,12 +901,12 @@ function DNSInspectorContent() {
                               <button
                                 type="button"
                                 onClick={() => toggleRecordExpansion(fix.id)}
-                                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-white/[0.08] bg-[#0A0A0C] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition cursor-pointer"
+                                className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md border border-slate-300 bg-white text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
                                 title={isExpanded ? "Collapse Details" : "Expand Details"}
                               >
                                 <ChevronDown
                                   className={`w-4 h-4 transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180 text-emerald-400" : ""
+                                    isExpanded ? "rotate-180 text-emerald-600" : ""
                                   }`}
                                 />
                               </button>
@@ -915,10 +915,10 @@ function DNSInspectorContent() {
 
                           {/* Optional Error notification if auto-fix fails */}
                           {fixErrorMsg[fix.id] && (
-                            <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-mono text-rose-400 flex items-center justify-between gap-2 animate-fadeIn">
+                            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs font-mono text-rose-700 flex items-center justify-between gap-2 animate-fadeIn">
                               <span>{fixErrorMsg[fix.id]}</span>
                               {fixErrorMsg[fix.id].includes("plan required") && (
-                                <Link href="/dashboard/billing" className="underline hover:text-white text-[11px] font-bold">
+                                <Link href="/dashboard/billing" className="underline hover:text-rose-900 text-[11px] font-bold">
                                   Upgrade to Growth
                                 </Link>
                               )}
@@ -926,14 +926,14 @@ function DNSInspectorContent() {
                           )}
 
                           {/* Record Content Grid */}
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs bg-[#08080A] p-3 rounded-lg border border-zinc-800/80">
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs bg-slate-50 p-3 rounded-md border border-slate-200">
                             <div>
-                              <span className="text-[10px] text-zinc-500 uppercase block font-mono">Host / Name</span>
-                              <code className="text-white font-bold block mt-0.5 text-xs">{fix.host}</code>
+                              <span className="text-[10px] text-slate-500 uppercase block font-mono">Host / Name</span>
+                              <code className="text-slate-900 font-bold block mt-0.5 text-xs">{fix.host}</code>
                             </div>
                             <div className="md:col-span-3">
-                              <span className="text-[10px] text-zinc-500 uppercase block font-mono">Record Content / Value</span>
-                              <code className="text-emerald-400/90 selection:bg-emerald-500/30 selection:text-white break-all block mt-0.5 text-xs font-mono">
+                              <span className="text-[10px] text-slate-500 uppercase block font-mono">Record Content / Value</span>
+                              <code className="text-slate-900 selection:bg-emerald-100 selection:text-emerald-900 break-all block mt-0.5 text-xs font-mono">
                                 {fix.value}
                               </code>
                             </div>
@@ -941,28 +941,28 @@ function DNSInspectorContent() {
 
                           {/* Collapsible Expanded Accordion Drawer */}
                           {isExpanded && (
-                            <div className="pt-3 border-t border-zinc-800/80 space-y-3 animate-fadeIn text-xs">
+                            <div className="pt-3 border-t border-slate-200 space-y-3 animate-fadeIn text-xs">
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono">
-                                <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Live Propagation</span>
-                                  <span className="text-xs font-bold text-emerald-400 block mt-0.5 flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3" /> 100% Verified
+                                <div className="p-2.5 bg-slate-50 rounded-md border border-slate-200">
+                                  <span className="text-[10px] text-slate-500 uppercase block">Live Propagation</span>
+                                  <span className="text-xs font-bold text-emerald-700 block mt-0.5 flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 100% Verified
                                   </span>
                                 </div>
-                                <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Target TTL</span>
-                                  <span className="text-xs font-bold text-white block mt-0.5">{fix.ttl}</span>
+                                <div className="p-2.5 bg-slate-50 rounded-md border border-slate-200">
+                                  <span className="text-[10px] text-slate-500 uppercase block">Target TTL</span>
+                                  <span className="text-xs font-bold text-slate-900 block mt-0.5">{fix.ttl}</span>
                                 </div>
-                                <div className="p-2.5 bg-[#08080A] rounded-lg border border-zinc-800/80">
-                                  <span className="text-[10px] text-zinc-500 uppercase block">Compliance Standard</span>
-                                  <span className="text-xs font-bold text-emerald-400 block mt-0.5">{fix.compliance_spec}</span>
+                                <div className="p-2.5 bg-slate-50 rounded-md border border-slate-200">
+                                  <span className="text-[10px] text-slate-500 uppercase block">Compliance Standard</span>
+                                  <span className="text-xs font-bold text-emerald-700 block mt-0.5">{fix.compliance_spec}</span>
                                 </div>
                               </div>
 
-                              <div className="p-3 bg-[#08080A] rounded-lg border border-zinc-800/80 space-y-1">
-                                <span className="text-[10px] text-zinc-500 uppercase block font-mono">Destination DNS Provider / Target Server</span>
-                                <code className="text-zinc-300 font-mono text-xs block">{fix.authoritative_target}</code>
-                                <p className="text-xs text-zinc-400 font-sans mt-1">{fix.explanation}</p>
+                              <div className="p-3 bg-slate-50 rounded-md border border-slate-200 space-y-1">
+                                <span className="text-[10px] text-slate-500 uppercase block font-mono">Destination DNS Provider / Target Server</span>
+                                <code className="text-slate-800 font-mono text-xs block">{fix.authoritative_target}</code>
+                                <p className="text-xs text-slate-600 font-sans mt-1">{fix.explanation}</p>
                               </div>
                             </div>
                           )}
@@ -972,10 +972,10 @@ function DNSInspectorContent() {
                   </div>
 
                   {/* Prominent Verification Trigger directly below records */}
-                  <div className="bg-[#0A0A0C] backdrop-blur-md p-4 rounded-xl border border-white/[0.08] flex items-center justify-between gap-4 font-mono text-xs">
+                  <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs flex items-center justify-between gap-4 font-mono text-xs">
                     <div>
-                      <span className="font-bold text-white block text-sm">Step 2: Instant DNS Verification</span>
-                      <span className="text-zinc-400 text-xs">
+                      <span className="font-bold text-slate-900 block text-sm">Step 2: Instant DNS Verification</span>
+                      <span className="text-slate-600 text-xs">
                         Probes authoritative resolvers to ensure record propagation.
                       </span>
                     </div>
@@ -994,7 +994,7 @@ function DNSInspectorContent() {
               ) : (
                 /* Etched OperationalEmptyState prevents layout collapse */
                 <OperationalEmptyState
-                  icon={<Terminal className="w-8 h-8 text-emerald-400" />}
+                  icon={<Terminal className="w-8 h-8 text-emerald-600" />}
                   badge="Awaiting Domain Query"
                   title="No DNS Records Generated"
                   description={
@@ -1020,40 +1020,40 @@ function DNSInspectorContent() {
               <div className="space-y-5">
                 {/* Top Diagnostic KPI Tiles */}
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                  <div className="obsidian-panel p-4 space-y-1">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">Health Score</span>
-                    <span className="text-2xl font-extrabold text-emerald-400 block font-mono tabular-nums">{auditData.health_score}%</span>
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-xs p-4 space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-mono">Health Score</span>
+                    <span className="text-2xl font-extrabold text-slate-950 block font-mono tabular-nums">{auditData.health_score}%</span>
                     <span className={`text-[10px] font-mono uppercase font-semibold ${
-                      auditData.health_score >= 90 ? "text-emerald-400" : auditData.health_score >= 60 ? "text-amber-400" : "text-rose-400"
+                      auditData.health_score >= 90 ? "text-emerald-700" : auditData.health_score >= 60 ? "text-amber-700" : "text-rose-700"
                     }`}>
                       • {auditData.status.toUpperCase()}
                     </span>
                   </div>
 
-                  <div className="obsidian-panel p-4 space-y-1">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">SPF Lookup Barrier</span>
-                    <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-xs p-4 space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-mono">SPF Lookup Barrier</span>
+                    <span className="text-lg font-extrabold text-slate-950 block font-mono tabular-nums">
                       {auditData.summary.spf.dns_lookup_count} of 10 Used
                     </span>
-                    <span className={`text-[10px] font-mono ${auditData.summary.spf.dns_lookup_count <= 10 ? "text-emerald-400" : "text-rose-400"}`}>
+                    <span className={`text-[10px] font-mono font-semibold ${auditData.summary.spf.dns_lookup_count <= 10 ? "text-emerald-700" : "text-rose-700"}`}>
                       {auditData.summary.spf.dns_lookup_count <= 10 ? "RFC 7208 Compliant" : "PermError Exceeded"}
                     </span>
                   </div>
 
-                  <div className="obsidian-panel p-4 space-y-1">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DKIM Cryptography</span>
-                    <span className="text-lg font-extrabold text-white block font-mono tabular-nums">
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-xs p-4 space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-mono">DKIM Cryptography</span>
+                    <span className="text-lg font-extrabold text-slate-950 block font-mono tabular-nums">
                       {auditData.summary.dkim.found_selectors.length} Selectors
                     </span>
-                    <span className="text-[10px] text-emerald-400 font-mono">2048-bit RSA Aligned</span>
+                    <span className="text-[10px] text-emerald-700 font-mono font-semibold">2048-bit RSA Aligned</span>
                   </div>
 
-                  <div className="obsidian-panel p-4 space-y-1">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-mono">DMARC Policy Posture</span>
-                    <span className="text-lg font-extrabold text-emerald-400 block font-mono">
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-xs p-4 space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-mono">DMARC Policy Posture</span>
+                    <span className="text-lg font-extrabold text-slate-950 block font-mono">
                       p={auditData.summary.dmarc.policy || "none"}
                     </span>
-                    <span className="text-[10px] text-zinc-400 font-mono">
+                    <span className="text-[10px] text-slate-500 font-mono">
                       {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
                         ? "Enforced (Google/Yahoo 2024)"
                         : "Monitoring Only (Action Needed)"}
@@ -1062,25 +1062,25 @@ function DNSInspectorContent() {
                 </div>
 
                 {/* Carbon-Grade DNS Record Verification Matrix */}
-                <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] overflow-hidden shadow-fluent-elevation">
-                  <div className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#0E1217]">
+                <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-xs">
+                  <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50/80">
                     <div>
-                      <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
                         DNS Protocol Verification &amp; Merchant Diagnostics
                       </h3>
-                      <p className="text-xs text-zinc-400 mt-0.5">
+                      <p className="text-xs text-slate-600 mt-0.5">
                         Deep inspection across SPF, DKIM, DMARC, and BIMI records with Polaris merchant impact analysis.
                       </p>
                     </div>
-                    <span className="text-[10px] font-mono font-semibold text-emerald-400 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                    <span className="text-[10px] font-mono font-semibold text-emerald-800 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200">
                       Authoritative Multi-Resolver
                     </span>
                   </div>
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs font-mono border-collapse" role="grid">
-                      <thead className="bg-[#0E1217] border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-zinc-400">
+                      <thead className="bg-slate-50/80 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-600 font-semibold">
                         <tr>
                           <th scope="col" className="py-2.5 px-4 font-semibold text-left">Protocol</th>
                           <th scope="col" className="py-2.5 px-4 font-semibold text-left">Published Value / Selectors</th>
@@ -1090,36 +1090,36 @@ function DNSInspectorContent() {
                           <th scope="col" className="py-2.5 px-4 font-semibold text-right">Remediation</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/[0.05] text-zinc-300">
+                      <tbody className="divide-y divide-slate-100 text-slate-800">
                         {/* Row 1: SPF */}
-                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <tr className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                               SPF
                             </span>
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
-                            <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.spf.raw_record}>
+                            <code className="text-slate-800 text-[11px] break-all line-clamp-2 block" title={auditData.summary.spf.raw_record}>
                               {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
                             </code>
                           </td>
-                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                          <td className="py-3 px-3 text-slate-500 text-[11px]">
                             RFC 7208 ({auditData.summary.spf.dns_lookup_count}/10 Lookups)
                           </td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
                               auditData.summary.spf.dns_lookup_count <= 10
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-rose-50 text-rose-800 border-rose-200"
                             }`}>
                               {auditData.summary.spf.dns_lookup_count <= 10 ? "OPTIMAL" : "CRITICAL"}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                          <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
                             {auditData.summary.spf.dns_lookup_count <= 10 ? (
                               <span>Transactional order receipts authenticated across all configured store senders.</span>
                             ) : (
-                              <span className="text-rose-300 font-medium">
+                              <span className="text-rose-700 font-medium">
                                 <strong>Why this matters:</strong> Exceeds the 10 DNS lookup limit. Gmail and Yahoo may reject checkout receipts and order tracking emails.
                               </span>
                             )}
@@ -1128,7 +1128,7 @@ function DNSInspectorContent() {
                             <button
                               type="button"
                               onClick={() => setActiveTab("spf-merge")}
-                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
+                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 shadow-2xs transition"
                             >
                               Merge &amp; Fix SPF
                             </button>
@@ -1136,37 +1136,37 @@ function DNSInspectorContent() {
                         </tr>
 
                         {/* Row 2: DKIM */}
-                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <tr className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                               DKIM
                             </span>
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
                             <div className="flex flex-wrap gap-1">
                               {auditData.summary.dkim.found_selectors.map((s, i) => (
-                                <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white">
+                                <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700">
                                   {s}
                                 </span>
                               ))}
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                          <td className="py-3 px-3 text-slate-500 text-[11px]">
                             RFC 6376 (2048-bit RSA)
                           </td>
                           <td className="py-3 px-3 text-center">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                               OPTIMAL
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                          <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
                             Cryptographic signatures verified. Protects order emails from in-flight tampering or forgery.
                           </td>
                           <td className="py-3 px-4 text-right">
                             <button
                               type="button"
                               onClick={() => setActiveTab("generator")}
-                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-zinc-300 hover:text-white transition"
+                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 shadow-2xs transition"
                             >
                               Selectors
                             </button>
@@ -1174,36 +1174,36 @@ function DNSInspectorContent() {
                         </tr>
 
                         {/* Row 3: DMARC */}
-                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <tr className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                               DMARC
                             </span>
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
-                            <code className="text-emerald-300/90 text-[11px] break-all line-clamp-2 block" title={auditData.summary.dmarc.raw_record}>
+                            <code className="text-slate-800 text-[11px] break-all line-clamp-2 block" title={auditData.summary.dmarc.raw_record}>
                               {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100;"}
                             </code>
                           </td>
-                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                          <td className="py-3 px-3 text-slate-500 text-[11px]">
                             RFC 7489 (Policy: p={auditData.summary.dmarc.policy || "none"})
                           </td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
                               auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
                             }`}>
                               {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine"
                                 ? "ENFORCED"
                                 : "ATTENTION"}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                          <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
                             {auditData.summary.dmarc.policy === "reject" || auditData.summary.dmarc.policy === "quarantine" ? (
                               <span>Strict policy active. Phishing attempts using your brand are dropped by receiving mailboxes.</span>
                             ) : (
-                              <span className="text-amber-300 font-medium">
+                              <span className="text-amber-800 font-medium">
                                 <strong>Why this matters:</strong> Policy is not enforced (p=none). Under 2024 mailbox rules, checkout emails risk automated spam classification.
                               </span>
                             )}
@@ -1212,7 +1212,7 @@ function DNSInspectorContent() {
                             <button
                               type="button"
                               onClick={() => setActiveTab("generator")}
-                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-lg bg-[#0E1217] hover:bg-[#141A22] border border-white/[0.08] hover:border-emerald-500/30 text-emerald-400 transition"
+                              className="px-2.5 py-1 text-xs font-mono font-semibold rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 shadow-2xs transition"
                             >
                               Enforce
                             </button>
@@ -1220,30 +1220,30 @@ function DNSInspectorContent() {
                         </tr>
 
                         {/* Row 4: BIMI */}
-                        <tr className="carbon-table-row hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <tr className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                               BIMI
                             </span>
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
-                            <code className="text-zinc-400 text-[11px] truncate block" title={auditData.summary.bimi?.svg_url || "default._bimi"}>
+                            <code className="text-slate-600 text-[11px] truncate block" title={auditData.summary.bimi?.svg_url || "default._bimi"}>
                               {auditData.summary.bimi?.svg_url || "default._bimi"}
                             </code>
                           </td>
-                          <td className="py-3 px-3 text-zinc-400 text-[11px]">
+                          <td className="py-3 px-3 text-slate-500 text-[11px]">
                             Brand Indicators (SVG Tiny-PS)
                           </td>
                           <td className="py-3 px-3 text-center">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                               VERIFIED
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-sans text-xs text-zinc-300 max-w-xs">
+                          <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
                             Displays your official store logo directly beside checkout receipts in Gmail and Apple Mail.
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <span className="text-[11px] text-zinc-500 font-mono">Active</span>
+                            <span className="text-[11px] text-slate-500 font-mono">Active</span>
                           </td>
                         </tr>
                       </tbody>
@@ -1260,7 +1260,7 @@ function DNSInspectorContent() {
             ) : (
               /* OperationalEmptyState when detailed audit has not yet run */
               <OperationalEmptyState
-                icon={<Terminal className="w-8 h-8 text-emerald-400" />}
+                icon={<Terminal className="w-8 h-8 text-emerald-600" />}
                 badge="Awaiting DNS Query"
                 title="No Diagnostic Data Loaded"
                 description={
@@ -1298,28 +1298,28 @@ function DNSInspectorContent() {
 
       {/* 3. COLLAPSIBLE RAW DIAGNOSTIC JSON PAYLOAD DRAWER (Development Only) */}
       {process.env.NODE_ENV === "development" && (
-        <div className="bg-[#0A0A0C] backdrop-blur-md rounded-xl border border-white/[0.08] overflow-hidden">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
           <button
             type="button"
             onClick={() => setShowRawDrawer(!showRawDrawer)}
-            className="w-full p-4 flex items-center justify-between text-left hover:bg-zinc-800/25 transition cursor-pointer font-mono text-xs"
+            className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition cursor-pointer font-mono text-xs"
           >
             <div className="flex items-center gap-2.5">
-              <Code2 className="w-4 h-4 text-emerald-400" />
-              <span className="font-bold text-white">Raw Diagnostic JSON Report</span>
-              <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              <Code2 className="w-4 h-4 text-emerald-600" />
+              <span className="font-bold text-slate-900">Raw Diagnostic JSON Report</span>
+              <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                 {auditData ? `${auditData.execution_time_ms}ms execution` : "237.92ms execution"}
               </span>
             </div>
             <ChevronDown
               className={`w-4 h-4 transition-transform duration-200 ${
-                showRawDrawer ? "rotate-180 text-emerald-400" : "text-zinc-400"
+                showRawDrawer ? "rotate-180 text-emerald-600" : "text-slate-400"
               }`}
             />
           </button>
 
           {showRawDrawer && (
-            <div className="p-4 border-t border-zinc-800/80 bg-[#08080A] space-y-3 animate-fadeIn">
+            <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3 animate-fadeIn">
               <div className="flex justify-end">
                 <button
                   type="button"
@@ -1328,13 +1328,13 @@ function DNSInspectorContent() {
                     setCopiedJson(true);
                     setTimeout(() => setCopiedJson(false), 2000);
                   }}
-                  className="border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs font-mono px-3 py-1 transition flex items-center gap-1.5 cursor-pointer"
+                  className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-md text-xs font-mono px-3 py-1 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
-                  {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   {copiedJson ? "JSON Copied" : "Copy JSON"}
                 </button>
               </div>
-              <pre className="text-emerald-400/90 font-mono text-xs overflow-x-auto max-h-80 p-4 bg-[#08080A] rounded-lg border border-zinc-800/80 selection:bg-emerald-500/30 selection:text-white">
+              <pre className="text-slate-900 font-mono text-xs overflow-x-auto max-h-80 p-4 bg-white rounded-md border border-slate-200 selection:bg-emerald-100 selection:text-emerald-900">
                 {JSON.stringify(auditData || { domain: domainInput, status: "optimal", execution_time_ms: 237.92 }, null, 2)}
               </pre>
             </div>
@@ -1349,10 +1349,10 @@ export default function DNSInspectorPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-96 w-full items-center justify-center font-mono text-xs text-zinc-500">
+        <div className="flex h-96 w-full items-center justify-center font-mono text-xs text-slate-500">
           <div className="flex items-center space-x-2.5">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-            <span className="text-zinc-400">Loading DNS Inspector & Diagnostic Engine...</span>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+            <span className="text-slate-600">Loading DNS Inspector &amp; Diagnostic Engine...</span>
           </div>
         </div>
       }

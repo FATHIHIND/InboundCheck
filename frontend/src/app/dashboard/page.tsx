@@ -586,11 +586,11 @@ export default function DashboardOverviewPage() {
       {/* 1. Header: Store Selector + Run Live Diagnostic Pipeline */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100 tracking-tight flex items-center gap-2.5">
-            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <ShieldCheck className="w-5 h-5 text-emerald-600" />
             Shopify Store Deliverability &amp; Revenue Shield
           </h1>
-          <p className="text-sm text-zinc-400 font-normal mt-1">
+          <p className="text-sm text-slate-600 font-normal mt-1">
             Monitor store deliverability, protect customer order receipts, and prevent silent spam placement across your fleet.
           </p>
         </div>
@@ -601,7 +601,7 @@ export default function DashboardOverviewPage() {
               <select
                 value={selectedStore}
                 onChange={(e) => setSelectedStore(e.target.value)}
-                className="bg-[#0E0E12] border border-white/[0.08] text-xs font-mono text-zinc-300 rounded-lg px-3 py-2 pr-8 appearance-none focus:outline-none focus:border-emerald-500 cursor-pointer"
+                className="bg-white border border-slate-300 text-xs font-mono text-slate-900 rounded-md px-3 py-2 pr-8 appearance-none focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer shadow-2xs"
               >
                 <option value="all">All Connected Stores ({stores.length})</option>
                 {stores.map((s) => (
@@ -610,7 +610,7 @@ export default function DashboardOverviewPage() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           )}
 
@@ -631,7 +631,7 @@ export default function DashboardOverviewPage() {
               setAddError(null);
               setShowAddModal(true);
             }}
-            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center p-2.5 bg-[#0E0E12] hover:bg-[#14141A] border border-white/[0.08] text-white rounded-lg transition cursor-pointer"
+            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center p-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 rounded-md transition cursor-pointer shadow-2xs"
             aria-label="Add Monitored Store"
             title="Add Monitored Store"
           >
@@ -641,8 +641,8 @@ export default function DashboardOverviewPage() {
       </div>
 
       {pipelineStep && (
-        <div className="p-3 bg-[#14141A] border border-emerald-500/30 rounded-xl text-xs font-mono text-emerald-400 flex items-center gap-2 animate-fadeIn">
-          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-mono text-emerald-800 flex items-center gap-2 animate-fadeIn">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
           <span>{pipelineStep}</span>
         </div>
       )}
@@ -878,24 +878,22 @@ export default function DashboardOverviewPage() {
       )}
 
       {domainsResource.state === "empty" && !isDemoActive && (
-        <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 relative overflow-hidden shadow-2xl space-y-6">
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-          
+        <div className="rounded-lg border border-slate-200 bg-white p-6 relative overflow-hidden shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                <ShieldCheck className="w-6 h-6 text-emerald-400" />
+              <div className="w-12 h-12 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-6 h-6 text-emerald-600" />
               </div>
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base sm:text-lg font-bold text-zinc-100 tracking-tight">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                     Instant Activation: Protect Your Shopify Transactional Deliverability
                   </h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold uppercase tracking-wider">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold uppercase tracking-wider">
                     &lt; 60s TTV
                   </span>
                 </div>
-                <p className="text-sm text-zinc-400 font-normal max-w-2xl leading-relaxed">
+                <p className="text-sm text-slate-600 font-normal max-w-2xl leading-relaxed">
                   Google and Yahoo 2024 mailbox rules silently classify unaligned store emails as spam. Eliminate order receipt drops, cut chargeback disputes, and protect your GMV in under 60 seconds.
                 </p>
               </div>
@@ -904,41 +902,41 @@ export default function DashboardOverviewPage() {
 
           {/* 3 Micro-Feature Pillars */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 relative z-10">
-            <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] hover:border-emerald-500/30 transition-all">
-              <div className="text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all">
+              <div className="text-emerald-700 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
                 <Zap className="w-3.5 h-3.5" />
                 <span>Zero Email Drops</span>
               </div>
-              <p className="text-xs text-zinc-400 leading-snug">
+              <p className="text-xs text-slate-600 leading-snug">
                 Combines Shopify, Klaviyo &amp; Zendesk records without exceeding the strict 10-lookup barrier.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] hover:border-emerald-500/30 transition-all">
-              <div className="text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all">
+              <div className="text-emerald-700 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
                 <Radio className="w-3.5 h-3.5" />
                 <span>Blacklist Radar</span>
               </div>
-              <p className="text-xs text-zinc-400 leading-snug">
+              <p className="text-xs text-slate-600 leading-snug">
                 24/7 scanning across 10 authoritative RBLs (Spamhaus, Barracuda) with instant Telegram/Slack alerts.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] hover:border-emerald-500/30 transition-all">
-              <div className="text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all">
+              <div className="text-emerald-700 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
                 <Shield className="w-3.5 h-3.5" />
                 <span>1-Click Auto-Remediation</span>
               </div>
-              <p className="text-xs text-zinc-400 leading-snug">
+              <p className="text-xs text-slate-600 leading-snug">
                 Direct Cloudflare &amp; GoDaddy API zone injection with pre-flight safety checks and instant rollback.
               </p>
             </div>
           </div>
 
           {/* Dual Action Controls for <60s TTV */}
-          <div className="pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
-            <div className="text-xs text-zinc-400 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+            <div className="text-xs text-slate-600 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
               <span>Ready for first scan. Enter your domain or test drive a live simulation.</span>
             </div>
             
@@ -946,20 +944,21 @@ export default function DashboardOverviewPage() {
               <button
                 type="button"
                 onClick={() => setIsDemoActive(true)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-200 border border-white/10 hover:border-emerald-500/40 text-xs font-semibold transition-all active:scale-95 cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
               >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Simulate Audit with Demo Store</span>
               </button>
 
-              <button
-                type="button"
+              <EmeraldHoverButton
+                variant="primary"
+                size="sm"
                 onClick={() => setShowAddModal(true)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-10 px-5 text-xs font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/20"
+                icon={<Plus className="w-3.5 h-3.5 stroke-[2.5]" />}
+                className="w-full sm:w-auto"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Add Your Store Domain</span>
-              </button>
+                Add Your Store Domain
+              </EmeraldHoverButton>
             </div>
           </div>
         </div>
@@ -987,36 +986,36 @@ export default function DashboardOverviewPage() {
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowAddModal(false);
           }}
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] max-w-md w-full p-6 space-y-4 animate-fadeIn shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-              <h3 id="add-domain-modal-title" className="text-base font-bold text-zinc-100">Add Monitored Store Domain</h3>
+          <div className="rounded-lg border border-slate-200 bg-white max-w-md w-full p-6 space-y-4 animate-fadeIn shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 id="add-domain-modal-title" className="text-base font-bold text-slate-900">Add Monitored Store Domain</h3>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
                 aria-label="Close dialog"
-                className="text-zinc-500 hover:text-white"
+                className="text-slate-400 hover:text-slate-700 transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {addError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 font-mono">
                 {addError}
               </div>
             )}
 
             <form onSubmit={handleAddDomain} className="space-y-4">
               <div>
-                <label className="text-xs text-zinc-400 block mb-1">Domain Apex / Host</label>
+                <label className="text-xs font-medium text-slate-700 block mb-1">Domain Apex / Host</label>
                 <input
                   type="text"
                   value={newDomainInput}
                   onChange={(e) => setNewDomainInput(e.target.value)}
                   placeholder="e.g. store.com"
-                  className="w-full px-3 py-2 bg-[#08080A] border border-white/[0.08] rounded-lg text-zinc-100 font-mono text-xs placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 font-mono text-xs placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
                   required
                 />
               </div>
@@ -1024,17 +1023,20 @@ export default function DashboardOverviewPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg text-xs text-zinc-400 hover:text-white cursor-pointer font-medium"
+                  className="px-4 py-2 rounded-md text-xs border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer font-medium shadow-2xs"
                 >
                   Cancel
                 </button>
-                <button
+                <EmeraldHoverButton
                   type="submit"
                   disabled={isAdding}
-                  className="h-10 px-5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50"
+                  isLoading={isAdding}
+                  loadingText="Registering..."
+                  variant="primary"
+                  size="sm"
                 >
-                  {isAdding ? "Registering..." : "Add Store"}
-                </button>
+                  Add Store
+                </EmeraldHoverButton>
               </div>
             </form>
           </div>
@@ -1050,13 +1052,13 @@ export default function DashboardOverviewPage() {
           onClick={(e) => {
             if (e.target === e.currentTarget && !isDeletingStore) setStoreToDelete(null);
           }}
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] max-w-md w-full p-6 space-y-4 animate-fadeIn border-rose-500/20 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-              <div className="flex items-center gap-2 text-rose-400">
-                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-                <h3 id="delete-domain-modal-title" className="text-base font-bold text-zinc-100">
+          <div className="rounded-lg border border-slate-200 bg-white max-w-md w-full p-6 space-y-4 animate-fadeIn shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                <h3 id="delete-domain-modal-title" className="text-base font-bold text-slate-900">
                   Remove Sending Domain
                 </h3>
               </div>
@@ -1065,20 +1067,20 @@ export default function DashboardOverviewPage() {
                 onClick={() => !isDeletingStore && setStoreToDelete(null)}
                 disabled={isDeletingStore}
                 aria-label="Close dialog"
-                className="text-zinc-500 hover:text-white disabled:opacity-50 transition cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 disabled:opacity-50 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3">
-              <p className="text-xs text-zinc-300 leading-relaxed">
-                Are you sure you want to stop monitoring <span className="text-white font-mono font-bold">{storeToDelete.domain_name}</span>? All historical deliverability logs, SPF/DKIM snapshots, and blacklist tracking history will be permanently removed.
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to stop monitoring <span className="text-slate-900 font-mono font-bold">{storeToDelete.domain_name}</span>? All historical deliverability logs, SPF/DKIM snapshots, and blacklist tracking history will be permanently removed.
               </p>
 
               {deleteError && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-300 font-mono flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 font-mono flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                   <span>{deleteError}</span>
                 </div>
               )}
@@ -1089,7 +1091,7 @@ export default function DashboardOverviewPage() {
                 type="button"
                 onClick={() => setStoreToDelete(null)}
                 disabled={isDeletingStore}
-                className="h-10 px-4 bg-[#14141A] hover:bg-[#1E1E26] border border-white/[0.08] text-zinc-300 rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+                className="h-9 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-md text-xs font-semibold transition disabled:opacity-50 cursor-pointer shadow-2xs"
               >
                 Cancel
               </button>
@@ -1097,7 +1099,7 @@ export default function DashboardOverviewPage() {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeletingStore}
-                className="h-10 px-5 bg-rose-500 hover:bg-rose-600 active:scale-[0.98] text-white font-semibold rounded-lg text-xs transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.3)] disabled:opacity-50 cursor-pointer"
+                className="h-9 px-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-semibold rounded-md text-xs transition flex items-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
               >
                 {isDeletingStore ? (
                   <>
@@ -1107,7 +1109,7 @@ export default function DashboardOverviewPage() {
                 ) : (
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Confirm & Remove</span>
+                    <span>Confirm &amp; Remove</span>
                   </>
                 )}
               </button>
