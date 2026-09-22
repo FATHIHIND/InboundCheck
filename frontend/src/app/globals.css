@@ -4,42 +4,43 @@
 
 :root {
   /* ==========================================================================
-     TIER 1: REFERENCE TOKENS (Primitive Color Scales in HSL and Hex)
+     TIER 1: REFERENCE TOKENS (Light Institutional Scale)
      ========================================================================== */
-  --obsidian-black: 0 0% 0%;           /* #000000 */
-  --obsidian-950: 240 10% 4%;          /* #0A0A0C */
-  --obsidian-900: 220 14% 7%;          /* #0E1217 */
-  --obsidian-850: 220 13% 9%;          /* #12161D */
-  --obsidian-800: 220 12% 14%;         /* #1C222B */
+  --obsidian-black: 210 40% 98%;        /* #F8FAFC (Slate 50 Canvas) */
+  --obsidian-950: 0 0% 100%;            /* #FFFFFF (Pure White Base) */
+  --obsidian-900: 210 40% 96.1%;        /* #F1F5F9 (Slate 100 Elevated) */
+  --obsidian-850: 214.3 31.8% 91.4%;    /* #E2E8F0 (Slate 200 Hairline) */
+  --obsidian-800: 215 20.2% 65.1%;      /* #94A3B8 (Slate 400 Muted) */
 
-  --shopify-green: 165 100% 25%;       /* #008060 */
-  --shopify-dark: 170 100% 15%;        /* #004C3F */
-  --emerald-neon: 160 84% 39%;         /* #10B981 */
-  --amber-warning: 38 92% 50%;         /* #F59E0B */
-  --crimson-danger: 0 84% 60%;         /* #EF4444 */
+  --shopify-green: 165 100% 25%;        /* #008060 */
+  --shopify-dark: 170 100% 15%;         /* #004C3F */
+  --emerald-neon: 160 84% 39%;          /* #10B981 */
+  --emerald-classic: 161 94% 30%;       /* #059669 (Emerald 600 CTA) */
+  --amber-warning: 38 92% 50%;          /* #F59E0B */
+  --crimson-danger: 0 84% 60%;          /* #EF4444 */
 
   /* ==========================================================================
-     TIER 2: SYSTEM TOKENS (Semantic Role Mapping & Contrast Compliance)
+     TIER 2: SYSTEM TOKENS (Semantic Role Mapping & High Contrast)
      ========================================================================== */
-  --sys-bg-canvas: hsl(var(--obsidian-black));
-  --sys-surface-base: hsl(var(--obsidian-950));
-  --sys-surface-raised: hsl(var(--obsidian-900));
-  --sys-surface-overlay: hsl(var(--obsidian-850));
+  --sys-bg-canvas: #F8FAFC;
+  --sys-surface-base: #FFFFFF;
+  --sys-surface-raised: #FFFFFF;
+  --sys-surface-overlay: #F1F5F9;
 
-  --sys-text-primary: #FFFFFF;
-  --sys-text-secondary: #94A3B8;       /* Slate 400 - 7.1:1 Contrast on #0A0A0C */
-  --sys-text-tertiary: #64748B;        /* Slate 500 - 4.5:1 Contrast on #0A0A0C */
-  --sys-text-on-emerald: #021C14;
+  --sys-text-primary: #0F172A;          /* Slate 900 */
+  --sys-text-secondary: #475569;        /* Slate 600 */
+  --sys-text-tertiary: #94A3B8;         /* Slate 400 */
+  --sys-text-on-emerald: #FFFFFF;
 
   /* Stripe Sub-pixel Hairlines & Borders */
-  --sys-border-subtle: rgba(255, 255, 255, 0.07);
-  --sys-border-default: rgba(255, 255, 255, 0.12);
-  --sys-border-highlight: rgba(255, 255, 255, 0.18);
-  --sys-hairline-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  --sys-border-subtle: #E2E8F0;         /* Slate 200 */
+  --sys-border-default: #CBD5E1;        /* Slate 300 */
+  --sys-border-highlight: #94A3B8;      /* Slate 400 */
+  --sys-hairline-specular: inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
 
-  /* Fluent Ambient + Dual-Lighting Elevation Shadows */
-  --sys-shadow-ambient: 0 20px 40px -15px rgba(0, 0, 0, 0.85);
-  --sys-shadow-emerald-glow: 0 0 35px -5px rgba(16, 185, 129, 0.15);
+  /* Subtle B2B SaaS Elevation Shadows */
+  --sys-shadow-ambient: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --sys-shadow-emerald-glow: 0 0 20px -3px rgba(5, 150, 105, 0.15);
 
   /* ==========================================================================
      TIER 3: KINETIC & SPATIAL TOKENS (Apple HIG Physics)
@@ -48,83 +49,83 @@
   --duration-fluid: 200ms;
 
   /* ==========================================================================
-     LEGACY COMPATIBILITY TOKENS (Preserved for existing components)
+     LEGACY COMPATIBILITY TOKENS (Calibrated for Light Mode)
      ========================================================================== */
-  --background: 0 0% 0%;
-  --foreground: 0 0% 100%;
-  --canvas-base: #000000;
-  --surface-primary: #0A0A0C;
-  --surface-elevated: #0E1217;
-  --surface-subtle: #12161D;
-  --surface-hover: rgba(255, 255, 255, 0.03);
-  --border-card: rgba(255, 255, 255, 0.08);
-  --border-elevated: rgba(255, 255, 255, 0.12);
-  --surface: #0A0A0C;
-  --border: 240 3.7% 15.9%;
-  --border-subtle: rgba(0, 128, 96, 0.2);
-  --border-active: rgba(16, 185, 129, 0.45);
-  --text-primary: #FFFFFF;
-  --text-muted: #94A3B8;
+  --background: 210 40% 98%;            /* Slate 50 */
+  --foreground: 222.2 84% 4.9%;         /* Slate 900 */
+  --canvas-base: #F8FAFC;
+  --surface-primary: #FFFFFF;
+  --surface-elevated: #FFFFFF;
+  --surface-subtle: #F1F5F9;
+  --surface-hover: rgba(15, 23, 42, 0.03);
+  --border-card: #E2E8F0;
+  --border-elevated: #CBD5E1;
+  --surface: #FFFFFF;
+  --border: 214.3 31.8% 91.4%;          /* Slate 200 */
+  --border-subtle: #E2E8F0;
+  --border-active: #059669;
+  --text-primary: #0F172A;
+  --text-muted: #64748B;
   --accent-shopify: #008060;
-  --accent-emerald: #10B981;
+  --accent-emerald: #059669;
   --accent-deep: #004C3F;
-  --accent-amber: #F59E0B;
-  --accent-red: #EF4444;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
+  --accent-amber: #D97706;
+  --accent-red: #DC2626;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
 }
 
-/* Obsidian Design Tokens & Base Panels */
+/* Institutional Design Tokens & Base Panels */
 .obsidian-card {
   position: relative;
-  background-color: #0A0A0C;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1rem;
-  transition: all 0.25s ease;
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.5rem; /* rounded-lg (8px) */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 }
 
 .obsidian-card:hover {
-  border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.12);
+  border-color: #CBD5E1;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.06);
 }
 
 .obsidian-card-elevated {
   position: relative;
-  background-color: #0E1217;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 1rem;
-  transition: all 0.25s ease;
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 }
 
 .obsidian-card-elevated:hover {
-  border-color: rgba(16, 185, 129, 0.4);
-  box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.2);
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
 }
 
-/* Stripe-inspired Sub-pixel Etched Panel with Fluent Dual Elevation */
+/* Stripe-inspired Sub-pixel Etched Panel with Hairline Borders */
 .obsidian-panel {
   position: relative;
   background-color: var(--sys-surface-base);
   border: 1px solid var(--sys-border-subtle);
-  border-radius: 0.75rem; /* 12px */
-  box-shadow: var(--sys-hairline-specular), var(--sys-shadow-ambient);
+  border-radius: 0.5rem; /* rounded-lg (8px) */
+  box-shadow: var(--sys-shadow-ambient);
   transition: border-color var(--duration-fluid) var(--ease-apple-spring),
-              box-shadow var(--duration-fluid) var(--ease-apple-spring),
-              transform var(--duration-fluid) var(--ease-apple-spring);
+              box-shadow var(--duration-fluid) var(--ease-apple-spring);
 }
 
 .obsidian-panel:hover {
-  border-color: var(--sys-border-highlight);
-  box-shadow: var(--sys-hairline-specular), var(--sys-shadow-ambient), var(--sys-shadow-emerald-glow);
+  border-color: var(--sys-border-default);
 }
 
-/* IBM Carbon-grade High-Density Interactive Row */
+/* High-Density Interactive Ledger Row */
 .carbon-table-row {
   transition: background-color 100ms ease;
 }
 
 .carbon-table-row:hover {
-  background-color: rgba(255, 255, 255, 0.025);
+  background-color: #F8FAFC;
 }
 
 /* Minimum Accessible Touch Target (WCAG 2.2 44x44px) */
@@ -152,27 +153,17 @@ html {
 }
 
 body {
-  background-color: #000000;
-  color: #FFFFFF;
+  background-color: #F8FAFC;
+  color: #0F172A;
   font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
   overflow-x: hidden;
   position: relative;
-  selection-background-color: rgba(0, 128, 96, 0.35);
 }
 
-/* Stipple / Noise Global Texture Overlay */
+/* Disabled Background Noise Stipple in Light Theme for Pure Clean Canvas */
 body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 99999;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  display: none;
 }
 
 /* Typography Classes */
@@ -319,30 +310,30 @@ body::before {
 
 @layer components {
   .btn-emerald-primary {
-    @apply bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95;
+    @apply bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors shadow-xs active:scale-[0.99];
   }
   .btn-obsidian-secondary {
-    @apply bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 font-medium px-4 py-2 rounded-xl transition-all;
+    @apply bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-300 font-medium px-4 py-2 rounded-lg transition-colors shadow-2xs;
   }
   .badge-status-pass {
-    @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/30;
+    @apply bg-emerald-50 text-emerald-700 border border-emerald-200;
   }
   .badge-status-attention {
-    @apply bg-amber-500/10 text-amber-400 border border-amber-500/30;
+    @apply bg-amber-50 text-amber-700 border border-amber-200;
   }
   .badge-status-neutral {
-    @apply bg-slate-800/60 text-slate-400 border border-slate-700/40;
+    @apply bg-slate-100 text-slate-600 border border-slate-200;
   }
 }
 
 .obsidian-card-hover {
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s ease;
 }
 
 .obsidian-card-hover:hover {
-  background: #14141A;
-  border-color: rgba(255, 255, 255, 0.16);
-  transform: translateY(-2px);
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 /* Technical Corner Brackets */
@@ -356,8 +347,8 @@ body::before {
   left: -1px;
   width: 6px;
   height: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.4);
-  border-left: 1px solid rgba(255, 255, 255, 0.4);
+  border-top: 1px solid rgba(15, 23, 42, 0.2);
+  border-left: 1px solid rgba(15, 23, 42, 0.2);
   pointer-events: none;
 }
 
@@ -367,8 +358,8 @@ body::before {
   right: -1px;
   width: 6px;
   height: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.4);
-  border-right: 1px solid rgba(255, 255, 255, 0.4);
+  border-top: 1px solid rgba(15, 23, 42, 0.2);
+  border-right: 1px solid rgba(15, 23, 42, 0.2);
   pointer-events: none;
 }
 
@@ -378,8 +369,8 @@ body::before {
   left: -1px;
   width: 6px;
   height: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
-  border-left: 1px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.2);
+  border-left: 1px solid rgba(15, 23, 42, 0.2);
   pointer-events: none;
 }
 
@@ -389,8 +380,8 @@ body::before {
   right: -1px;
   width: 6px;
   height: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
-  border-right: 1px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.2);
+  border-right: 1px solid rgba(15, 23, 42, 0.2);
   pointer-events: none;
 }
 
@@ -398,32 +389,32 @@ body::before {
 .bg-stipple-grid {
   background-size: 24px 24px;
   background-image: 
-    radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    radial-gradient(circle, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
 }
 
 /* Radial Glow Backlight */
 .glow-ambient-white {
-  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08) 0%, transparent 65%);
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.9) 0%, transparent 65%);
 }
 
 .glow-ambient-emerald {
-  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.12) 0%, transparent 70%);
+  background: radial-gradient(circle at 50% 50%, rgba(5, 150, 105, 0.08) 0%, transparent 70%);
 }
 
 /* Custom Minimal Scrollbar & Bounded Table Scrollbar Utilities */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #08080A;
+  background: #F8FAFC;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1C1C24;
+  background: #CBD5E1;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2C2C38;
+  background: #94A3B8;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -434,11 +425,11 @@ body::before {
   background: transparent;
 }
 .scrollbar-thumb-zinc-800::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #CBD5E1;
   border-radius: 9999px;
 }
 .hover\:scrollbar-thumb-emerald-500\/40:hover::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.4);
+  background: #94A3B8;
 }
 
 /* Magnetic Button Animations */

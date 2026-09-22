@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { AlertTriangle, RefreshCw, Copy, Check, Terminal, ExternalLink, ShieldAlert } from "lucide-react";
+import { AlertTriangle, RefreshCw, Copy, Check, Terminal, ShieldAlert } from "lucide-react";
 import { ApiError } from "@/lib/apiResource";
 
 interface OperationalErrorCardProps {
@@ -63,24 +63,24 @@ export function OperationalErrorCard({
   if (compact) {
     return (
       <div
-        className={`bg-[#0E0E12]/90 border border-rose-500/30 rounded-xl p-4 flex items-center justify-between gap-4 backdrop-blur-md ${className}`}
+        className={`bg-rose-50/70 border border-rose-200 rounded-md p-3.5 flex items-center justify-between gap-4 shadow-2xs ${className}`}
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
+          <div className="p-1.5 rounded-md bg-rose-100 text-rose-700 border border-rose-200 shrink-0">
             <AlertTriangle className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xs font-semibold text-rose-300">{title}</div>
-            <div className="text-[11px] text-zinc-400 font-sans line-clamp-1">{advice}</div>
+            <div className="text-xs font-semibold text-rose-900">{title}</div>
+            <div className="text-[11px] text-slate-600 font-sans line-clamp-1">{advice}</div>
           </div>
         </div>
         {onRetry && (
           <button
             onClick={onRetry}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-medium border border-emerald-500/20 transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-300 shadow-2xs transition-colors shrink-0"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Retry
+            <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+            <span>Retry</span>
           </button>
         )}
       </div>
@@ -89,60 +89,57 @@ export function OperationalErrorCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl bg-[#0E0E12]/95 border border-rose-500/30 p-6 shadow-2xl backdrop-blur-xl transition-all ${className}`}
+      className={`relative overflow-hidden rounded-lg bg-rose-50/40 border border-rose-200 p-5 shadow-xs transition-all ${className}`}
     >
-      {/* Ambient background glow */}
-      <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-rose-500/5 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="relative flex flex-col md:flex-row md:items-start justify-between gap-6">
-        <div className="flex items-start gap-4">
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 shadow-inner shrink-0 mt-0.5">
-            <ShieldAlert className="w-6 h-6" />
+      <div className="relative flex flex-col md:flex-row md:items-start justify-between gap-5">
+        <div className="flex items-start gap-3.5">
+          <div className="p-2.5 rounded-lg bg-rose-100 border border-rose-200 text-rose-700 shrink-0 mt-0.5">
+            <ShieldAlert className="w-5 h-5" />
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h3 className="text-base font-semibold text-white tracking-tight">{title}</h3>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h3 className="text-base font-semibold text-slate-900 tracking-tight">{title}</h3>
               {process.env.NODE_ENV === "development" && status && (
-                <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-mono text-[11px] font-semibold border border-rose-500/30">
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-rose-100 text-rose-800 border border-rose-200">
                   HTTP {status}
                 </span>
               )}
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 font-mono text-[11px] border border-amber-500/30 font-semibold">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
                 ACTION REQUIRED
               </span>
             </div>
 
-            <p className="text-sm text-zinc-300 leading-relaxed max-w-2xl font-sans">
+            <p className="text-sm text-slate-700 leading-relaxed max-w-2xl font-sans">
               {message}
             </p>
 
-            <p className="text-xs text-zinc-400 font-sans leading-relaxed max-w-2xl bg-white/[0.02] border border-white/5 rounded-lg p-2.5">
-              <span className="text-emerald-400 font-semibold">Suggested Action: </span>
+            <p className="text-xs text-slate-600 font-sans leading-relaxed max-w-2xl bg-white border border-slate-200 rounded-md p-2.5 shadow-2xs">
+              <span className="text-emerald-700 font-semibold">Suggested Action: </span>
               {advice}
             </p>
 
             {/* Technical diagnostic details (Development Only) */}
             {process.env.NODE_ENV === "development" && (endpoint || referenceId) && (
-              <div className="pt-2 flex flex-wrap items-center gap-3 text-xs font-mono text-zinc-400">
+              <div className="pt-1 flex flex-wrap items-center gap-2.5 text-xs font-mono text-slate-600">
                 {endpoint && (
-                  <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-md border border-white/5">
-                    <Terminal className="w-3.5 h-3.5 text-zinc-500" />
-                    <span className="text-zinc-500">Route:</span>
-                    <span className="text-zinc-300">{endpoint}</span>
+                  <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded border border-slate-200 shadow-2xs">
+                    <Terminal className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-slate-400">Route:</span>
+                    <span className="text-slate-700">{endpoint}</span>
                   </div>
                 )}
 
                 {referenceId && (
-                  <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-md border border-white/5">
-                    <span className="text-zinc-500">Ref ID:</span>
-                    <span className="text-amber-300/90 font-medium">{referenceId}</span>
+                  <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded border border-slate-200 shadow-2xs">
+                    <span className="text-slate-400">Ref ID:</span>
+                    <span className="text-slate-800 font-medium">{referenceId}</span>
                     <button
                       onClick={handleCopyRef}
                       title="Copy incident reference ID"
-                      className="ml-1 hover:text-white transition-colors p-0.5"
+                      className="ml-1 text-slate-400 hover:text-slate-600 transition-colors p-0.5"
                     >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 )}
@@ -152,30 +149,30 @@ export function OperationalErrorCard({
         </div>
 
         {/* Action triggers */}
-        <div className="flex md:flex-col items-center md:items-end justify-end gap-2.5 shrink-0 pt-2 md:pt-0">
+        <div className="flex md:flex-col items-center md:items-end justify-end gap-2 shrink-0 pt-2 md:pt-0">
           {onRetry && (
             <button
               onClick={onRetry}
-              className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer"
+              className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
             >
-              <RefreshCw className="w-4 h-4" />
-              {retryLabel}
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>{retryLabel}</span>
             </button>
           )}
 
           {referenceId && (
             <button
               onClick={handleCopyRef}
-              className="w-full md:w-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-medium border border-white/10 transition-colors cursor-pointer"
+              className="w-full md:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-300 transition-colors shadow-2xs cursor-pointer"
             >
               {copied ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Reference Copied</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                  <Copy className="w-3.5 h-3.5 text-slate-500" />
                   <span>Copy Incident Ref</span>
                 </>
               )}
@@ -186,3 +183,5 @@ export function OperationalErrorCard({
     </div>
   );
 }
+
+export default OperationalErrorCard;

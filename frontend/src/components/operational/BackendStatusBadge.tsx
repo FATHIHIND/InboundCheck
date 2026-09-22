@@ -14,29 +14,29 @@ export function BackendStatusBadge() {
       type="button"
       onClick={() => refreshHealth()}
       title={isOperational ? "Monitoring Active • Click to refresh" : isDegraded ? "System Degraded • Click to refresh" : "Connecting to Services"}
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-colors cursor-pointer group"
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group shadow-2xs"
     >
       <span className="relative flex h-2 w-2 shrink-0">
         <span
           className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-60 ${
             isOperational
-              ? "bg-emerald-400"
+              ? "bg-emerald-500"
               : isDegraded
-              ? "bg-amber-400"
-              : "bg-rose-400"
+              ? "bg-amber-500"
+              : "bg-rose-500"
           }`}
         />
         <span
           className={`relative inline-flex rounded-full h-2 w-2 ${
             isOperational
-              ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+              ? "bg-emerald-500"
               : isDegraded
-              ? "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]"
-              : "bg-rose-400 shadow-[0_0_6px_rgba(248,113,113,0.8)]"
+              ? "bg-amber-500"
+              : "bg-rose-500"
           }`}
         />
       </span>
-      <span className="text-[10px] text-zinc-400 group-hover:text-zinc-300 font-sans select-none whitespace-nowrap">
+      <span className="text-[10px] text-slate-600 group-hover:text-slate-900 font-medium select-none whitespace-nowrap">
         {isOperational ? "Monitoring Active" : isDegraded ? "System Degraded" : "Connecting..."}
       </span>
     </button>

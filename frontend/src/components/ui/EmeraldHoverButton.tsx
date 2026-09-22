@@ -37,18 +37,17 @@ export interface EmeraldHoverButtonProps
 }
 
 const SIZE_STYLES: Record<EmeraldButtonSize, string> = {
-  xs: "px-2.5 py-1 text-[11px] rounded-lg gap-1.5",
-  sm: "px-3.5 py-1.5 text-xs rounded-lg gap-1.5",
-  md: "px-4 py-2 text-xs sm:text-sm rounded-xl gap-2",
-  lg: "px-5 py-2.5 text-sm sm:text-base rounded-xl gap-2.5",
-  xl: "px-7 py-3.5 text-base sm:text-lg rounded-2xl gap-3 font-bold",
+  xs: "h-7 px-2.5 text-[11px] rounded-md gap-1",
+  sm: "h-8 px-3 text-xs rounded-md gap-1.5",
+  md: "h-9 px-4 text-xs sm:text-sm rounded-md gap-2",
+  lg: "h-10 px-5 text-sm rounded-md gap-2.5",
+  xl: "h-11 px-6 text-base rounded-lg gap-3 font-semibold",
 };
 
 /**
- * Uiverse-adapted Emerald Hover Fill Button.
- * Base: Midnight Obsidian (#08080A) & Shopify Emerald (#10B981).
- * Transition: Expands smooth emerald fill from corner to cover button on hover,
- * seamlessly shifting text to deep Midnight Obsidian (#08080A) for state-of-the-art contrast.
+ * Enterprise B2B SaaS Standard Button (Style Option A: Stripe / Shopify Admin Classic).
+ * Primary: Solid Shopify Emerald (bg-emerald-600 hover:bg-emerald-700 text-white)
+ * Secondary / Outline: High-contrast white border-slate-300 text-slate-700
  */
 export const EmeraldHoverButton = forwardRef<
   HTMLButtonElement,
@@ -75,100 +74,46 @@ export const EmeraldHoverButton = forwardRef<
 
     // Base button structure
     const baseClasses =
-      "group relative inline-flex items-center justify-center font-semibold select-none overflow-hidden transition-all duration-300 cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed";
+      "inline-flex items-center justify-center font-semibold select-none transition-colors duration-150 cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed shadow-xs";
 
     // Variant configurations
     let variantClasses = "";
-    let fillElement: React.ReactNode = null;
 
-    if (variant === "primary") {
+    if (variant === "primary" || variant === "solid") {
       variantClasses =
-        "border border-emerald-500/60 bg-transparent text-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_25px_rgba(16,185,129,0.35)] active:border-emerald-600";
-      fillElement = (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-emerald-500 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none group-active:bg-emerald-600 -z-10"
-        />
-      );
-    } else if (variant === "solid") {
+        "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border border-transparent";
+    } else if (variant === "secondary" || variant === "outline") {
       variantClasses =
-        "border border-emerald-500 bg-emerald-500 text-slate-950 font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 hover:border-emerald-400 active:scale-95 transition-all";
-      fillElement = (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100 -z-10"
-        />
-      );
+        "bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs font-medium";
     } else if (variant === "ghost") {
       variantClasses =
-        "border border-zinc-700/60 bg-zinc-900/60 text-zinc-300 hover:border-emerald-500/50 hover:text-white hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]";
-      fillElement = (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-emerald-500/20 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none group-active:bg-emerald-500/30 -z-10"
-        />
-      );
-    } else if (variant === "secondary") {
-      variantClasses =
-        "border border-zinc-700/60 bg-zinc-900/80 text-zinc-200 hover:bg-zinc-800 font-medium hover:border-zinc-600 transition-all";
-      fillElement = (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-zinc-700/30 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none -z-10"
-        />
-      );
-    } else if (variant === "outline") {
-      variantClasses =
-        "border border-white/[0.12] bg-[#0E0E12]/80 backdrop-blur-md text-zinc-200 hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]";
-      fillElement = (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-emerald-500 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none group-active:bg-emerald-600 -z-10"
-        />
-      );
+        "bg-transparent hover:bg-slate-100 active:bg-slate-200 text-slate-600 hover:text-slate-900 border border-transparent shadow-none font-medium";
     } else if (variant === "destructive") {
       variantClasses =
-        "border border-rose-500/50 bg-rose-500/10 text-rose-400 hover:border-rose-400 hover:shadow-[0_0_20px_rgba(244,63,94,0.3)]";
-      fillElement = (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-[20px] -right-[20px] h-0 w-0 rounded-full bg-rose-500 transition-all duration-700 ease-out group-hover:-top-[30px] group-hover:-left-[30px] group-hover:h-[calc(100%+60px)] group-hover:w-[calc(100%+60px)] group-hover:rounded-none group-active:bg-rose-600 -z-10"
-        />
-      );
+        "bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white border border-transparent";
     }
-
-    // Text color transition for primary/outline variants where text flips to obsidian, or ghost/secondary/destructive flipping to white
-    const textClasses =
-      variant === "primary" || variant === "outline"
-        ? "relative z-10 flex items-center justify-center gap-2 transition-colors duration-300 group-hover:text-[#08080A]"
-        : variant === "ghost" || variant === "secondary" || variant === "destructive"
-        ? "relative z-10 flex items-center justify-center gap-2 transition-colors duration-300 group-hover:text-white"
-        : "relative z-10 flex items-center justify-center gap-2 transition-colors duration-300";
 
     const content = (
       <>
-        {fillElement}
-        <span className={textClasses}>
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-          ) : icon && iconPosition === "left" ? (
-            <span className="shrink-0 transition-transform duration-200 group-hover:scale-110">
-              {icon}
-            </span>
-          ) : null}
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+        ) : icon && iconPosition === "left" ? (
+          <span className="shrink-0 flex items-center justify-center">
+            {icon}
+          </span>
+        ) : null}
 
-          {isLoading && loadingText ? (
-            <span>{loadingText}</span>
-          ) : (
-            <span>{children}</span>
-          )}
+        {isLoading && loadingText ? (
+          <span>{loadingText}</span>
+        ) : (
+          <span>{children}</span>
+        )}
 
-          {!isLoading && icon && iconPosition === "right" && (
-            <span className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
-              {icon}
-            </span>
-          )}
-        </span>
+        {!isLoading && icon && iconPosition === "right" && (
+          <span className="shrink-0 flex items-center justify-center">
+            {icon}
+          </span>
+        )}
       </>
     );
 

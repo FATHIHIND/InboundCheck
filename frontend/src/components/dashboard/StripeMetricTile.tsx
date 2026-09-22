@@ -34,34 +34,31 @@ export function StripeMetricTile({
   badgeVariant = "neutral",
   delta,
   icon: Icon,
-  iconColor = "text-emerald-400",
+  iconColor = "text-emerald-600",
   children,
   className = "",
 }: StripeMetricTileProps) {
   const badgeColors = {
-    emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-    amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-    rose: "bg-rose-500/10 text-rose-400 border-rose-500/30",
-    neutral: "bg-white/5 text-zinc-400 border-white/10",
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    amber: "bg-amber-50 text-amber-700 border-amber-200",
+    rose: "bg-rose-50 text-rose-700 border-rose-200",
+    neutral: "bg-slate-100 text-slate-600 border-slate-200",
   }[badgeVariant];
 
   const highlightColors = {
-    emerald: "text-emerald-400",
-    amber: "text-amber-400",
-    rose: "text-rose-400",
-    neutral: "text-zinc-400",
+    emerald: "text-emerald-700",
+    amber: "text-amber-700",
+    rose: "text-rose-700",
+    neutral: "text-slate-500",
   }[highlightVariant];
 
   return (
     <div
-      className={`group relative flex flex-col justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-[#0A0A0C] p-6 shadow-fluent-elevation transition-all duration-200 hover:border-white/[0.16] hover:bg-[#0E1015] min-h-[160px] h-full ${className}`}
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-xs transition-all duration-150 hover:border-slate-300 hover:shadow-sm min-h-[160px] h-full ${className}`}
     >
-      {/* Specular Top Edge (Stripe Hairline) */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.14] to-transparent" />
-
       {/* Header Row: Label + Badge or Icon */}
       <div className="flex items-center justify-between relative z-10">
-        <span className="text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-400">
+        <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
           {label}
         </span>
         {badgeText ? (
@@ -69,7 +66,7 @@ export function StripeMetricTile({
             {badgeText}
           </span>
         ) : Icon ? (
-          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-1.5 text-zinc-400 transition-colors group-hover:text-emerald-400 group-hover:border-emerald-500/30">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition-colors group-hover:text-emerald-600 group-hover:border-emerald-200">
             <Icon className={`h-4 w-4 ${iconColor}`} aria-hidden="true" />
           </div>
         ) : null}
@@ -85,18 +82,18 @@ export function StripeMetricTile({
       {/* Metric Value & Dynamics */}
       <div className="space-y-1 relative z-10 mt-auto pt-2">
         <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold font-mono text-zinc-100 tracking-tight tabular-nums">
+          <span className="text-2xl sm:text-3xl font-bold font-mono text-slate-950 tracking-tight tabular-nums">
             {value}
           </span>
           {unit && (
-            <span className="font-mono text-xs text-zinc-400 font-normal">
+            <span className="font-mono text-xs text-slate-500 font-normal">
               {unit}
             </span>
           )}
         </div>
 
         {/* Subtext, Delta, and Highlights */}
-        <div className="text-[11px] font-mono flex items-center justify-between gap-2 text-zinc-400">
+        <div className="text-[11px] font-mono flex items-center justify-between gap-2 text-slate-500">
           {highlightText ? (
             <span className={`font-semibold ${highlightColors}`}>
               {highlightText}
@@ -104,25 +101,27 @@ export function StripeMetricTile({
           ) : delta ? (
             <div className="flex items-center gap-1">
               {delta.direction === "up" ? (
-                <span className="flex items-center gap-0.5 font-semibold text-emerald-400">
+                <span className="flex items-center gap-0.5 font-semibold text-emerald-700">
                   <TrendingUp className="h-3 w-3" />
                   {delta.percentage}
                 </span>
               ) : delta.direction === "down" ? (
-                <span className="flex items-center gap-0.5 font-semibold text-rose-400">
+                <span className="flex items-center gap-0.5 font-semibold text-rose-700">
                   <TrendingDown className="h-3 w-3" />
                   {delta.percentage}
                 </span>
               ) : (
-                <span className="font-semibold text-zinc-400">&mdash;</span>
+                <span className="font-semibold text-slate-400">&mdash;</span>
               )}
-              {delta.subtext && <span className="text-zinc-500">{delta.subtext}</span>}
+              {delta.subtext && <span className="text-slate-400">{delta.subtext}</span>}
             </div>
           ) : subtext ? (
-            <span className="truncate">{subtext}</span>
+            <span className="truncate text-slate-500">{subtext}</span>
           ) : null}
         </div>
       </div>
     </div>
   );
 }
+
+export default StripeMetricTile;

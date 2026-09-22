@@ -18,30 +18,32 @@ export function OperationalLoadingState({
 }: OperationalLoadingStateProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl bg-[#0E0E12]/70 border border-white/5 p-8 backdrop-blur-xl shadow-xl space-y-6 ${className}`}
+      className={`relative overflow-hidden rounded-lg bg-white border border-slate-200 p-6 shadow-xs space-y-5 ${className}`}
     >
-      <div className="flex items-center gap-4">
-        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-          <Loader2 className="w-5 h-5 animate-spin" />
+      <div className="flex items-center gap-3.5">
+        <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700">
+          <Loader2 className="w-4 h-4 animate-spin" />
         </div>
         <div>
-          <div className="text-sm font-medium text-white">{label}</div>
-          <div className="text-xs text-zinc-500 font-mono mt-0.5">{subtext}</div>
+          <div className="text-sm font-semibold text-slate-900">{label}</div>
+          <div className="text-xs text-slate-500 font-mono mt-0.5">{subtext}</div>
         </div>
       </div>
 
-      <div className="space-y-3 pt-2">
+      <div className="space-y-2.5 pt-1">
         {Array.from({ length: rows }).map((_, i) => (
           <div
             key={i}
-            className="h-12 w-full rounded-xl bg-white/[0.02] border border-white/[0.04] animate-pulse flex items-center px-4 justify-between"
+            className="h-10 w-full rounded-md bg-slate-50 border border-slate-100 animate-pulse flex items-center px-4 justify-between"
           >
-            <div className="h-4 bg-white/5 rounded-md w-1/3" />
-            <div className="h-4 bg-white/5 rounded-md w-1/6" />
-            <div className="h-4 bg-white/5 rounded-md w-1/4" />
+            <div className="h-3.5 bg-slate-200 rounded w-1/3" />
+            <div className="h-3.5 bg-slate-200 rounded w-1/6" />
+            <div className="h-3.5 bg-slate-200 rounded w-1/4" />
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+export default OperationalLoadingState;

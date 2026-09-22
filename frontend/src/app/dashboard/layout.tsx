@@ -101,13 +101,13 @@ export default function DashboardLayout({
   const isActive = (path: string) => pathname === path;
 
   return (
-    <div className="min-h-screen bg-[#000000] text-white flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans">
       {/* Mobile Top Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/[0.08] bg-[#0A0A0C]/95 backdrop-blur-md sticky top-0 z-50">
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-200 bg-white sticky top-0 z-50 shadow-2xs">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.25)]">
+          <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
             <svg
-              className="w-3.5 h-3.5 text-emerald-400"
+              className="w-3.5 h-3.5 text-emerald-700"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -119,8 +119,8 @@ export default function DashboardLayout({
               <path d="m9 12 2 2 4-4" />
             </svg>
           </div>
-          <span className="font-bold text-sm tracking-tight text-white">inboundcheck</span>
-          <span className="text-[10px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+          <span className="font-bold text-sm tracking-tight text-slate-900">inboundcheck</span>
+          <span className="text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded">
             PRO
           </span>
         </Link>
@@ -129,7 +129,7 @@ export default function DashboardLayout({
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           aria-label="Toggle navigation menu"
           aria-expanded={mobileMenuOpen}
-          className="p-2 text-zinc-400 hover:text-white transition cursor-pointer"
+          className="p-2 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
         >
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
@@ -138,24 +138,24 @@ export default function DashboardLayout({
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/70 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-xs md:hidden"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Streamlined Enterprise Governance Sidebar */}
+      {/* Streamlined Enterprise Governance Sidebar (Style Option A) */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-40 h-screen w-64 bg-[#0A0A0C] border-r border-white/[0.08] flex flex-col justify-between p-4 transition-transform duration-200 ${
+        className={`fixed md:sticky top-0 left-0 z-40 h-screen w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-4 transition-transform duration-200 shadow-xs ${
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
         <div className="space-y-6 overflow-y-auto pr-1">
-          {/* Bespoke Emerald SVG Logo Header */}
+          {/* Logo Header */}
           <Link href="/dashboard" className="px-2 py-2 flex items-center gap-3 group">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.2)] group-hover:border-emerald-500/50 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.35)] transition duration-200">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center transition-colors group-hover:border-emerald-300">
               <svg
-                className="w-4 h-4 text-emerald-400"
+                className="w-4 h-4 text-emerald-700"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -169,28 +169,28 @@ export default function DashboardLayout({
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-base tracking-tight text-white">inboundcheck</span>
-                <span className="text-[10px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                <span className="font-bold text-base tracking-tight text-slate-900">inboundcheck</span>
+                <span className="text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded">
                   PRO
                 </span>
               </div>
-              <span className="text-xs font-semibold text-emerald-400 font-mono tracking-normal">Shopify Email Shield</span>
+              <span className="text-xs font-semibold text-emerald-700 font-mono tracking-normal">Shopify Email Shield</span>
             </div>
           </Link>
 
           {/* Governance Navigation Groups */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             {/* Group 1: Store Protection */}
             <div className="space-y-1">
-              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 block">
+              <span className="text-slate-400 font-bold text-[10px] tracking-widest uppercase pl-2 mb-1.5 block font-mono">
                 STORE PROTECTION
               </span>
               <Link
                 href="/dashboard"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <LayoutDashboard strokeWidth={2} size={18} />
@@ -198,10 +198,10 @@ export default function DashboardLayout({
               </Link>
               <Link
                 href="/dashboard/wizard"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard/wizard")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <ShieldCheck strokeWidth={2} size={18} />
@@ -209,10 +209,10 @@ export default function DashboardLayout({
               </Link>
               <Link
                 href="/dashboard/shopify"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard/shopify")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <ShoppingBag strokeWidth={2} size={18} />
@@ -222,15 +222,15 @@ export default function DashboardLayout({
 
             {/* Group 2: Diagnostics & Radar */}
             <div className="space-y-1">
-              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 block">
+              <span className="text-slate-400 font-bold text-[10px] tracking-widest uppercase pl-2 mb-1.5 block font-mono">
                 DIAGNOSTICS &amp; RADAR
               </span>
               <Link
                 href="/dashboard/inspector"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard/inspector")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <TerminalSquare strokeWidth={2} size={18} />
@@ -238,24 +238,24 @@ export default function DashboardLayout({
               </Link>
               <Link
                 href="/dashboard/radar"
-                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard/radar")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Radio strokeWidth={2} size={18} />
                   <span>Reputation Radar</span>
                 </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               </Link>
               <Link
                 href="/dashboard/content-lab"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard/content-lab")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <Sparkles strokeWidth={2} size={18} />
@@ -265,15 +265,15 @@ export default function DashboardLayout({
 
             {/* Group 3: Configuration */}
             <div className="space-y-1">
-              <span className="text-zinc-500 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 block">
+              <span className="text-slate-400 font-bold text-[10px] tracking-widest uppercase pl-2 mb-1.5 block font-mono">
                 CONFIGURATION
               </span>
               <Link
                 href="/dashboard/settings"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard/settings")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <Sliders strokeWidth={2} size={18} />
@@ -281,10 +281,10 @@ export default function DashboardLayout({
               </Link>
               <Link
                 href="/dashboard/billing"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
                   isActive("/dashboard/billing")
-                    ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-white/[0.04] border border-transparent font-medium"
+                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
                 }`}
               >
                 <CreditCard strokeWidth={2} size={18} />
@@ -295,30 +295,30 @@ export default function DashboardLayout({
         </div>
 
         {/* Compact Single-Row User Profile & Operational Footer */}
-        <div className="pt-3 border-t border-white/[0.08] space-y-2 font-sans text-xs">
+        <div className="pt-3 border-t border-slate-200 space-y-2 font-sans text-xs">
           <div className="flex items-center justify-between px-1">
             <BackendStatusBadge />
             <Link
               href="/dashboard/settings"
               title="Store Settings & Alerts"
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition flex items-center gap-1 text-[11px]"
+              className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1 text-[11px]"
             >
               <Sliders size={14} />
             </Link>
           </div>
 
           {/* Consolidated Compact Profile Bar */}
-          <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/[0.06] gap-2">
+          <div className="flex items-center justify-between px-2.5 py-2 rounded-lg bg-slate-50 border border-slate-200 gap-2 shadow-2xs">
             <div className="flex items-center gap-2 min-w-0">
               <div className="relative shrink-0">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 font-bold text-xs font-mono">
+                <div className="w-7 h-7 rounded-md bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-800 font-bold text-xs font-mono">
                   {userEmail ? userEmail.charAt(0).toUpperCase() : "M"}
                 </div>
                 {/* Inline green pulse dot for active monitoring */}
-                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-[#0A0A0C] animate-pulse" />
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white" />
               </div>
               <div className="min-w-0">
-                <span className="block max-w-[120px] truncate text-xs font-medium text-zinc-300">
+                <span className="block max-w-[120px] truncate text-xs font-medium text-slate-800">
                   {userEmail ? userEmail.split("@")[0] : "Merchant"}
                 </span>
               </div>
@@ -330,7 +330,7 @@ export default function DashboardLayout({
               onClick={handleSignOut}
               title="Sign Out"
               aria-label="Sign Out"
-              className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-white/[0.04] rounded-md transition-colors cursor-pointer shrink-0"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer shrink-0"
             >
               <LogOut strokeWidth={2} size={15} />
             </button>
@@ -339,7 +339,7 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main App Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-slate-50">
         {/* Sticky Trial Countdown Banner */}
         {subscription?.subscription_status === "trialing" && (
           <TrialCountdownBanner
@@ -354,7 +354,7 @@ export default function DashboardLayout({
           </div>
         </main>
 
-        {/* Full-Screen Non-Dismissible Obsidian Paywall Modal on Expiration */}
+        {/* Full-Screen Paywall Modal on Expiration */}
         {subscription?.subscription_status === "expired" && pathname !== "/dashboard/billing" && (
           <ObsidianPaywallModal />
         )}

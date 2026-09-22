@@ -38,23 +38,22 @@ export function DomainMatrixTable({
   const renderProtocolPill = (status: string, label: string) => {
     const isOptimal = status === "optimal";
     const isWarn = status === "warning" || status === "warn";
-    const isMissing = status === "missing" || status === "failed" || status === "critical";
 
     const badgeClass = isOptimal
-      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
       : isWarn
-      ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-      : "bg-rose-500/10 text-rose-400 border-rose-500/30";
+      ? "bg-amber-50 text-amber-700 border-amber-200"
+      : "bg-rose-50 text-rose-700 border-rose-200";
 
     const dotClass = isOptimal
-      ? "bg-emerald-400"
+      ? "bg-emerald-500"
       : isWarn
-      ? "bg-amber-400"
-      : "bg-rose-400";
+      ? "bg-amber-500"
+      : "bg-rose-500";
 
     return (
       <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1.5 border ${badgeClass}`}>
-        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${dotClass}`} />
+        <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
         {status.toUpperCase()}
       </span>
     );
@@ -63,8 +62,8 @@ export function DomainMatrixTable({
   const renderPlacementPill = (score: number) => {
     if (score >= 85) {
       return (
-        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 w-fit">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-fit">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <Inbox className="w-3 h-3" />
           INBOX
         </span>
@@ -72,16 +71,16 @@ export function DomainMatrixTable({
     }
     if (score >= 60) {
       return (
-        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-fit">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 w-fit">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
           <AlertTriangle className="w-3 h-3" />
           AT RISK
         </span>
       );
     }
     return (
-      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1 w-fit">
-        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 w-fit">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
         <XCircle className="w-3 h-3" />
         FAILING
       </span>
@@ -89,22 +88,22 @@ export function DomainMatrixTable({
   };
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#0A0A0C] overflow-hidden shadow-2xl">
+    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-xs">
       {/* Live Mock Simulation Header Banner */}
       {isDemoActive && (
-        <div className="p-4 border-b border-emerald-500/20 bg-gradient-to-r from-emerald-950/40 via-[#0A0A0C] to-cyan-950/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="p-4 border-b border-emerald-200 bg-emerald-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-emerald-700" />
             </div>
             <div>
-              <div className="text-xs font-bold text-white flex items-center gap-2">
+              <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
                 <span>Interactive Simulation Mode: {stores[0]?.domain_name || "allure-apparel.com"}</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold uppercase">
                   Live Mock Scenario
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
+              <p className="text-[11px] text-slate-600 mt-0.5">
                 Simulating store DNS audit scenario: 3 misconfigured records, estimated $2,400/wk delivery risk, and 1-click repair triggers.
               </p>
             </div>
@@ -113,7 +112,7 @@ export function DomainMatrixTable({
             <button
               type="button"
               onClick={onAddStore}
-              className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.25)] min-h-[44px]"
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-md transition-colors shadow-xs"
             >
               Add Real Store Domain →
             </button>
@@ -121,7 +120,7 @@ export function DomainMatrixTable({
               <button
                 type="button"
                 onClick={onExitDemo}
-                className="px-3 py-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-mono text-xs rounded-xl border border-white/10 transition-colors min-h-[44px]"
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-mono text-xs rounded-md border border-slate-300 transition-colors"
               >
                 Exit Demo
               </button>
@@ -130,46 +129,46 @@ export function DomainMatrixTable({
         </div>
       )}
 
-      {/* Carbon Table Toolbar */}
-      <div className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#0E1217]">
+      {/* Financial Table Toolbar */}
+      <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white">
         <div>
-          <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-            <Shield className="w-4 h-4 text-emerald-400" />
+          <h3 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-600" />
             Monitored Stores &amp; Verified Sending Domains
           </h3>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5">
             Live DNS records, customer inbox placement status, and on-demand diagnostic inspector.
           </p>
         </div>
-        <span className="text-[10px] font-mono font-semibold text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#0A0A0C] border border-white/[0.08]">
+        <span className="text-[11px] font-mono font-medium text-slate-600 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200">
           {stores.length} Active Stores
         </span>
       </div>
 
       {/* Dense High-Precision Data Grid */}
-      <div className="overflow-x-auto max-h-[560px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent hover:scrollbar-thumb-emerald-500/40">
+      <div className="overflow-x-auto max-h-[560px] overflow-y-auto scrollbar-thin">
         <table className="w-full text-left text-xs font-mono border-collapse" role="grid">
-          <thead className="sticky top-0 z-10 bg-[#0E1217] backdrop-blur-md border-b border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+          <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-600">
             <tr>
-              <th scope="col" className="py-3 px-4 font-semibold text-left">Domain Name</th>
-              <th scope="col" className="py-3 px-4 font-semibold text-left">Shopify Store</th>
-              <th scope="col" className="py-3 px-4 font-semibold text-left">Placement</th>
-              <th scope="col" className="py-3 px-4 font-semibold text-left">SPF</th>
-              <th scope="col" className="py-3 px-4 font-semibold text-left">DKIM</th>
-              <th scope="col" className="py-3 px-4 font-semibold text-left">DMARC</th>
-              <th scope="col" className="py-3 px-4 font-semibold text-center">Score</th>
-              <th scope="col" className="py-3 px-4 font-semibold text-right">Actions</th>
+              <th scope="col" className="py-3 px-4 text-left">Domain Name</th>
+              <th scope="col" className="py-3 px-4 text-left">Shopify Store</th>
+              <th scope="col" className="py-3 px-4 text-left">Placement</th>
+              <th scope="col" className="py-3 px-4 text-left">SPF</th>
+              <th scope="col" className="py-3 px-4 text-left">DKIM</th>
+              <th scope="col" className="py-3 px-4 text-left">DMARC</th>
+              <th scope="col" className="py-3 px-4 text-center">Score</th>
+              <th scope="col" className="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/[0.05] text-zinc-300">
+          <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
             {stores.map((store) => (
               <tr
                 key={store.id}
                 onClick={() => onInspect(store.domain_name)}
-                className={`carbon-table-row cursor-pointer transition-colors ${
+                className={`cursor-pointer transition-colors ${
                   auditingId === store.id
-                    ? "bg-emerald-500/5 border-l-2 border-l-emerald-500/40"
-                    : "hover:bg-white/[0.02]"
+                    ? "bg-emerald-50/60 border-l-2 border-l-emerald-600"
+                    : "hover:bg-slate-50/80"
                 }`}
                 tabIndex={0}
                 onKeyDown={(e) => {
@@ -179,15 +178,15 @@ export function DomainMatrixTable({
                 }}
               >
                 {/* Domain Name */}
-                <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <td className="py-3 px-4 font-semibold text-slate-900 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                   <span className="truncate max-w-[180px] sm:max-w-[280px] inline-block" title={store.domain_name}>
                     {store.domain_name}
                   </span>
                 </td>
 
                 {/* Shopify Store */}
-                <td className="py-3 px-4 text-zinc-400 text-[11px]">
+                <td className="py-3 px-4 text-slate-500 text-[11px]">
                   {store.shopify_store}
                 </td>
 
@@ -205,13 +204,13 @@ export function DomainMatrixTable({
                 <td className="py-3 px-4 text-center">
                   <span className={`font-bold tabular-nums text-xs inline-flex items-center gap-1 ${
                     store.unified_score >= 85
-                      ? "text-emerald-400"
+                      ? "text-emerald-700"
                       : store.unified_score >= 60
-                      ? "text-amber-400"
-                      : "text-rose-400"
+                      ? "text-amber-700"
+                      : "text-rose-700"
                   }`}>
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      store.unified_score >= 85 ? "bg-emerald-400" : store.unified_score >= 60 ? "bg-amber-400" : "bg-rose-400"
+                      store.unified_score >= 85 ? "bg-emerald-500" : store.unified_score >= 60 ? "bg-amber-500" : "bg-rose-500"
                     }`} />
                     {store.unified_score}%
                   </span>
@@ -219,21 +218,21 @@ export function DomainMatrixTable({
 
                 {/* Actions */}
                 <td className="py-3 px-4 text-right">
-                  <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => onReAudit(store.id, store.domain_name)}
                       disabled={auditingId === store.id}
-                      className="min-h-[38px] px-2.5 py-1.5 bg-[#0A0A0C] hover:bg-[#121820] border border-white/[0.08] hover:border-emerald-500/40 text-zinc-300 font-bold rounded-lg transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-semibold rounded-md shadow-2xs transition-colors text-xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       title="Run on-demand DNS audit"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${auditingId === store.id ? "animate-spin text-emerald-400" : ""}`} />
+                      <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${auditingId === store.id ? "animate-spin text-emerald-600" : ""}`} />
                       <span>Audit</span>
                     </button>
 
                     <Link
                       href={`/dashboard/inspector?domain=${encodeURIComponent(store.domain_name)}`}
-                      className="min-h-[38px] px-2.5 py-1.5 bg-[#0A0A0C] hover:bg-[#121820] border border-white/[0.08] hover:border-emerald-500/40 text-emerald-400 font-bold rounded-lg transition-all text-xs inline-flex items-center gap-1.5"
+                      className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-emerald-700 font-semibold rounded-md shadow-2xs transition-colors text-xs inline-flex items-center gap-1.5"
                       title="Open full inspector"
                     >
                       <Terminal className="w-3.5 h-3.5" />
@@ -243,7 +242,7 @@ export function DomainMatrixTable({
                     <button
                       type="button"
                       onClick={() => onOpenDeleteModal(store.id, store.domain_name)}
-                      className="min-h-[38px] min-w-[38px] p-2 bg-[#0A0A0C] hover:bg-rose-500/10 border border-white/[0.08] hover:border-rose-500/30 text-zinc-500 hover:text-rose-400 rounded-lg transition inline-flex items-center justify-center cursor-pointer"
+                      className="p-1.5 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-400 hover:text-rose-600 rounded-md transition-colors inline-flex items-center justify-center cursor-pointer shadow-2xs"
                       title="Delete monitored domain"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -258,3 +257,5 @@ export function DomainMatrixTable({
     </div>
   );
 }
+
+export default DomainMatrixTable;

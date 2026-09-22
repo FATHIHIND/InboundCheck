@@ -155,28 +155,24 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
       role="dialog"
       aria-modal="true"
       aria-labelledby="paywall-title"
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
     >
-      <div className="relative w-full max-w-5xl rounded-2xl bg-[#0A0A0C] border border-emerald-500/30 shadow-[0_0_60px_rgba(16,185,129,0.15)] p-6 sm:p-10 space-y-8 text-white my-8">
-        {/* Subtle Ambient Radial Glow */}
-        <div className="absolute -top-32 -right-32 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 -left-32 w-80 h-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
-
+      <div className="relative w-full max-w-5xl rounded-lg bg-white border border-slate-200 shadow-xl p-6 sm:p-10 space-y-8 text-slate-900 my-8">
         {/* Modal Header: High-Impact GMV Protection & ROI Framing */}
-        <div className="text-center space-y-3.5 max-w-2xl mx-auto relative z-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="text-center space-y-3 max-w-2xl mx-auto relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono font-bold uppercase tracking-wider">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>37.3x Average GMV Protection ROI</span>
           </div>
 
-          <h2 id="paywall-title" className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white leading-tight">
-            Protect Up to <span className="text-emerald-400 font-mono">$2,400/wk</span> in Silent Spam Revenue Loss
+          <h2 id="paywall-title" className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
+            Protect Up to <span className="text-emerald-700 font-mono">$2,400/wk</span> in Silent Spam Revenue Loss
           </h2>
           
-          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
             {targetDomain ? (
               <>
-                Unreceived order receipts on <span className="text-white font-mono font-semibold">{targetDomain}</span> cause customer dispute spikes and silent revenue leakage. Select an institutional tier to unlock continuous DNS governance and 1-click auto-patching.
+                Unreceived order receipts on <span className="text-slate-900 font-mono font-semibold">{targetDomain}</span> cause customer dispute spikes and silent revenue leakage. Select an institutional tier to unlock continuous DNS governance and 1-click auto-patching.
               </>
             ) : (
               <>
@@ -187,34 +183,34 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
 
           {/* Billing Cycle Toggle: Monthly vs Annual (20% Savings) */}
           <div className="pt-2 flex items-center justify-center gap-3">
-            <span className={`text-xs font-medium ${billingCycle === "monthly" ? "text-white font-semibold" : "text-zinc-500"}`}>
+            <span className={`text-xs font-medium ${billingCycle === "monthly" ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
               Monthly
             </span>
             <button
               type="button"
               onClick={() => setBillingCycle((prev) => (prev === "monthly" ? "annual" : "monthly"))}
-              className="relative w-12 h-6 rounded-full bg-[#1A1A22] border border-white/10 transition-colors p-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="relative w-12 h-6 rounded-full bg-slate-200 border border-slate-300 transition-colors p-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               aria-label="Toggle annual or monthly billing"
               aria-pressed={billingCycle === "annual"}
             >
               <div
-                className={`w-[18px] h-[18px] rounded-full bg-emerald-400 transition-transform duration-200 ${
+                className={`w-[18px] h-[18px] rounded-full bg-emerald-600 transition-transform duration-200 ${
                   billingCycle === "annual" ? "translate-x-6" : "translate-x-0.5"
                 }`}
               />
             </button>
             <div className="flex items-center gap-1.5">
-              <span className={`text-xs font-medium ${billingCycle === "annual" ? "text-white font-semibold" : "text-zinc-500"}`}>
+              <span className={`text-xs font-medium ${billingCycle === "annual" ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
                 Annual
               </span>
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                 SAVE 20%
               </span>
             </div>
           </div>
 
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center font-mono">
+            <div className="p-3 rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-xs text-center font-mono">
               {errorMessage}
             </div>
           )}
@@ -229,14 +225,14 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
             return (
               <div
                 key={tier.id}
-                className={`relative rounded-2xl flex flex-col justify-between p-6 sm:p-7 transition-all duration-300 ${
+                className={`relative rounded-lg flex flex-col justify-between p-6 sm:p-7 transition-all duration-200 bg-white ${
                   tier.isPopular
-                    ? "bg-[#0E1217] border-2 border-emerald-500/70 shadow-[0_0_40px_rgba(16,185,129,0.25)] md:-translate-y-2"
-                    : "bg-[#0A0A0C] border border-white/[0.08] hover:border-emerald-500/30"
+                    ? "border-2 border-emerald-600 shadow-md md:-translate-y-1"
+                    : "border border-slate-200 shadow-xs hover:border-slate-300"
                 }`}
               >
                 {tier.isPopular && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-0.5 rounded-full bg-emerald-500 text-black font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-xs">
                     <Sparkles className="w-3 h-3 fill-current" />
                     <span>Most Popular</span>
                   </div>
@@ -245,33 +241,33 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-bold text-white tracking-tight">{tier.name}</h3>
-                      <p className="text-xs text-zinc-400 mt-1 min-h-[32px] leading-relaxed">{tier.tagline}</p>
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight">{tier.name}</h3>
+                      <p className="text-xs text-slate-500 mt-1 min-h-[32px] leading-relaxed">{tier.tagline}</p>
                     </div>
                   </div>
 
-                  <div className="pt-2 pb-3 border-b border-white/[0.08]">
+                  <div className="pt-2 pb-3 border-b border-slate-100">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-mono">
+                      <span className="text-3xl font-extrabold text-slate-950 tracking-tight font-mono">
                         {displayPrice}
                       </span>
-                      <span className="text-xs text-zinc-400 font-mono">{tier.period}</span>
+                      <span className="text-xs text-slate-500 font-mono">{tier.period}</span>
                     </div>
                     {billingCycle === "annual" && (
-                      <div className="text-[11px] font-mono text-emerald-400 mt-0.5 font-medium">
+                      <div className="text-[11px] font-mono text-emerald-700 mt-0.5 font-medium">
                         {tier.annualSavings}
                       </div>
                     )}
-                    <span className="inline-block mt-2.5 text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    <span className="inline-block mt-2.5 text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                       {tier.domainLimit}
                     </span>
                   </div>
 
                   {/* Bullet list */}
-                  <ul className="space-y-2.5 pt-1 text-xs text-zinc-300 font-sans">
+                  <ul className="space-y-2.5 pt-1 text-xs text-slate-600 font-sans">
                     {tier.features.map((feat, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                         <span className="leading-snug">{feat}</span>
                       </li>
                     ))}
@@ -279,15 +275,15 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
                 </div>
 
                 {/* Checkout Trigger Button */}
-                <div className="pt-6 mt-6 border-t border-white/[0.08]">
+                <div className="pt-6 mt-6 border-t border-slate-100">
                   <button
                     type="button"
                     disabled={Boolean(loadingTier)}
                     onClick={() => handleCheckout(tier.id)}
-                    className={`w-full min-h-[44px] py-3 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60 ${
+                    className={`w-full h-10 px-4 rounded-md font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-60 ${
                       tier.isPopular
-                        ? "bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)]"
-                        : "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1] hover:border-emerald-500/30"
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-800"
                     }`}
                   >
                     {isLoading ? (
@@ -310,11 +306,11 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
 
         {/* Enterprise Anchor Link */}
         <div className="text-center pt-2 relative z-10">
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-slate-500">
             Need 20+ stores, dedicated IP probing, or custom SLA?{" "}
             <a
               href="mailto:enterprise@inboundcheck.com?subject=Enterprise%20InboundCheck%20Inquiry"
-              className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-4 decoration-emerald-500/50 hover:decoration-emerald-400 transition-colors inline-flex items-center gap-1"
+              className="text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-4 decoration-emerald-500/50 hover:decoration-emerald-700 transition-colors inline-flex items-center gap-1"
             >
               <Building2 className="w-3.5 h-3.5" />
               <span>Contact Enterprise Team</span>
@@ -323,20 +319,20 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
         </div>
 
         {/* Security & Instant Activation Guarantee */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4 text-xs text-zinc-400 border-t border-white/[0.08] relative z-10">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4 text-xs text-slate-500 border-t border-slate-200 relative z-10">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>256-bit Encrypted Stripe Checkout</span>
           </div>
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-emerald-400" />
+            <Zap className="w-4 h-4 text-emerald-600" />
             <span>Instant Provisioning &amp; Live Domain Unlocking</span>
           </div>
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+              className="text-xs text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
             >
               Dismiss
             </button>

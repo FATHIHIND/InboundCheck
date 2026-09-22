@@ -24,9 +24,9 @@ export interface GlassEmeraldCardProps {
   actionLabel?: string;
   /** Optional secondary action click handler */
   onActionClick?: () => void;
-  /** Whether to disable the background cyber grid overlay */
+  /** Whether to disable background accents (preserved for backwards compatibility) */
   disableGrid?: boolean;
-  /** Optional custom footer label. If omitted, no redundant brand label is displayed */
+  /** Optional custom footer label */
   footerLabel?: string;
   /** Nested content or additional children elements */
   children?: React.ReactNode;
@@ -35,25 +35,24 @@ export interface GlassEmeraldCardProps {
 }
 
 const BADGE_VARIANTS = {
-  emerald: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]",
-  amber: "bg-amber-500/10 text-amber-400 border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.2)]",
-  cyan: "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.2)]",
-  rose: "bg-rose-500/10 text-rose-400 border border-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.2)]",
-  neutral: "bg-white/[0.04] text-zinc-400 border border-white/[0.08]",
+  emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  amber: "bg-amber-50 text-amber-700 border-amber-200",
+  cyan: "bg-sky-50 text-sky-700 border-sky-200",
+  rose: "bg-rose-50 text-rose-700 border-rose-200",
+  neutral: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
 const DOT_VARIANTS = {
-  emerald: "bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]",
-  amber: "bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)]",
-  cyan: "bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]",
-  rose: "bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.8)]",
-  neutral: "bg-zinc-400 shadow-none",
+  emerald: "bg-emerald-500",
+  amber: "bg-amber-500",
+  cyan: "bg-sky-500",
+  rose: "bg-rose-500",
+  neutral: "bg-slate-400",
 };
 
 /**
- * Premium UIverse-inspired Glassmorphic Card styled strictly for the InboundCheck theme.
- * Base: Midnight Obsidian (#0A0A0C) with backdrop blur.
- * Accents: Shopify Emerald (#10B981) neon glow.
+ * Enterprise Classic Card styled strictly for Style Option A (Stripe/Shopify Admin Classic).
+ * Base: Pure White (#FFFFFF), Hairline Border (#E2E8F0), Shadow-xs, High-Contrast Typography.
  */
 export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
   title,
@@ -66,7 +65,7 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
   onClick,
   actionLabel,
   onActionClick,
-  disableGrid = false,
+  disableGrid: _disableGrid = false,
   footerLabel,
   children,
   className = "",
@@ -74,34 +73,22 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`group relative overflow-hidden rounded-xl border border-white/[0.08] bg-[#0A0A0C] backdrop-blur-md p-6 transition-all duration-300 hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.18)] ${
+      className={`group relative overflow-hidden rounded-lg border border-slate-200 bg-white p-6 shadow-xs transition-all duration-200 hover:border-slate-300 hover:shadow-sm ${
         onClick ? "cursor-pointer" : ""
       } ${className}`}
     >
-      {/* Top Ambient Radial Glow Effect */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl transition-all duration-500 group-hover:bg-emerald-500/20 group-hover:scale-125" />
-      <div className="pointer-events-none absolute -bottom-24 -right-24 h-48 w-48 rounded-full bg-emerald-400/5 blur-3xl transition-all duration-500 group-hover:bg-emerald-400/15" />
-
-      {/* Cyber Subtle Grid Lines Overlay - lowered opacity to 0.20 to prevent interference */}
-      {!disableGrid && (
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#10b98108_1px,transparent_1px),linear-gradient(to_bottom,#10b98108_1px,transparent_1px)] bg-[size:24px_24px] opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
-      )}
-
-      {/* Glass Light Reflection Shimmer Line */}
-      <div className="pointer-events-none absolute -left-full top-0 h-full w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-emerald-400/10 to-transparent group-hover:animate-[shimmer_1.5s_ease-in-out_infinite]" />
-
       {/* Card Header & Badge */}
       <div className="relative z-10 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-transform duration-300 group-hover:scale-105 group-hover:border-emerald-400/50">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors duration-200">
             {icon || <ShieldCheck className="h-5 w-5" />}
           </div>
           <div>
-            <h3 className="text-base font-semibold tracking-tight text-white transition-colors duration-200 group-hover:text-emerald-300">
+            <h3 className="text-sm sm:text-base font-semibold tracking-tight text-slate-900 transition-colors duration-200 group-hover:text-emerald-800">
               {title}
             </h3>
             {subtitle && (
-              <p className="text-xs font-medium text-zinc-400 mt-0.5">
+              <p className="text-xs font-normal text-slate-500 mt-0.5">
                 {subtitle}
               </p>
             )}
@@ -110,10 +97,10 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
 
         {badgeText && (
           <div
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wide ${BADGE_VARIANTS[badgeVariant]}`}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-mono font-medium tracking-tight ${BADGE_VARIANTS[badgeVariant]}`}
           >
             <span
-              className={`h-1.5 w-1.5 rounded-full animate-pulse ${DOT_VARIANTS[badgeVariant]}`}
+              className={`h-1.5 w-1.5 rounded-full ${DOT_VARIANTS[badgeVariant]}`}
             />
             {badgeText}
           </div>
@@ -125,32 +112,32 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
         <div className="relative z-10 mt-5 flex items-baseline justify-between">
           {metricValue !== undefined && (
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-white drop-shadow-[0_2px_10px_rgba(16,185,129,0.3)]">
+              <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-slate-950 tabular-nums">
                 {metricValue}
               </span>
             </div>
           )}
           {trendText && (
-            <div className="flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-              <Sparkles className="h-3 w-3" />
+            <div className="flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              <Sparkles className="h-3 w-3 text-emerald-600" />
               <span>{trendText}</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Children Content Slot - unconstrained typography allows child scale freedom */}
+      {/* Children Content Slot */}
       {children && <div className="relative z-10 mt-4">{children}</div>}
 
-      {/* Card Action Footer - customizable via footerLabel, no redundant default */}
+      {/* Card Action Footer */}
       {(actionLabel || footerLabel) && (
         <div
-          className={`relative z-10 mt-5 pt-3 border-t border-emerald-500/10 flex items-center ${
+          className={`relative z-10 mt-5 pt-3 border-t border-slate-100 flex items-center ${
             footerLabel && actionLabel ? "justify-between" : footerLabel ? "justify-start" : "justify-end"
           }`}
         >
           {footerLabel && (
-            <span className="text-xs text-zinc-400 font-medium group-hover:text-zinc-300 transition-colors">
+            <span className="text-xs text-slate-500 font-medium">
               {footerLabel}
             </span>
           )}
@@ -161,7 +148,7 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
                 e.stopPropagation();
                 onActionClick?.();
               }}
-              className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors group-hover:translate-x-0.5 duration-200"
+              className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 transition-colors group-hover:translate-x-0.5 duration-150"
             >
               <span>{actionLabel}</span>
               <ArrowUpRight className="h-3.5 w-3.5" />

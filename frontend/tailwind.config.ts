@@ -33,26 +33,28 @@ const config: Config = {
         card: "hsl(var(--card))",
         "card-foreground": "hsl(var(--card-foreground))",
         primary: {
-          DEFAULT: "#10b981", // Emerald Neon
-          foreground: "#000000",
+          DEFAULT: "#059669", // Emerald 600 (Stripe/Shopify Classic)
+          foreground: "#ffffff",
         },
         accent: {
-          DEFAULT: "#06b6d4", // Electric Cyan
+          DEFAULT: "#0284c7", // Electric Sky
           foreground: "#ffffff",
         },
         destructive: {
-          DEFAULT: "#ef4444",
+          DEFAULT: "#dc2626", // Red 600
           foreground: "#ffffff",
         },
         warning: {
-          DEFAULT: "#f59e0b",
-          foreground: "#000000",
+          DEFAULT: "#d97706", // Amber 600
+          foreground: "#ffffff",
         }
       },
       boxShadow: {
         "stripe-hairline": "var(--sys-hairline-specular)",
-        "fluent-elevation": "var(--sys-hairline-specular), var(--sys-shadow-ambient)",
-        "emerald-radar": "0 0 25px -4px rgba(16, 185, 129, 0.25)",
+        "fluent-elevation": "var(--sys-shadow-ambient)",
+        "emerald-radar": "0 0 20px -2px rgba(5, 150, 105, 0.2)",
+        "xs": "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        "2xs": "0 1px 1px 0 rgba(0, 0, 0, 0.03)",
       },
       transitionTimingFunction: {
         "apple-spring": "cubic-bezier(0.16, 1, 0.3, 1)",

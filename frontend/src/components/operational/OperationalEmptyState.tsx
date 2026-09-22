@@ -26,21 +26,21 @@ export function OperationalEmptyState({
 }: OperationalEmptyStateProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-xl bg-[#0A0A0C] border border-white/[0.08] p-8 md:p-12 text-center backdrop-blur-xl shadow-xl flex flex-col items-center justify-center ${className}`}
+      className={`relative overflow-hidden rounded-lg bg-white border border-slate-200 p-8 md:p-12 text-center shadow-xs flex flex-col items-center justify-center ${className}`}
     >
-      <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 text-zinc-400 mb-4 shadow-inner">
-        {icon || <FolderX className="w-8 h-8 text-zinc-500" />}
+      <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-400 mb-3.5">
+        {icon || <FolderX className="w-7 h-7 text-slate-400" />}
       </div>
 
-      <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium tracking-wide uppercase font-mono mb-3">
+      <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-mono font-medium tracking-wider uppercase mb-2.5">
         {badge}
       </span>
 
-      <h3 className="text-lg font-semibold text-white tracking-tight mb-2 max-w-md">
+      <h3 className="text-base font-semibold text-slate-900 tracking-tight mb-1.5 max-w-md">
         {title}
       </h3>
 
-      <p className="text-sm text-zinc-400 leading-relaxed max-w-lg mb-6">
+      <p className="text-xs text-slate-500 leading-relaxed max-w-lg mb-5">
         {description}
       </p>
 
@@ -48,24 +48,26 @@ export function OperationalEmptyState({
         action.href ? (
           <a
             href={action.href}
-            className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold h-10 px-5 rounded-lg transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer text-xs"
+            className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-9 px-4 rounded-md shadow-xs transition-colors text-xs cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
-            {action.label}
-            <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+            <span>{action.label}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </a>
         ) : (
           <button
             type="button"
             onClick={action.onClick}
-            className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold h-10 px-5 rounded-lg transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer text-xs"
+            className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-9 px-4 rounded-md shadow-xs transition-colors text-xs cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
-            {action.label}
-            <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+            <span>{action.label}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         )
       )}
     </div>
   );
 }
+
+export default OperationalEmptyState;
