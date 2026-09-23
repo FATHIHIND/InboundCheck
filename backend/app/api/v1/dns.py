@@ -12,6 +12,7 @@ import logging
 
 from app.core.config import settings
 from app.core.security import get_current_user_id
+from app.core.rate_limiter import rate_limit_dns_tier, rate_limit_rbl_tier
 from app.core.tier_guards import require_growth_or_enterprise_tier
 from app.schemas.dns import (
     DNSAuditRequest,
@@ -43,7 +44,7 @@ diagnostic_engine = DNSDiagnosticEngine()
 @router.post("/audit", response_model=DNSAuditResponse)
 async def execute_dns_audit(
     request: DNSAuditRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(rate_limit_dns_tier)
 ):
     """
     Execute real-time multi-resolver DNS audit for the specified domain.
@@ -143,7 +144,7 @@ from app.services.supabase_client import supabase_service
 @router.post("/rbl-scan", response_model=RBLScanResult)
 async def scan_domain_rbl(
     request: RBLScanRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(rate_limit_rbl_tier)
 ):
     """
     Execute on-demand asynchronous DNSBL reputation scan across 10 authoritative RBL databases.

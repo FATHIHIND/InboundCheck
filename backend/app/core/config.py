@@ -16,10 +16,14 @@ class Settings(BaseSettings):
     ]
 
     # Supabase Configuration
+    # --- Public Values (Safe to expose to browser / client) ---
     SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: str = ""
-    SUPABASE_JWT_SECRET: str = ""
+    SUPABASE_KEY: str = ""  # Public anon key - MUST NEVER be used as a JWT signing/verification secret!
+
+    # --- Server-Only Secrets (Must NEVER be exposed to clients or used outside secure server boundaries) ---
+    SUPABASE_SERVICE_ROLE_KEY: str = ""  # Service role key for admin DB operations bypassing RLS
+    SUPABASE_JWT_SECRET: str = ""  # Symmetric HMAC (HS256) secret for cryptographically verifying Supabase user JWTs
+    SUPABASE_JWT_AUDIENCE: str = "authenticated"  # Expected audience claim for Supabase user JWTs
 
     # Shopify App Integration Configuration
     SHOPIFY_API_KEY: str = ""

@@ -96,12 +96,20 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "127.0.0.1"
+        from app.core.rate_limiter import get_trusted_client_ip
+        client_ip = get_trusted_client_ip(request)
         now = time.time()
 
         # Exempt health checks and pytest test runner from IP rate limiting
         is_exempt = (
-            request.url.path in ["/health", "/", "/docs", "/openapi.json"]
+            request.url.path in [
+                "/health",
+                "/ready",
+                f"{settings.API_V1_STR}/health",
+                "/",
+                "/docs",
+                "/openapi.json",
+            ]
             or os.getenv("PYTEST_CURRENT_TEST") is not None
         )
 
@@ -181,8 +189,46 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def global_exception_shield(request: Request, exc: Exception):
+    from app.services.supabase_client import DatabaseUnavailableError
+    if isinstance(exc, DatabaseUnavailableError):
+        ref_id = str(uuid.uuid4())
+        logger.error(f"Database unavailable [Ref ID: {ref_id}]: {exc}")
+        # Ops Incident Alert (OPS-02)
+        try:
+            from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+            await ops_alert_service.dispatch_incident(
+                OpsIncident(
+                    alert_id="ALERT-DB-OUTAGE",
+                    severity="P0",
+                    summary="Database service is unavailable",
+                    details={"error_reference": ref_id, "path": str(request.url.path), "error": str(exc)[:200]},
+                )
+            )
+        except Exception as alert_err:
+            logger.warning(f"Failed to dispatch DB outage alert: {alert_err}")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "Database service is temporarily unavailable. Please retry shortly.",
+                "error_reference": ref_id,
+                "status": "unavailable",
+            }
+        )
     ref_id = str(uuid.uuid4())
     logger.error(f"Unhandled server exception [Ref ID: {ref_id}]: {exc}\n{traceback.format_exc()}")
+    # Ops Incident Alert (OPS-02)
+    try:
+        from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+        await ops_alert_service.dispatch_incident(
+            OpsIncident(
+                alert_id="ALERT-UNHANDLED-500",
+                severity="P1",
+                summary=f"Unhandled 500 on {request.method} {request.url.path}",
+                details={"error_reference": ref_id, "path": str(request.url.path), "method": request.method, "exc_type": exc.__class__.__name__},
+            )
+        )
+    except Exception as alert_err:
+        logger.warning(f"Failed to dispatch unhandled 500 alert: {alert_err}")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -198,33 +244,58 @@ app.include_router(failover_webhooks_router)
 
 
 @app.get("/health", tags=["Health Checks"])
-@app.get(f"{settings.API_V1_STR}/health", tags=["Health Checks"])
 async def health_check():
-    """Health check endpoint verifying operational status and core dependencies."""
+    """Liveness probe verifying that the Python process and event loop are responsive."""
+    return {
+        "status": "alive",
+        "service": settings.PROJECT_NAME,
+        "environment": settings.ENVIRONMENT,
+        "version": "1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/ready", tags=["Health Checks"])
+@app.get(f"{settings.API_V1_STR}/health", tags=["Health Checks"])
+async def readiness_check():
+    """Readiness probe verifying operational status and core dependencies."""
+    from app.services.supabase_client import supabase_service
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Background auditor state
-    scheduler_status = "healthy" if background_auditor.is_running else "healthy"
+    is_db_ready = supabase_service.check_db_health()
+    db_status = "healthy" if is_db_ready else "unhealthy"
 
-    # Database connectivity probe
-    db_status = "healthy"
-    try:
-        from app.services.supabase_client import supabase_service
-        if not supabase_service.is_configured:
-            db_status = "healthy"
-    except Exception:
-        db_status = "healthy"
+    if getattr(settings, "RUN_IN_PROCESS_SCHEDULER", False):
+        scheduler_status = "healthy" if background_auditor.is_running else "stopped"
+    else:
+        scheduler_status = "external_worker"
+
+    dependencies = {
+        "database": db_status,
+        "scheduler": scheduler_status,
+    }
+
+    if not is_db_ready and not supabase_service._allow_in_memory_fallback():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "unavailable",
+                "service": settings.PROJECT_NAME,
+                "environment": settings.ENVIRONMENT,
+                "version": "1.0.0",
+                "timestamp": now_iso,
+                "dependencies": dependencies,
+                "reason": "Database connection probe failed",
+            },
+        )
 
     return {
-        "status": "healthy",
+        "status": "ready" if is_db_ready else "degraded",
         "service": settings.PROJECT_NAME,
         "environment": settings.ENVIRONMENT,
         "version": "1.0.0",
         "timestamp": now_iso,
-        "dependencies": {
-            "database": db_status,
-            "scheduler": scheduler_status,
-        },
+        "dependencies": dependencies,
     }
 
 

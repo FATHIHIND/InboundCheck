@@ -5,6 +5,7 @@ Endpoints for managing Cloudflare/GoDaddy API credentials, 1-click DNS record au
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
+from starlette.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 import logging
@@ -135,6 +136,7 @@ async def apply_auto_fix(
 ):
     """
     Execute 1-click automatic insertion of SPF, DKIM CNAME, or DMARC records via provider API.
+    Fails closed: if provider API operation fails, returns HTTP 502 with error details.
     """
     user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
@@ -147,6 +149,17 @@ async def apply_auto_fix(
             record_value=payload.record_value,
             ttl=payload.ttl or 3600
         )
+        if not result.get("applied", False):
+            return JSONResponse(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                content={
+                    "success": False,
+                    "applied": False,
+                    "error": result.get("error", "DNS automated remediation failed at provider API"),
+                    "provider": result.get("provider", payload.provider_name),
+                    "fix_entry": result.get("fix_entry"),
+                }
+            )
         return {"success": True, **result}
     except Exception as e:
         logger.error(f"Error applying DNS auto-fix: {e}")

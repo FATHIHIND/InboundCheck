@@ -46,11 +46,23 @@ def parse_utc_datetime(dt_val: Union[str, datetime, None]) -> Optional[datetime]
 
 
 def is_trial_expired(profile: Dict[str, Any]) -> bool:
-    """Check if the 3-day free trial has expired."""
+    """
+    Check if the 3-day free trial has expired.
+    FAIL-CLOSED: If profile is trialing but trial_ends_at is missing, NULL,
+    or unparseable, it MUST be treated as expired (return True) to prevent infinite free access.
+    """
+    sub_status = (profile.get("subscription_status") or "trialing").lower()
+    if sub_status != "trialing":
+        return False
+
     trial_ends_at_val = profile.get("trial_ends_at")
+    if not trial_ends_at_val:
+        return True
+
     dt = parse_utc_datetime(trial_ends_at_val)
     if not dt:
-        return False
+        return True
+
     return datetime.now(timezone.utc) > dt
 
 
@@ -83,6 +95,14 @@ async def verify_active_subscription_or_trial(
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
+            logger.info(
+                "Trial expired enforcement",
+                extra={
+                    "event_type": "security_trial_expired",
+                    "user_id": user_id,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail="Free trial expired. Upgrade to a paid plan to maintain continuous inbox protection.",
@@ -92,13 +112,20 @@ async def verify_active_subscription_or_trial(
     if sub_status == "active":
         return profile
 
-    if sub_status in ("expired", "past_due", "canceled"):
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Subscription is {sub_status}. Active plan required to continue.",
-        )
-
-    return profile
+    # Fail closed for all other statuses: expired, past_due, canceled, or unrecognized
+    logger.info(
+        "Subscription gate rejected access",
+        extra={
+            "event_type": "security_subscription_gate",
+            "user_id": user_id,
+            "status": sub_status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail=f"Subscription is {sub_status}. Active plan required to continue.",
+    )
 
 
 def enforce_domain_quota(user_id: str, profile: Optional[Dict[str, Any]] = None) -> None:

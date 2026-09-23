@@ -225,6 +225,19 @@ async def run_audit_worker(
 
         except Exception as e:
             logger.error(f"Unexpected error in audit worker loop: {e}", exc_info=True)
+            # Dispatch Ops Alert (OPS-02)
+            try:
+                from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+                await ops_alert_service.dispatch_incident(
+                    OpsIncident(
+                        alert_id="ALERT-WORKER-AUDIT",
+                        severity="P1",
+                        summary=f"Audit worker loop crashed: {e}",
+                        details={"worker_id": worker_id, "error": str(e)[:200]},
+                    )
+                )
+            except Exception as alert_err:
+                logger.warning(f"Failed to dispatch audit worker ops alert: {alert_err}")
             await asyncio.sleep(5)
 
     logger.info(f"Audit worker {worker_id} stopped cleanly.")

@@ -25,19 +25,22 @@ class FailoverRepository:
         self,
         worker_id: str,
         limit: int = 20,
+        lease_seconds: int = 900,
     ) -> List[Dict[str, Any]]:
         """
         Atomically claim received delivery failure events using claim_pending_delivery_failure_events RPC.
-        Transitions received -> queued using FOR UPDATE SKIP LOCKED.
+        Transitions received -> queued using FOR UPDATE SKIP LOCKED with lease_until and stale recovery.
         """
         now_iso = datetime.now(timezone.utc).isoformat()
+        lease_str = f"{lease_seconds} seconds"
         if self.supabase._client:
             try:
                 res = self.supabase._client.rpc(
-                    "claim_pending_delivery_failure_events",
+                    "claim_received_delivery_failure_events",
                     {
                         "p_worker_id": worker_id,
-                        "p_limit": limit
+                        "p_limit": limit,
+                        "p_lease_timeout": lease_str,
                     }
                 ).execute()
                 if res.data is not None:
@@ -48,14 +51,39 @@ class FailoverRepository:
                                 m["processing_status"] = "queued"
                                 m["claimed_by"] = worker_id
                                 m["claimed_at"] = row.get("claimed_at")
+                                m["lease_until"] = row.get("lease_until")
                     return res.data
             except Exception as e:
-                logger.warning(f"Could not execute claim_pending_delivery_failure_events RPC: {e}")
+                try:
+                    res = self.supabase._client.rpc(
+                        "claim_pending_delivery_failure_events",
+                        {
+                            "p_worker_id": worker_id,
+                            "p_limit": limit,
+                            "p_lease_timeout": lease_str,
+                        }
+                    ).execute()
+                    if res.data is not None:
+                        return res.data
+                except Exception:
+                    logger.warning(f"Could not execute claim_received_delivery_failure_events RPC: {e}")
 
         # In-memory fallback for local development and testing
-        return self.supabase.claim_pending_delivery_failure_events(worker_id=worker_id, limit=limit)
+        return self.supabase.claim_pending_delivery_failure_events(
+            worker_id=worker_id,
+            limit=limit,
+            lease_seconds=lease_seconds,
+        )
 
     claim_received_delivery_failure_events = claim_pending_delivery_failure_events
+
+    def release_claimed_event(self, event_id: str, worker_id: str) -> bool:
+        """Gracefully release a claimed event back to 'received' status on worker shutdown."""
+        return self.supabase.release_claimed_delivery_failure_event(
+            event_id=event_id,
+            worker_id=worker_id,
+        )
+
 
     def mark_event_processed(
         self,
@@ -194,4 +222,5 @@ class FailoverRepository:
 
 failure_event_repository = FailoverRepository()
 failover_repository = failure_event_repository
+failover_repo = failure_event_repository
 repository = failure_event_repository

@@ -5,6 +5,7 @@ Automates 1-click DNS record insertion (SPF, DKIM CNAME, DMARC TXT) into Cloudfl
 and GoDaddy zones with pre-flight conflict resolution and snapshot rollback capability.
 """
 
+import re
 from typing import Dict, Any, List, Optional
 import httpx
 import logging
@@ -129,7 +130,7 @@ class DNSAutoFixerService:
     ) -> Dict[str, Any]:
         """
         Execute 1-click DNS record insertion or update via Cloudflare/GoDaddy REST API.
-        Enforces pre-flight conflict resolution and snapshot logging.
+        Enforces strict fail-closed policy: failures never report status='applied' or applied=True.
         """
         clean_provider = provider_name.lower()
         clean_domain = domain_name.strip().lower()
@@ -141,28 +142,85 @@ class DNSAutoFixerService:
             "conflict_checked": True
         }
 
-        # Cloudflare API call if token configured in settings
-        if clean_provider == "cloudflare" and settings.CLOUDFLARE_API_TOKEN:
-            try:
-                creds = self.get_credentials(user_id).get("cloudflare", {})
-                zone_id = creds.get("zone_id") or creds.get("secret_or_zone")
-                if zone_id:
-                    async with httpx.AsyncClient(timeout=8.0) as client:
-                        res = await client.post(
-                            f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
-                            headers={"Authorization": f"Bearer {settings.CLOUDFLARE_API_TOKEN}"},
-                            json={
-                                "type": record_type,
-                                "name": host,
-                                "content": record_value,
-                                "ttl": ttl,
-                                "proxied": False
-                            }
-                        )
-                        if res.status_code in [200, 201]:
-                            logger.info(f"Cloudflare DNS record created successfully for {host}")
-            except Exception as e:
-                logger.error(f"Cloudflare API error: {e}")
+        applied = False
+        status = "failed"
+        error_msg: Optional[str] = None
+        is_production = settings.ENVIRONMENT.lower() in ("production", "prod")
+
+        # 1. Cloudflare Provider Execution
+        if clean_provider == "cloudflare":
+            if settings.CLOUDFLARE_API_TOKEN:
+                try:
+                    creds = self.get_credentials(user_id).get("cloudflare", {})
+                    zone_id = creds.get("zone_id") or creds.get("secret_or_zone")
+                    if not zone_id:
+                        applied = False
+                        status = "failed"
+                        error_msg = "Cloudflare Zone ID must be configured in credentials."
+                    else:
+                        async with httpx.AsyncClient(timeout=8.0) as client:
+                            res = await client.post(
+                                f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
+                                headers={"Authorization": f"Bearer {settings.CLOUDFLARE_API_TOKEN}"},
+                                json={
+                                    "type": record_type,
+                                    "name": host,
+                                    "content": record_value,
+                                    "ttl": ttl,
+                                    "proxied": False
+                                }
+                            )
+                            if res.status_code in [200, 201]:
+                                logger.info(f"Cloudflare DNS record created successfully for {host}")
+                                applied = True
+                                status = "applied"
+                            else:
+                                safe_res = re.sub(
+                                    r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+",
+                                    r"\1=[REDACTED]",
+                                    res.text,
+                                    flags=re.IGNORECASE
+                                )
+                                error_msg = f"Cloudflare API rejected record creation (HTTP {res.status_code}): {safe_res[:200]}"
+                                logger.error(error_msg)
+                                applied = False
+                                status = "failed"
+                except Exception as e:
+                    safe_err = re.sub(
+                        r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+",
+                        r"\1=[REDACTED]",
+                        str(e),
+                        flags=re.IGNORECASE
+                    )
+                    error_msg = f"Cloudflare API communication error: {safe_err[:200]}"
+                    logger.error(error_msg)
+                    applied = False
+                    status = "failed"
+            elif not is_production:
+                # Local development / automated testing simulation without live token
+                applied = True
+                status = "applied"
+                logger.info(f"Simulated Cloudflare DNS record creation for {host} (dev/test mode)")
+            else:
+                applied = False
+                status = "failed"
+                error_msg = "Cloudflare API Token is not configured in server environment."
+                logger.error(error_msg)
+
+        elif clean_provider == "godaddy":
+            if not is_production:
+                applied = True
+                status = "applied"
+                logger.info(f"Simulated GoDaddy DNS record creation for {host} (dev/test mode)")
+            else:
+                applied = False
+                status = "failed"
+                error_msg = "GoDaddy API integration is not configured in server environment."
+                logger.error(error_msg)
+        else:
+            applied = False
+            status = "failed"
+            error_msg = f"Unsupported DNS provider: {clean_provider}"
 
         fix_entry = {
             "id": f"fix_{int(datetime.utcnow().timestamp())}",
@@ -171,20 +229,26 @@ class DNSAutoFixerService:
             "record_type": record_type,
             "host": host,
             "record_value": record_value,
-            "status": "applied",
+            "status": status,
             "snapshot_before": snapshot_before,
             "timestamp": "Just now"
         }
+        if error_msg:
+            fix_entry["error"] = error_msg
 
         if user_id not in _mock_auto_fix_logs:
             _mock_auto_fix_logs[user_id] = []
         _mock_auto_fix_logs[user_id].insert(0, fix_entry)
 
-        return {
-            "applied": True,
+        result_payload = {
+            "applied": applied,
             "provider": clean_provider,
             "fix_entry": fix_entry
         }
+        if error_msg:
+            result_payload["error"] = error_msg
+
+        return result_payload
 
     def rollback_dns_fix(self, user_id: str, fix_id: str) -> Dict[str, Any]:
         """Rollback applied DNS change using snapshot log."""
@@ -202,8 +266,9 @@ class DNSAutoFixerService:
         }
 
     def get_logs(self, user_id: str) -> List[Dict[str, Any]]:
-        """Fetch auto-fix execution logs."""
-        return _mock_auto_fix_logs.get(user_id, _mock_auto_fix_logs["demo-user-123"])
+        """Fetch auto-fix execution logs scoped strictly to the tenant."""
+        return _mock_auto_fix_logs.get(user_id, [])
 
 
 dns_auto_fixer_service = DNSAutoFixerService()
+dns_auto_fixer = dns_auto_fixer_service

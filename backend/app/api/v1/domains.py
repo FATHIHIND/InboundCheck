@@ -8,11 +8,13 @@ and triggering on-demand DNS deliverability re-audits with authenticated tenant 
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
 import logging
 
 from app.core.security import get_current_user_id
+from app.core.rate_limiter import domain_re_audit_limiter, user_manual_audit_limiter
 from app.core.tier_guards import verify_active_subscription_or_trial, TIER_DOMAIN_LIMITS
-from app.services.supabase_client import supabase_service
+from app.services.supabase_client import supabase_service, DatabaseUnavailableError
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.dns.scorer import DeliverabilityScorer
 from app.schemas.dns import DNSAuditResponse
@@ -41,6 +43,8 @@ async def list_user_domains(
     try:
         domains = supabase_service.get_user_domains(user_id=user_id, limit=limit, offset=offset)
         return domains
+    except DatabaseUnavailableError:
+        raise
     except Exception as e:
         logger.error(f"Error listing domains for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve monitored domains")
@@ -131,10 +135,33 @@ async def re_audit_domain(
 ):
     """
     Trigger on-demand live DNS re-audit for a specific monitored domain.
+    Verifies that the target domain_id belongs to the authenticated user.
     Updates the health score, status pill badges, and appends a new audit log.
     """
+    clean_domain = domain_name.strip().lower()
+
+    # Tenant isolation validation: verify domain ownership before auditing
+    existing_domains = supabase_service.get_user_domains(user_id=user_id, limit=100)
+    owned_domain = next((d for d in existing_domains if str(d.get("id")) == str(domain_id)), None)
+    if not owned_domain:
+        logger.warning(
+            "Tenant isolation violation: unauthorized re-audit attempt on domain",
+            extra={
+                "event_type": "security_unauthorized_access",
+                "user_id": user_id,
+                "resource_type": "monitored_domain",
+                "resource_id": domain_id,
+                "reason": "domain_ownership_mismatch",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        raise HTTPException(status_code=404, detail="Monitored domain not found")
+
+    # Enforce manual audit quotas: 10 per user / min, 2 per domain / min
+    user_manual_audit_limiter.check(user_id)
+    domain_re_audit_limiter.check(f"{user_id}:{domain_id}")
+
     try:
-        clean_domain = domain_name.strip().lower()
         summary, raw_responses, exec_ms = await diagnostic_engine.audit_domain(domain=clean_domain)
 
         health_score, overall_status, breakdown, issues, fixes = DeliverabilityScorer.calculate_health_score(
@@ -171,6 +198,8 @@ async def re_audit_domain(
             "domain": updated_domain,
             "audit": audit_payload
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error re-auditing domain {domain_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to re-audit monitored domain")

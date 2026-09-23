@@ -47,6 +47,10 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
     if not service_key or check_is_placeholder(service_key):
         issues.append("SUPABASE_SERVICE_ROLE_KEY is unconfigured or placeholder.")
 
+    if is_prod:
+        if not settings.SUPABASE_JWT_SECRET or check_is_placeholder(settings.SUPABASE_JWT_SECRET):
+            issues.append("SUPABASE_JWT_SECRET is required in production for cryptographic JWT verification.")
+
     # 2. Stripe Live Monetization Checks & Mode Logging
     stripe_key = settings.STRIPE_SECRET_KEY
     if stripe_key and not check_is_placeholder(stripe_key):

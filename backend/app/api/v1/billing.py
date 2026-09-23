@@ -252,6 +252,24 @@ async def stripe_webhook_handler(request: Request):
 
     sig_header = request.headers.get("Stripe-Signature", "")
     if not stripe_service.verify_webhook_signature(payload_bytes, sig_header):
+        try:
+            from app.services.alerting.ops_alert_service import ops_alert_service
+            import asyncio
+            asyncio.create_task(
+                ops_alert_service.dispatch_incident(
+                    fingerprint="ALERT-STRIPE-WEBHOOK-SIG",
+                    severity="P1",
+                    summary="Stripe Webhook Signature Verification Failed",
+                    details={
+                        "path": "/api/v1/billing/webhook",
+                        "reason": "invalid_signature_or_expired_timestamp",
+                        "sig_header_present": bool(sig_header),
+                        "payload_size": len(payload_bytes),
+                    },
+                )
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature or expired timestamp")
 
     try:
@@ -262,4 +280,21 @@ async def stripe_webhook_handler(request: Request):
         raise
     except Exception as e:
         logger.error(f"Webhook processing error: {e}")
+        try:
+            from app.services.alerting.ops_alert_service import ops_alert_service
+            import asyncio
+            asyncio.create_task(
+                ops_alert_service.dispatch_incident(
+                    fingerprint="ALERT-STRIPE-WEBHOOK-PROCESS",
+                    severity="P1",
+                    summary="Stripe Webhook Payload Processing Failed",
+                    details={
+                        "path": "/api/v1/billing/webhook",
+                        "error_type": type(e).__name__,
+                        "error_msg": str(e)[:200],
+                    },
+                )
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail="Failed to parse Stripe webhook payload")

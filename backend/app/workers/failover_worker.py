@@ -192,20 +192,23 @@ process_failover_event = process_delivery_failure_event
 async def run_failover_worker(
     stop_event: Optional[asyncio.Event] = None,
     poll_idle_seconds: int = 15,
+    lease_seconds: int = 900,
 ) -> None:
     """
     Continuous worker loop polling and claiming delivery failure events atomically.
     Transitions events: received -> queued -> processed / failed / ignored.
+    Recovers stale leases if prior workers crashed, and gracefully releases in-flight events on SIGTERM.
     """
     worker_id = str(uuid.uuid4())
-    logger.info(f"Failover worker started [Worker ID: {worker_id}] (poll interval: {poll_idle_seconds}s)")
+    logger.info(f"Failover worker started [Worker ID: {worker_id}] (poll interval: {poll_idle_seconds}s, lease: {lease_seconds}s)")
 
     while stop_event is None or not stop_event.is_set():
         try:
-            # Atomically claim received delivery failure events (FOR UPDATE SKIP LOCKED)
+            # Atomically claim received delivery failure events (FOR UPDATE SKIP LOCKED with lease expiry)
             events = repository.claim_received_delivery_failure_events(
                 worker_id=worker_id,
                 limit=20,
+                lease_seconds=lease_seconds,
             )
 
             if not events:
@@ -217,13 +220,34 @@ async def run_failover_worker(
                 continue
 
             logger.info(f"Worker {worker_id} claimed {len(events)} delivery failure event(s). Processing...")
-            for event in events:
+            for idx, event in enumerate(events):
                 if stop_event and stop_event.is_set():
+                    # Graceful shutdown: release remaining unprocessed events back to 'received'
+                    unprocessed = events[idx:]
+                    for remaining_event in unprocessed:
+                        evt_id = remaining_event.get("id")
+                        if evt_id:
+                            repository.release_claimed_event(str(evt_id), worker_id)
+                    logger.info(f"Worker {worker_id} gracefully released {len(unprocessed)} unprocessed event(s) on stop signal.")
                     break
                 await process_delivery_failure_event(event, worker_id)
 
         except Exception as exc:
             logger.error(f"Error in failover worker loop: {exc}", exc_info=True)
+            # Dispatch Ops Alert (OPS-02)
+            try:
+                from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+                await ops_alert_service.dispatch_incident(
+                    OpsIncident(
+                        alert_id="ALERT-WORKER-FAILOVER",
+                        severity="P1",
+                        summary=f"Failover worker loop crashed: {exc}",
+                        details={"worker_id": worker_id, "error": str(exc)[:200]},
+                    )
+                )
+            except Exception as alert_err:
+                logger.warning(f"Failed to dispatch failover worker ops alert: {alert_err}")
             await asyncio.sleep(5)
 
     logger.info(f"Failover worker {worker_id} stopped cleanly.")
+

@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status, Depends, B
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
+from datetime import datetime, timezone
 import logging
 import json
 
@@ -225,42 +226,145 @@ async def shopify_billing_callback(
         except Exception:
             clean_shop = shop
 
+    if not clean_shop:
+        logger.warning(
+            "Shopify billing callback rejected: missing shop parameter",
+            extra={
+                "event_type": "security_billing_callback_rejected",
+                "reason": "missing_shop",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        raise HTTPException(status_code=400, detail="Missing required shop parameter")
+
     resolved_user_id = user_id
-    if not resolved_user_id and clean_shop:
+    if not resolved_user_id:
         # Resolve user by store domain in persistent/in-memory store registry
         for uid, stores in getattr(supabase_service, "_in_memory_stores", {}).items():
             if any(s.get("shop_domain") == clean_shop for s in stores):
                 resolved_user_id = uid
                 break
 
-    # If store has encrypted token, verify charge node with Shopify Admin API
-    if clean_shop and resolved_user_id:
+    if not resolved_user_id:
+        logger.warning(
+            "Shopify billing callback rejected: unknown user for shop",
+            extra={
+                "event_type": "security_billing_callback_rejected",
+                "shop": clean_shop,
+                "reason": "unresolved_user",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        raise HTTPException(status_code=404, detail="Store owner not found")
+
+    # Verify store ownership server-side
+    stores = supabase_service.get_user_stores(resolved_user_id)
+    store = next((s for s in stores if s.get("shop_domain") == clean_shop), None)
+    if not store:
+        logger.warning(
+            "Shopify billing callback rejected: store does not belong to user",
+            extra={
+                "event_type": "security_billing_callback_rejected",
+                "shop": clean_shop,
+                "user_id": resolved_user_id,
+                "reason": "store_ownership_mismatch",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        raise HTTPException(status_code=403, detail="Store domain not associated with tenant")
+
+    # Idempotency check: if merchant profile is already active with this exact charge_id
+    existing_profile = supabase_service.get_user_profile(resolved_user_id)
+    if existing_profile and existing_profile.get("shopify_charge_id") == charge_id and existing_profile.get("subscription_status") == "active":
+        current_tier = existing_profile.get("subscription_tier") or "growth"
+        logger.info(
+            "Shopify billing callback idempotent hit: charge already activated",
+            extra={"shop": clean_shop, "charge_id": charge_id, "user_id": resolved_user_id}
+        )
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/dashboard/billing?checkout=success&billing=success&plan={current_tier}",
+            status_code=status.HTTP_302_FOUND
+        )
+
+    # Gate 2: Access token must be present on store record for server-side verification
+    encrypted_token = store.get("access_token_encrypted")
+    if not encrypted_token:
+        logger.warning(
+            "Shopify billing callback rejected: store has no access token for verification",
+            extra={"shop": clean_shop, "user_id": resolved_user_id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Store is not properly connected for billing verification"
+        )
+
+    # Gate 3: Decrypt token and query Shopify Admin API (Fail closed on any exception)
+    try:
         from app.services.shopify.shopify_billing_service import shopify_billing_service
-        stores = supabase_service.get_user_stores(resolved_user_id)
-        store = next((s for s in stores if s.get("shop_domain") == clean_shop), None)
-        if store and store.get("access_token_encrypted"):
-            try:
-                token = shopify_service.decrypt_token(store["access_token_encrypted"])
-                await shopify_billing_service.verify_and_activate_subscription(
-                    shop_domain=clean_shop,
-                    access_token=token,
-                    charge_id=charge_id
-                )
-            except Exception as err:
-                logger.warning(f"Could not verify subscription node with Shopify: {err}")
+        token = shopify_service.decrypt_token(encrypted_token)
+        sub_node = await shopify_billing_service.verify_and_activate_subscription(
+            shop_domain=clean_shop,
+            access_token=token,
+            charge_id=charge_id
+        )
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(
+            f"Shopify subscription verification failed: {err}",
+            extra={"shop": clean_shop, "charge_id": charge_id, "user_id": resolved_user_id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Shopify billing verification failed"
+        )
 
-    # Activate subscription tier in Supabase profile
-    tier = (plan_tier or "growth").lower()
-    if resolved_user_id:
-        supabase_service.update_user_profile(resolved_user_id, {
-            "subscription_tier": tier,
-            "subscription_status": "active",
-            "billing_provider": "shopify",
-            "shopify_charge_id": charge_id,
-        })
+    # Gate 4: Validate subscription node and status
+    if not sub_node or not isinstance(sub_node, dict):
+        logger.warning("Shopify billing callback rejected: missing subscription node")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Shopify billing verification failed: missing subscription data"
+        )
 
-    redirect_target = f"{settings.FRONTEND_URL}/dashboard/billing?checkout=success&billing=success&plan={tier}"
+    sub_status = (sub_node.get("status") or "").upper()
+    if sub_status not in ["ACTIVE", "ACCEPTED"]:
+        logger.warning(
+            f"Shopify billing callback rejected: subscription is not active (status={sub_status})",
+            extra={"shop": clean_shop, "charge_id": charge_id, "status": sub_status}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Shopify subscription is not active or was declined"
+        )
+
+    # Gate 5: Plan Tier Binding (derive verified tier from subscription node name)
+    sub_name = sub_node.get("name", "")
+    verified_tier = None
+    for candidate in ["enterprise", "agency", "growth", "starter"]:
+        if candidate in sub_name.lower():
+            verified_tier = candidate
+            break
+
+    if not verified_tier:
+        # Fallback to sanitized requested tier if node name does not embed tier
+        clean_requested = (plan_tier or "growth").lower().strip()
+        if clean_requested in ["starter", "growth", "agency", "enterprise"]:
+            verified_tier = clean_requested
+        else:
+            verified_tier = "growth"
+
+    # Gate 6: Persist subscription activation in Supabase profile
+    supabase_service.update_user_profile(resolved_user_id, {
+        "subscription_tier": verified_tier,
+        "subscription_status": "active",
+        "billing_provider": "shopify",
+        "shopify_charge_id": charge_id,
+    })
+
+    redirect_target = f"{settings.FRONTEND_URL}/dashboard/billing?checkout=success&billing=success&plan={verified_tier}"
     return RedirectResponse(url=redirect_target, status_code=status.HTTP_302_FOUND)
+
 
 
 @router.post("/sender-alignment")
@@ -349,6 +453,19 @@ async def shopify_orders_webhook(request: Request):
 
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
+        # Ops Alert (OPS-02)
+        try:
+            from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+            await ops_alert_service.dispatch_incident(
+                OpsIncident(
+                    alert_id="ALERT-SHOPIFY-WEBHOOK",
+                    severity="P1",
+                    summary="Shopify orders webhook HMAC signature verification failed",
+                    details={"topic": "orders/create", "reason": "invalid_hmac_signature"},
+                )
+            )
+        except Exception as alert_err:
+            logger.warning(f"Failed to dispatch Shopify webhook ops alert: {alert_err}")
         raise HTTPException(status_code=401, detail="Invalid Shopify HMAC-SHA256 signature")
 
     webhook_id = request.headers.get("X-Shopify-Webhook-Id")

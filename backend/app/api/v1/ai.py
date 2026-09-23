@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any, List
 import logging
 
 from app.core.security import get_current_user_id
+from app.core.rate_limiter import rate_limit_ai_tier
 from app.services.ai.content_optimizer import ai_content_service, DEFAULT_SAMPLE_TEMPLATES
 
 logger = logging.getLogger("AIRoutes")
@@ -48,7 +49,7 @@ async def get_sample_templates(user_id: str = Depends(get_current_user_id)):
 @router.post("/audit-template")
 async def analyze_email_template(
     payload: TemplateAnalyzeRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(rate_limit_ai_tier)
 ):
     """
     Audit template content for spam trigger density, formatting anomalies, and risk score.
@@ -77,7 +78,7 @@ async def analyze_email_template(
 @router.post("/generate-variants")
 async def generate_polymorphic_variants(
     payload: PolymorphicGenerateRequest,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(rate_limit_ai_tier)
 ):
     """
     Generate 3 deliverability-optimized polymorphic variations of the email copy.

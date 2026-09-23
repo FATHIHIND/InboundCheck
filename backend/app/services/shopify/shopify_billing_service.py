@@ -184,9 +184,18 @@ class ShopifyBillingService:
                 raise RuntimeError(f"Failed to query Shopify subscription: HTTP {res.status_code}")
 
             data = res.json()
+            if "errors" in data and data["errors"]:
+                logger.error(f"Shopify subscription query GraphQL error: {data['errors']}")
+                raise RuntimeError("GraphQL error returned from Shopify subscription query")
+
             node = data.get("data", {}).get("node")
             if not node:
                 raise RuntimeError(f"Subscription {gid} not found in Shopify")
+
+            # Validate that status is in approved active states
+            status_val = (node.get("status") or "").upper()
+            if status_val not in ["ACTIVE", "ACCEPTED"]:
+                raise RuntimeError(f"Shopify subscription {gid} is not active (status: {status_val})")
 
             return node
         except httpx.RequestError as req_err:

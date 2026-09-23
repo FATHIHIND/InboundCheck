@@ -6,6 +6,7 @@ profiles, and store integration metadata.
 """
 
 import hashlib
+import random
 from typing import List, Dict, Any, Optional, Union
 import logging
 import uuid
@@ -16,6 +17,11 @@ from supabase import create_client, Client
 from app.core.config import settings
 
 logger = logging.getLogger("SupabaseService")
+
+
+class DatabaseUnavailableError(Exception):
+    """Raised when the database is unavailable in production environments."""
+    pass
 
 
 class SupabaseService:
@@ -34,6 +40,7 @@ class SupabaseService:
         self._in_memory_delivery_failure_events: Dict[str, Dict[str, Any]] = {}
         self._in_memory_spf_merge_plans: Dict[str, Dict[str, Any]] = {}
         self._in_memory_asset_audits: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_rate_limits: Dict[str, int] = {}
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -45,24 +52,36 @@ class SupabaseService:
         else:
             logger.info("Supabase credentials not configured in env. Running with in-memory persistence.")
 
+    def _allow_in_memory_fallback(self) -> bool:
+        """Allow in-memory fallback strictly in local development or automated test environments."""
+        env = (getattr(settings, "ENVIRONMENT", "development") or "development").lower()
+        return env in ["development", "test", "local"]
+
+    def check_db_health(self) -> bool:
+        """Active database probe for readiness checks."""
+        if not self._client:
+            return self._allow_in_memory_fallback()
+        try:
+            res = self._client.table("profiles").select("id").limit(1).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Database health probe failed: {e}")
+            return False
+
     @property
     def is_connected(self) -> bool:
         return self._client is not None
 
     @property
     def is_configured(self) -> bool:
-        """Check if Supabase client is connected or running in operational in-memory fallback."""
+        """Check if Supabase client is connected or running in permitted in-memory fallback."""
         if self._client is not None:
             return True
-        # If credentials provided in settings or env, considered configured
-        if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
-            return True
-        # In development / testing, running with in-memory persistence is healthy
-        return True
+        return self._allow_in_memory_fallback()
 
     def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Fetch public.profiles record for user."""
-        if user_id in self._in_memory_profiles:
+        if self._allow_in_memory_fallback() and user_id in self._in_memory_profiles:
             return self._in_memory_profiles[user_id]
 
         if self._client:
@@ -76,6 +95,11 @@ class SupabaseService:
                     return profile
             except Exception as e:
                 logger.error(f"Failed to query user profile {user_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database query failed for user profile {user_id}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
 
         # Local development / testing default profile with active 3-day trial
         default_profile = {
@@ -94,6 +118,9 @@ class SupabaseService:
 
     def update_user_profile(self, user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """Update public.profiles record for user with fallback persistence and self-healing upsert."""
+        if not self._allow_in_memory_fallback() and not self._client:
+            raise DatabaseUnavailableError("Database client is not connected in production")
+
         profile = self.get_user_profile(user_id) or {"id": user_id}
         profile.update(updates)
 
@@ -103,7 +130,8 @@ class SupabaseService:
         elif "tier" in updates and "subscription_tier" not in updates:
             profile["subscription_tier"] = updates["tier"]
 
-        self._in_memory_profiles[user_id] = profile
+        if self._allow_in_memory_fallback():
+            self._in_memory_profiles[user_id] = profile
 
         if self._client:
             try:
@@ -123,12 +151,14 @@ class SupabaseService:
                     self._client.table("profiles").upsert(upsert_payload).execute()
             except Exception as e:
                 logger.error(f"Failed to update user profile {user_id} in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database update failed for user profile {user_id}: {e}")
 
         return profile
 
     def get_user_domain_count(self, user_id: str) -> int:
         """Get count of active monitored domains for user."""
-        if user_id in self._in_memory_domains:
+        if self._allow_in_memory_fallback() and user_id in self._in_memory_domains:
             return len(self._in_memory_domains[user_id])
 
         if self._client:
@@ -139,11 +169,17 @@ class SupabaseService:
                 return len(res.data or [])
             except Exception as e:
                 logger.error(f"Failed to count domains for {user_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database count failed for domains of {user_id}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
+
         return len(self._in_memory_domains.get(user_id, []))
 
     def get_user_domains(self, user_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
         """Fetch all monitored domains for a user with pagination."""
-        if user_id in self._in_memory_domains and len(self._in_memory_domains[user_id]) > 0:
+        if self._allow_in_memory_fallback() and user_id in self._in_memory_domains and len(self._in_memory_domains[user_id]) > 0:
             return self._in_memory_domains[user_id][offset:offset + limit]
 
         if self._client:
@@ -159,6 +195,11 @@ class SupabaseService:
                 return response.data or []
             except Exception as e:
                 logger.error(f"Failed to query user domains from Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database query failed for monitored domains: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
 
         # Fallback in-memory
         all_domains = self._in_memory_domains.get(user_id, [])
@@ -192,6 +233,10 @@ class SupabaseService:
                 "dmarc_status": audit_result.get("summary", {}).get("dmarc", {}).get("status", "missing"),
                 "mx_status": audit_result.get("summary", {}).get("mx", {}).get("status", "missing"),
                 "bimi_status": audit_result.get("summary", {}).get("bimi", {}).get("status", "missing"),
+                "audit_failure_count": 0,
+                "last_audit_error": None,
+                "next_audit_retry_at": None,
+                "audit_lease_until": None,
             })
         else:
             record.update({
@@ -215,6 +260,11 @@ class SupabaseService:
                     return response.data[0]
             except Exception as e:
                 logger.error(f"Failed to upsert domain in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database upsert failed for domain {domain_clean}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database is unavailable in production; in-memory fallback rejected")
 
         # Fallback in-memory
         if user_id not in self._in_memory_domains:
@@ -238,11 +288,17 @@ class SupabaseService:
                 return True
             except Exception as e:
                 logger.error(f"Failed to delete domain in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database delete failed for domain {domain_id}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database is unavailable in production; in-memory fallback rejected")
 
         if user_id in self._in_memory_domains:
             self._in_memory_domains[user_id] = [d for d in self._in_memory_domains[user_id] if d["id"] != domain_id]
             return True
         return False
+
 
     def save_audit_log(
         self,
@@ -371,6 +427,11 @@ class SupabaseService:
                     return response.data[0]
             except Exception as e:
                 logger.warning(f"Failed to persist DNS audit log to Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Failed to persist DNS audit log in production: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database is unavailable in production; in-memory fallback rejected")
 
         # In-memory persistence
         log_key = domain_id or clean_domain or "default"
@@ -423,6 +484,11 @@ class SupabaseService:
                         return res.data[0]
                 except Exception as e:
                     logger.warning(f"Could not persist store to table '{table_name}': {e}")
+                    if not self._allow_in_memory_fallback():
+                        raise DatabaseUnavailableError(f"Failed to persist store to {table_name} in production: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database is unavailable in production; in-memory fallback rejected")
 
         # In-memory persistence
         if user_id not in self._in_memory_stores:
@@ -453,7 +519,14 @@ class SupabaseService:
                         return res.data
                 except Exception as e:
                     logger.warning(f"Could not fetch stores from '{table_name}': {e}")
+                    if not self._allow_in_memory_fallback():
+                        raise DatabaseUnavailableError(f"Failed to fetch stores in production: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
+
         return self._in_memory_stores.get(user_id, [])
+
 
     def handle_customer_data_request(
         self,
@@ -736,6 +809,16 @@ class SupabaseService:
                     except Exception:
                         pass
 
+                # Check retry backoff criteria (must not be in exponential backoff window)
+                next_retry = domain.get("next_audit_retry_at")
+                if next_retry:
+                    try:
+                        next_retry_dt = datetime.fromisoformat(next_retry.replace("Z", "+00:00"))
+                        if next_retry_dt > now:
+                            continue
+                    except Exception:
+                        pass
+
                 if is_due and not is_leased:
                     lease_expiry = datetime.fromtimestamp(now.timestamp() + lease_seconds, tz=timezone.utc).isoformat()
                     domain["audit_lease_owner"] = worker_id
@@ -778,6 +861,7 @@ class SupabaseService:
                     if domain.get("audit_lease_owner") == worker_id:
                         domain["audit_lease_owner"] = None
                         domain["audit_lease_until"] = None
+                        domain["next_audit_retry_at"] = None
                         domain["last_audited_at"] = now_iso
                         domain["audit_failure_count"] = 0
                         domain["last_audit_error"] = None
@@ -785,11 +869,20 @@ class SupabaseService:
                     return False
         return False
 
-    def fail_domain_audit(self, domain_id: str, worker_id: str, error: str) -> bool:
+    def fail_domain_audit(
+        self,
+        domain_id: str,
+        worker_id: str,
+        error: str,
+        base_delay_seconds: int = 120,
+        max_delay_seconds: int = 86400,
+    ) -> bool:
         """
-        Record domain audit failure, increment failure count, and release the lease.
+        Record domain audit failure with bounded exponential backoff and randomized jitter,
+        releasing the active lease and setting next_audit_retry_at.
         Requires that the calling worker owns the active lease.
         """
+        now = datetime.now(timezone.utc)
         if self._client:
             try:
                 res = self._client.rpc(
@@ -798,6 +891,8 @@ class SupabaseService:
                         "p_domain_id": domain_id,
                         "p_worker_id": worker_id,
                         "p_error": error[:500] if error else "Audit execution error",
+                        "p_base_delay_seconds": base_delay_seconds,
+                        "p_max_delay_seconds": max_delay_seconds,
                     },
                 ).execute()
                 if res.data is True:
@@ -810,9 +905,16 @@ class SupabaseService:
             for domain in domains:
                 if domain.get("id") == domain_id:
                     if domain.get("audit_lease_owner") == worker_id:
+                        current_failures = domain.get("audit_failure_count", 0)
+                        backoff = min(float(max_delay_seconds), float(base_delay_seconds) * (2 ** min(current_failures, 10)))
+                        jitter = random.uniform(0.0, 0.25 * backoff)
+                        total_delay = min(max_delay_seconds, int(backoff + jitter))
+                        next_retry_iso = (now + timedelta(seconds=total_delay)).isoformat()
+
                         domain["audit_lease_owner"] = None
                         domain["audit_lease_until"] = None
-                        domain["audit_failure_count"] = domain.get("audit_failure_count", 0) + 1
+                        domain["next_audit_retry_at"] = next_retry_iso
+                        domain["audit_failure_count"] = current_failures + 1
                         domain["last_audit_error"] = error[:500] if error else "Audit execution error"
                         return True
                     return False
@@ -959,29 +1061,104 @@ class SupabaseService:
         logs = self._in_memory_failover_logs.get(user_id, [])
         return logs[offset : offset + limit]
 
-    def claim_pending_delivery_failure_events(self, worker_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-        """Atomically claim received delivery failures for one Telegram worker."""
+    def claim_pending_delivery_failure_events(
+        self,
+        worker_id: str,
+        limit: int = 20,
+        lease_seconds: int = 900
+    ) -> List[Dict[str, Any]]:
+        """
+        Atomically claim received delivery failures for one Telegram worker with lease expiration and stale recovery.
+        Recovers events stuck in 'queued' if their lease has expired.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        lease_str = f"{lease_seconds} seconds"
+
         if self._client:
             try:
                 response = self._client.rpc(
-                    "claim_pending_delivery_failure_events",
-                    {"p_worker_id": worker_id, "p_limit": limit},
+                    "claim_received_delivery_failure_events",
+                    {
+                        "p_worker_id": worker_id,
+                        "p_limit": limit,
+                        "p_lease_timeout": lease_str,
+                    },
                 ).execute()
                 return response.data or []
             except Exception as exc:
-                logger.warning(f"Could not claim delivery failure events: {exc}")
+                try:
+                    response = self._client.rpc(
+                        "claim_pending_delivery_failure_events",
+                        {
+                            "p_worker_id": worker_id,
+                            "p_limit": limit,
+                            "p_lease_timeout": lease_str,
+                        },
+                    ).execute()
+                    return response.data or []
+                except Exception:
+                    logger.warning(f"Could not claim delivery failure events RPC: {exc}. Checking in-memory fallback.")
 
+        # In-memory lease claiming & stale recovery fallback
         claimed: List[Dict[str, Any]] = []
         for event in self._in_memory_delivery_failure_events.values():
-            if event.get("processing_status") == "received":
+            status = event.get("processing_status")
+            lease_until = event.get("lease_until")
+
+            is_stale = False
+            if status == "queued" and lease_until:
+                try:
+                    lease_dt = datetime.fromisoformat(str(lease_until).replace("Z", "+00:00"))
+                    if lease_dt <= now:
+                        is_stale = True
+                except Exception:
+                    is_stale = True
+            elif status == "queued" and not lease_until:
+                is_stale = True
+
+            if status == "received" or is_stale:
+                lease_expiry = datetime.fromtimestamp(now.timestamp() + lease_seconds, tz=timezone.utc).isoformat()
                 event["processing_status"] = "queued"
                 event["claimed_by"] = worker_id
+                event["claimed_at"] = now_iso
+                event["lease_until"] = lease_expiry
                 claimed.append(event)
                 if len(claimed) >= limit:
                     break
         return claimed
 
     claim_received_delivery_failure_events = claim_pending_delivery_failure_events
+
+    def release_claimed_delivery_failure_event(self, event_id: str, worker_id: str) -> bool:
+        """
+        Gracefully release a claimed delivery failure event back to 'received' status on worker shutdown.
+        Requires that the calling worker owns the active lease.
+        """
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "release_claimed_delivery_failure_event",
+                    {
+                        "p_event_id": event_id,
+                        "p_worker_id": worker_id,
+                    },
+                ).execute()
+                if res.data is True:
+                    return True
+            except Exception as e:
+                logger.warning(f"Could not execute release_claimed_delivery_failure_event RPC: {e}")
+
+        # In-memory fallback
+        for evt in self._in_memory_delivery_failure_events.values():
+            if str(evt.get("id")) == str(event_id) and evt.get("claimed_by") == worker_id:
+                if evt.get("processing_status") == "queued":
+                    evt["processing_status"] = "received"
+                    evt["claimed_by"] = None
+                    evt["claimed_at"] = None
+                    evt["lease_until"] = None
+                    return True
+        return False
 
     # =====================================================================
     # TRANSACTIONAL MESSAGE REGISTRY & DELIVERY FAILURE INGESTION (STEP 3)
@@ -1238,6 +1415,54 @@ class SupabaseService:
 
         self._in_memory_asset_audits[audit_id] = record
         return record
+
+    def consume_rate_limit(
+        self,
+        bucket_key: str,
+        max_requests: int,
+        window_seconds: int
+    ) -> Dict[str, Any]:
+        """
+        Atomically consume a rate limit token using PostgreSQL rate_limit_windows via RPC.
+        Falls back to in-memory fixed-window fallback for tests and local development.
+        """
+        now_ts = int(time.time())
+        window_start = (now_ts // window_seconds) * window_seconds
+        reset_seconds = max(1, (window_start + window_seconds) - now_ts)
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "consume_rate_limit",
+                    {
+                        "p_bucket_key": bucket_key,
+                        "p_max_requests": max_requests,
+                        "p_window_seconds": window_seconds,
+                    },
+                ).execute()
+                if res.data and isinstance(res.data, dict):
+                    return res.data
+            except Exception as e:
+                logger.warning(f"Could not execute consume_rate_limit RPC: {e}. Falling back to in-memory.")
+
+        # In-memory token counter fallback
+        cache_key = f"{bucket_key}:{window_start}"
+        current = self._in_memory_rate_limits.get(cache_key, 0) + 1
+        self._in_memory_rate_limits[cache_key] = current
+
+        # Prune expired in-memory buckets
+        cutoff = now_ts - (window_seconds * 2)
+        stale_keys = [k for k in list(self._in_memory_rate_limits.keys()) if int(k.split(":")[-1]) < cutoff]
+        for k in stale_keys:
+            self._in_memory_rate_limits.pop(k, None)
+
+        allowed = current <= max_requests
+        return {
+            "allowed": allowed,
+            "current_requests": current,
+            "remaining": max(0, max_requests - current),
+            "reset_seconds": reset_seconds,
+        }
 
 
 supabase_service = SupabaseService()
