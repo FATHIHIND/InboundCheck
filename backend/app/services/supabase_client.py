@@ -1078,25 +1078,27 @@ class SupabaseService:
         if self._client:
             try:
                 response = self._client.rpc(
-                    "claim_received_delivery_failure_events",
+                    "claim_pending_delivery_failure_events",
                     {
                         "p_worker_id": worker_id,
                         "p_limit": limit,
                         "p_lease_timeout": lease_str,
                     },
                 ).execute()
-                return response.data or []
+                if response.data is not None:
+                    return response.data
             except Exception as exc:
                 try:
                     response = self._client.rpc(
-                        "claim_pending_delivery_failure_events",
+                        "claim_received_delivery_failure_events",
                         {
                             "p_worker_id": worker_id,
                             "p_limit": limit,
                             "p_lease_timeout": lease_str,
                         },
                     ).execute()
-                    return response.data or []
+                    if response.data is not None:
+                        return response.data
                 except Exception:
                     logger.warning(f"Could not claim delivery failure events RPC: {exc}. Checking in-memory fallback.")
 

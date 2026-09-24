@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.services.alerting.ops_alert_service import ops_alert_service, OpsAlertService, OpsIncident
 from app.services.supabase_client import supabase_service, DatabaseUnavailableError
 from app.services.failover.failover_repository import failover_repo
-from app.workers.failover_worker import process_delivery_failure_event
+from app.workers.failover_worker import process_delivery_failure_event, run_failover_worker
 from app.services.dns.auto_fixer import dns_auto_fixer_service, dns_auto_fixer
 from tests.conftest import auth_headers, create_test_jwt
 
@@ -306,6 +306,316 @@ async def test_ops03_graceful_shutdown_releases_claimed_events():
 
         # Clean up
         supabase_service._in_memory_delivery_failure_events.clear()
+
+
+@pytest.mark.asyncio
+async def test_ops03_lease_claim_arguments():
+    """
+    Verify that claim_pending_delivery_failure_events correctly invokes
+    the claim RPC with p_worker_id, p_limit, and p_lease_timeout.
+    """
+    mock_client = MagicMock()
+    mock_rpc = MagicMock()
+    mock_client.rpc.return_value = mock_rpc
+    mock_rpc.execute.return_value = MagicMock(data=[
+        {
+            "id": "evt-claim-args-1",
+            "processing_status": "queued",
+            "claimed_by": "worker-claim-args",
+            "claimed_at": datetime.now(timezone.utc).isoformat(),
+            "lease_until": (datetime.now(timezone.utc) + timedelta(seconds=600)).isoformat(),
+        }
+    ])
+
+    with patch.object(failover_repo.supabase, "_client", mock_client):
+        claimed = failover_repo.claim_pending_delivery_failure_events(
+            worker_id="worker-claim-args",
+            limit=10,
+            lease_seconds=600,
+        )
+        assert len(claimed) == 1
+        assert claimed[0]["id"] == "evt-claim-args-1"
+
+        mock_client.rpc.assert_called_with(
+            "claim_pending_delivery_failure_events",
+            {
+                "p_worker_id": "worker-claim-args",
+                "p_limit": 10,
+                "p_lease_timeout": "600 seconds",
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_ops03_stale_queued_event_recovery():
+    """
+    Verify stale recovery: an event left queued with expired lease_until
+    is recovered and claimed by another worker.
+    """
+    event_id = "test-stale-recovery-301"
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+        # Stale event in queued status with lease in the past
+        past_lease = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+        failover_repo.supabase._in_memory_delivery_failure_events[event_id] = {
+            "id": event_id,
+            "order_id": "ORD-STALE-1",
+            "processing_status": "queued",
+            "claimed_by": "dead-worker",
+            "claimed_at": past_lease,
+            "lease_until": past_lease,
+        }
+
+        # New worker claims
+        recovered = failover_repo.claim_pending_delivery_failure_events(
+            worker_id="active-worker-301",
+            limit=5,
+            lease_seconds=900,
+        )
+        assert len(recovered) == 1
+        assert recovered[0]["id"] == event_id
+        assert recovered[0]["processing_status"] == "queued"
+        assert recovered[0]["claimed_by"] == "active-worker-301"
+
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+
+@pytest.mark.asyncio
+async def test_ops03_successful_event_processing():
+    """
+    Verify successful end-to-end processing of an eligible bounce event:
+    dispatch is called, incident log is created, and status transitions to processed.
+    """
+    worker_id = "worker-success-401"
+    user_id = "user-success-401"
+    event_id = "evt-success-401"
+    order_id = "ORD-SUCCESS-401"
+
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+        failover_repo.supabase._in_memory_failover_logs = {}
+
+        event = {
+            "id": event_id,
+            "user_id": user_id,
+            "order_id": order_id,
+            "esp_provider": "postmark",
+            "event_type": "bounce",
+            "event_payload": {"reason": "550 5.1.1 User unknown", "order_id": order_id},
+            "processing_status": "queued",
+            "claimed_by": worker_id,
+        }
+        failover_repo.supabase._in_memory_delivery_failure_events[event_id] = dict(event)
+
+        with patch("app.services.failover.omnichannel_service.telegram_alert_service.send_telegram_alert", new_callable=AsyncMock) as mock_send:
+            mock_send.return_value = {"success": True, "data": {"result": {"message_id": 888777}}}
+
+            result = await process_delivery_failure_event(event, worker_id)
+            assert result is True
+            mock_send.assert_called_once()
+
+            # Verify event marked processed
+            stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
+            assert stored["processing_status"] == "processed"
+
+            # Verify failover incident log persisted
+            logs = failover_repo.supabase.get_failover_logs(user_id)
+            assert len(logs) == 1
+            assert logs[0]["delivery_failure_event_id"] == event_id
+            assert logs[0]["status"] == "delivered"
+
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+        failover_repo.supabase._in_memory_failover_logs = {}
+
+
+@pytest.mark.asyncio
+async def test_ops03_processing_exception_recovery():
+    """
+    Verify processing exception recovery:
+    When an unhandled exception occurs during event processing,
+    the event is released back to 'received' and the exception is propagated.
+    """
+    worker_id = "worker-exc-501"
+    user_id = "user-exc-501"
+    event_id = "evt-exc-501"
+
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+        event = {
+            "id": event_id,
+            "user_id": user_id,
+            "order_id": "ORD-EXC-501",
+            "esp_provider": "sendgrid",
+            "event_type": "bounce",
+            "event_payload": {"reason": "550 Malformed response"},
+            "processing_status": "queued",
+            "claimed_by": worker_id,
+            "lease_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
+        }
+        failover_repo.supabase._in_memory_delivery_failure_events[event_id] = dict(event)
+
+        with patch("app.services.failover.omnichannel_service.telegram_alert_service.dispatch_alert", side_effect=RuntimeError("Transient dispatch network crash")):
+            with pytest.raises(RuntimeError, match="Transient dispatch network crash"):
+                await process_delivery_failure_event(event, worker_id)
+
+            # CRITICAL CHECK: Event must be released back to 'received' with lease cleared
+            stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
+            assert stored["processing_status"] == "received", "Event must be returned to received on processing exception"
+            assert stored["claimed_by"] is None
+            assert stored["lease_until"] is None
+
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+
+@pytest.mark.asyncio
+async def test_ops03_graceful_sigterm_release_in_worker_loop():
+    """
+    Verify that when run_failover_worker encounters a stop_event or SIGTERM/SIGINT,
+    all unhandled claimed in-flight events are gracefully released back to 'received'.
+    """
+    worker_stop_event = asyncio.Event()
+
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+        for i in (1, 2):
+            evt_id = f"evt-stop-{i}"
+            failover_repo.supabase._in_memory_delivery_failure_events[evt_id] = {
+                "id": evt_id,
+                "order_id": f"ORD-STOP-{i}",
+                "user_id": "user-stop-test",
+                "esp_provider": "postmark",
+                "event_type": "bounce",
+                "processing_status": "received",
+                "lease_until": None,
+            }
+
+        async def mock_process(event, wid):
+            # Signal stop immediately upon starting processing of first event
+            worker_stop_event.set()
+            return True
+
+        with patch("app.workers.failover_worker.process_delivery_failure_event", side_effect=mock_process):
+            worker_task = asyncio.create_task(
+                run_failover_worker(stop_event=worker_stop_event, poll_idle_seconds=1, lease_seconds=900)
+            )
+            await asyncio.wait_for(worker_task, timeout=5.0)
+
+        # Event 2 was in the batch but unhandled; must have been released back to 'received'
+        evt2 = failover_repo.supabase._in_memory_delivery_failure_events["evt-stop-2"]
+        assert evt2["processing_status"] == "received", "Unprocessed in-flight event must be released on stop signal"
+        assert evt2.get("claimed_by") is None
+        assert evt2.get("lease_until") is None
+
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+
+@pytest.mark.asyncio
+async def test_ops03_release_ownership_enforcement():
+    """
+    Verify that a worker cannot release an event leased by a different worker.
+    """
+    event_id = "evt-ownership-test"
+    owner_worker = "worker-owner"
+    imposter_worker = "worker-imposter"
+
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+        failover_repo.supabase._in_memory_delivery_failure_events[event_id] = {
+            "id": event_id,
+            "processing_status": "queued",
+            "claimed_by": owner_worker,
+            "lease_until": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+        }
+
+        # Imposter attempts to release
+        released = failover_repo.release_claimed_delivery_failure_event(event_id, imposter_worker)
+        assert released is False, "Imposter worker must NOT be able to release another worker's event"
+
+        # Event remains queued and claimed by owner
+        event = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
+        assert event["processing_status"] == "queued"
+        assert event["claimed_by"] == owner_worker
+
+        # Owner releases -> succeeds
+        released_owner = failover_repo.release_claimed_delivery_failure_event(event_id, owner_worker)
+        assert released_owner is True
+        assert event["processing_status"] == "received"
+        assert event["claimed_by"] is None
+
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+
+@pytest.mark.asyncio
+async def test_ops03_rpc_failure_handling():
+    """
+    Verify safe handling when Supabase RPC throws exceptions:
+    claim RPC falls back gracefully, and release RPC returns False without crashing.
+    """
+    mock_client = MagicMock()
+    mock_client.rpc.side_effect = RuntimeError("Postgres connection timeout")
+
+    with patch.object(failover_repo.supabase, "_client", mock_client):
+        # 1. Claim RPC failure handling
+        claimed = failover_repo.claim_pending_delivery_failure_events(
+            worker_id="worker-rpc-fail",
+            limit=5,
+            lease_seconds=900,
+        )
+        assert isinstance(claimed, list)
+
+        # 2. Release RPC failure handling
+        released = failover_repo.release_claimed_delivery_failure_event("nonexistent-evt", "worker-rpc-fail")
+        assert released is False
+
+
+@pytest.mark.asyncio
+async def test_ops03_failover_behavior_regression():
+    """
+    Verify existing eligibility & correlation behavior is strictly preserved:
+    - Non-eligible event types ('deferred', 'complaint') are marked 'ignored'
+    - Uncorrelated events without a tenant are marked 'failed'
+    """
+    worker_id = "worker-regress-1"
+
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+        # 1. Non-eligible deferred event
+        evt_deferred = {
+            "id": "evt-deferred-1",
+            "event_type": "deferred",
+            "processing_status": "queued",
+            "claimed_by": worker_id,
+        }
+        failover_repo.supabase._in_memory_delivery_failure_events["evt-deferred-1"] = dict(evt_deferred)
+
+        with patch("app.services.failover.omnichannel_service.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_dispatch:
+            res = await process_delivery_failure_event(evt_deferred, worker_id)
+            assert res is False
+            mock_dispatch.assert_not_called()
+            assert failover_repo.supabase._in_memory_delivery_failure_events["evt-deferred-1"]["processing_status"] == "ignored"
+
+        # 2. Uncorrelated event (no user_id)
+        evt_uncorrelated = {
+            "id": "evt-orphan-1",
+            "event_type": "bounce",
+            "user_id": None,
+            "provider_message_id": "nonexistent-msg-id",
+            "processing_status": "queued",
+            "claimed_by": worker_id,
+        }
+        failover_repo.supabase._in_memory_delivery_failure_events["evt-orphan-1"] = dict(evt_uncorrelated)
+
+        with patch("app.services.failover.omnichannel_service.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_dispatch:
+            res = await process_delivery_failure_event(evt_uncorrelated, worker_id)
+            assert res is False
+            mock_dispatch.assert_not_called()
+            assert failover_repo.supabase._in_memory_delivery_failure_events["evt-orphan-1"]["processing_status"] == "failed"
+
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
 
 
 # =====================================================================

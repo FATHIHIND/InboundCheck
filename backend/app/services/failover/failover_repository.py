@@ -31,12 +31,11 @@ class FailoverRepository:
         Atomically claim received delivery failure events using claim_pending_delivery_failure_events RPC.
         Transitions received -> queued using FOR UPDATE SKIP LOCKED with lease_until and stale recovery.
         """
-        now_iso = datetime.now(timezone.utc).isoformat()
         lease_str = f"{lease_seconds} seconds"
         if self.supabase._client:
             try:
                 res = self.supabase._client.rpc(
-                    "claim_received_delivery_failure_events",
+                    "claim_pending_delivery_failure_events",
                     {
                         "p_worker_id": worker_id,
                         "p_limit": limit,
@@ -54,9 +53,10 @@ class FailoverRepository:
                                 m["lease_until"] = row.get("lease_until")
                     return res.data
             except Exception as e:
+                logger.warning(f"claim_pending_delivery_failure_events RPC failed: {e}. Trying fallback RPC...")
                 try:
                     res = self.supabase._client.rpc(
-                        "claim_pending_delivery_failure_events",
+                        "claim_received_delivery_failure_events",
                         {
                             "p_worker_id": worker_id,
                             "p_limit": limit,
@@ -64,9 +64,17 @@ class FailoverRepository:
                         }
                     ).execute()
                     if res.data is not None:
+                        for row in res.data:
+                            evt_id = row.get("id")
+                            for m in self.supabase._in_memory_delivery_failure_events.values():
+                                if m.get("id") == evt_id:
+                                    m["processing_status"] = "queued"
+                                    m["claimed_by"] = worker_id
+                                    m["claimed_at"] = row.get("claimed_at")
+                                    m["lease_until"] = row.get("lease_until")
                         return res.data
-                except Exception:
-                    logger.warning(f"Could not execute claim_received_delivery_failure_events RPC: {e}")
+                except Exception as fallback_err:
+                    logger.warning(f"Could not execute claim RPC fallback: {fallback_err}")
 
         # In-memory fallback for local development and testing
         return self.supabase.claim_pending_delivery_failure_events(
@@ -77,12 +85,21 @@ class FailoverRepository:
 
     claim_received_delivery_failure_events = claim_pending_delivery_failure_events
 
-    def release_claimed_event(self, event_id: str, worker_id: str) -> bool:
-        """Gracefully release a claimed event back to 'received' status on worker shutdown."""
-        return self.supabase.release_claimed_delivery_failure_event(
-            event_id=event_id,
-            worker_id=worker_id,
-        )
+    def release_claimed_delivery_failure_event(self, event_id: str, worker_id: str) -> bool:
+        """
+        Gracefully release a claimed delivery failure event back to 'received' status on worker shutdown.
+        Requires that the calling worker owns the active lease.
+        """
+        try:
+            return self.supabase.release_claimed_delivery_failure_event(
+                event_id=event_id,
+                worker_id=worker_id,
+            )
+        except Exception as exc:
+            logger.error(f"Error releasing claimed event {event_id} for worker {worker_id}: {exc}", exc_info=True)
+            return False
+
+    release_claimed_event = release_claimed_delivery_failure_event
 
 
     def mark_event_processed(
