@@ -152,27 +152,52 @@ app.add_middleware(
 app.add_middleware(RateLimitingMiddleware, max_requests=120, window_seconds=60)
 
 # 3. Dynamic & Explicit CORS Configuration
-raw_allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
-if raw_allowed_origins == "*":
-    # When credentials are true, browsers require explicit origin matching or regex; include primary domains
-    cors_origins = [
-        "https://inbound-check-theta.vercel.app",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
-else:
-    cors_origins = [o.strip() for o in raw_allowed_origins.split(",") if o.strip()]
-    if "https://inbound-check-theta.vercel.app" not in cors_origins:
-        cors_origins.append("https://inbound-check-theta.vercel.app")
-    if "http://localhost:3000" not in cors_origins:
-        cors_origins.append("http://localhost:3000")
-    if "http://127.0.0.1:3000" not in cors_origins:
-        cors_origins.append("http://127.0.0.1:3000")
+# Institutional security: Only explicitly trusted production domains and localhost development origins are permitted.
+# Wildcard regexes over third-party multi-tenant domains (*.vercel.app, *.up.railway.app) are strictly prohibited.
+DEFAULT_TRUSTED_ORIGINS = [
+    "https://inboundcheck.com",
+    "https://www.inboundcheck.com",
+    "https://inbound-check-theta.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+cors_origins: List[str] = []
+
+# Parse custom allowed origins from environment if provided (excluding wildcard "*")
+raw_allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+if raw_allowed_origins and raw_allowed_origins != "*":
+    for origin in raw_allowed_origins.split(","):
+        cleaned = origin.strip()
+        if cleaned and cleaned != "*" and cleaned not in cors_origins:
+            cors_origins.append(cleaned)
+
+# Include settings.FRONTEND_URL if set and valid
+if getattr(settings, "FRONTEND_URL", None):
+    fe_url = settings.FRONTEND_URL.strip()
+    if fe_url and fe_url != "*" and fe_url not in cors_origins:
+        cors_origins.append(fe_url)
+
+# Include settings.CORS_ORIGINS if configured (skipping wildcard "*")
+if getattr(settings, "CORS_ORIGINS", None):
+    for origin in settings.CORS_ORIGINS:
+        cleaned = origin.strip()
+        if cleaned and cleaned != "*" and cleaned not in cors_origins:
+            cors_origins.append(cleaned)
+
+# Ensure default trusted origins are always present
+for origin in DEFAULT_TRUSTED_ORIGINS:
+    if origin not in cors_origins:
+        cors_origins.append(origin)
+
+# Local development regex allowing localhost on any port only when not in production.
+# In production, allow_origin_regex is disabled (None) to enforce exact origin matching.
+cors_origin_regex = None if is_production else r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.up\.railway\.app|http://localhost:\d+",
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

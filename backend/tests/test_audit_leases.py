@@ -20,6 +20,24 @@ from app.services.failover.omnichannel_service import omnichannel_service
 from app.services.alert_dispatcher import alert_dispatcher
 
 
+
+@pytest.fixture(autouse=True)
+def isolate_supabase_for_leases():
+    """Ensure lease and failover tests are completely isolated from live Supabase."""
+    orig_client = supabase_service._client
+    orig_domains = dict(supabase_service._in_memory_domains)
+    orig_failover = dict(getattr(supabase_service, "_in_memory_failover_logs", {}))
+    supabase_service._client = None
+    supabase_service._in_memory_domains.clear()
+    if hasattr(supabase_service, "_in_memory_failover_logs"):
+        supabase_service._in_memory_failover_logs.clear()
+    yield
+    supabase_service._client = orig_client
+    supabase_service._in_memory_domains = orig_domains
+    if hasattr(supabase_service, "_in_memory_failover_logs"):
+        supabase_service._in_memory_failover_logs = orig_failover
+
+
 @pytest.fixture
 def test_client():
     return TestClient(app)
@@ -34,10 +52,10 @@ def test_audit_leases_atomic_claiming_and_concurrency():
     # Seed 4 active monitored domains
     now_past = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
     domains = [
-        {"id": f"dom_lease_1_{uuid.uuid4()}", "user_id": user_id, "domain_name": "brand1.com", "is_active": True, "last_audited_at": now_past},
-        {"id": f"dom_lease_2_{uuid.uuid4()}", "user_id": user_id, "domain_name": "brand2.com", "is_active": True, "last_audited_at": now_past},
-        {"id": f"dom_lease_3_{uuid.uuid4()}", "user_id": user_id, "domain_name": "brand3.com", "is_active": True, "last_audited_at": now_past},
-        {"id": f"dom_lease_4_{uuid.uuid4()}", "user_id": user_id, "domain_name": "brand4.com", "is_active": True, "last_audited_at": now_past},
+        {"id": str(uuid.uuid4()), "user_id": user_id, "domain_name": "brand1.com", "is_active": True, "last_audited_at": now_past},
+        {"id": str(uuid.uuid4()), "user_id": user_id, "domain_name": "brand2.com", "is_active": True, "last_audited_at": now_past},
+        {"id": str(uuid.uuid4()), "user_id": user_id, "domain_name": "brand3.com", "is_active": True, "last_audited_at": now_past},
+        {"id": str(uuid.uuid4()), "user_id": user_id, "domain_name": "brand4.com", "is_active": True, "last_audited_at": now_past},
     ]
     supabase_service._in_memory_domains[user_id] = domains
 
@@ -80,7 +98,7 @@ def test_audit_lease_completion_and_failure_ownership():
     user_id = f"test-user-{uuid.uuid4()}"
     worker_owner = str(uuid.uuid4())
     worker_intruder = str(uuid.uuid4())
-    dom_id = f"dom_{uuid.uuid4()}"
+    dom_id = str(uuid.uuid4())
 
     domain = {
         "id": dom_id,
@@ -124,7 +142,7 @@ def test_audit_lease_expiration_recovery():
     user_id = f"test-user-{uuid.uuid4()}"
     worker_crashed = str(uuid.uuid4())
     worker_rescuer = str(uuid.uuid4())
-    dom_id = f"dom_{uuid.uuid4()}"
+    dom_id = str(uuid.uuid4())
 
     past_expiry = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
     domain = {
@@ -155,7 +173,7 @@ def test_audit_lease_heartbeat_extension():
     user_id = f"test-user-{uuid.uuid4()}"
     worker_active = str(uuid.uuid4())
     worker_intruder = str(uuid.uuid4())
-    dom_id = f"dom_{uuid.uuid4()}"
+    dom_id = str(uuid.uuid4())
 
     initial_expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
     domain = {
@@ -229,4 +247,64 @@ def test_options_cors_preflight_bypasses_and_succeeds(test_client):
     assert res.headers.get("access-control-allow-origin") == "https://inbound-check-theta.vercel.app"
     assert res.headers.get("access-control-allow-credentials") == "true"
     assert "GET" in res.headers.get("access-control-allow-methods", "")
+
+
+def test_cors_trusted_production_custom_domains(test_client):
+    """Verify that apex and www production domains receive correct CORS headers and credentials support."""
+    for origin in ["https://inboundcheck.com", "https://www.inboundcheck.com"]:
+        res = test_client.options(
+            "/api/v1/domains",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert res.status_code == 200
+        assert res.headers.get("access-control-allow-origin") == origin
+        assert res.headers.get("access-control-allow-credentials") == "true"
+
+
+def test_cors_trusted_local_development_origin(test_client):
+    """Verify that local development origins are permitted with credentials."""
+    res = test_client.options(
+        "/api/v1/domains",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert res.status_code == 200
+    assert res.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert res.headers.get("access-control-allow-credentials") == "true"
+
+
+def test_cors_arbitrary_vercel_origin_rejected(test_client):
+    """Verify that arbitrary or attacker-controlled Vercel deployments are rejected without CORS headers."""
+    res = test_client.options(
+        "/api/v1/domains",
+        headers={
+            "Origin": "https://attacker-controlled.vercel.app",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    # Untrusted origin must NOT receive access-control-allow-origin
+    assert res.headers.get("access-control-allow-origin") is None
+
+
+def test_cors_arbitrary_railway_origin_rejected(test_client):
+    """Verify that arbitrary or attacker-controlled Railway deployments are rejected without CORS headers."""
+    res = test_client.options(
+        "/api/v1/domains",
+        headers={
+            "Origin": "https://attacker-app.up.railway.app",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    # Untrusted origin must NOT receive access-control-allow-origin
+    assert res.headers.get("access-control-allow-origin") is None
+
 
