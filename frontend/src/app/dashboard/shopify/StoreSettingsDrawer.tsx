@@ -15,6 +15,7 @@ import {
   Lock
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { formatApiErrorMessage } from "@/lib/apiResource";
 
 export type EspProviderType = "shopify" | "klaviyo" | "postmark";
 
@@ -124,7 +125,7 @@ export function StoreSettingsDrawer({
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Unable to save store configuration.");
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Unable to save store configuration.");
       }
 
       const data = await res.json();

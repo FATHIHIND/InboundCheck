@@ -442,6 +442,39 @@ class SupabaseService:
         self._in_memory_logs[log_key].insert(0, in_mem_entry)
         return in_mem_entry
 
+    def get_audit_history(
+        self,
+        user_id: str,
+        domain_id: Optional[str] = None,
+        domain_name: Optional[str] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve recent DNS audit logs for a domain or user.
+        Queries public.dns_audit_logs with in-memory fallback.
+        """
+        clean_domain = (domain_name or "").strip().lower()
+        if self._client:
+            try:
+                query = self._client.table("dns_audit_logs").select("*").eq("user_id", user_id)
+                if domain_id:
+                    query = query.eq("domain_id", domain_id)
+                elif clean_domain:
+                    query = query.eq("domain_name", clean_domain)
+                res = query.order("created_at", desc=True).limit(limit).execute()
+                if res.data:
+                    return res.data
+            except Exception as e:
+                logger.warning(f"Failed to fetch audit history from Supabase: {e}")
+
+        # In-memory fallback
+        log_key = domain_id or clean_domain or "default"
+        logs = self._in_memory_logs.get(log_key, [])
+        if not logs and clean_domain:
+            logs = self._in_memory_logs.get(clean_domain, [])
+        user_logs = [entry for entry in logs if entry.get("user_id") == user_id]
+        return user_logs[:limit]
+
     def save_monitored_store(
         self,
         user_id: str,

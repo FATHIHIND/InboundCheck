@@ -122,7 +122,7 @@ export default function RadarPulseCanvas({ className = "" }: { className?: strin
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, []);
+  }, [isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <canvas

@@ -81,7 +81,7 @@ export default function InboxWitnessCanvas({ className = "" }: { className?: str
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, []);
+  }, [isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <canvas

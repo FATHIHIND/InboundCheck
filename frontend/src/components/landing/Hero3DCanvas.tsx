@@ -432,7 +432,7 @@ export default function Hero3DCanvas({
       document.removeEventListener("mouseleave", handleMouseLeave);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <div

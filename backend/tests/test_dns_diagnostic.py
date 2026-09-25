@@ -219,3 +219,127 @@ def test_anti_ssrf_and_cidr_filtering():
     assert engine._clean_domain("https://brandshop.com/") == "brandshop.com"
     assert engine._clean_domain("sub.orders.example.co.uk") == "sub.orders.example.co.uk"
 
+
+def test_domain_normalization_comprehensive():
+    """Verify robust normalization across real-world user inputs."""
+    # Standard apex domain
+    assert DNSDiagnosticEngine.normalize_domain("example.com") == "example.com"
+    # Domain with www prefix normalized to apex for email deliverability
+    assert DNSDiagnosticEngine.normalize_domain("www.example.com") == "example.com"
+    # Specific subdomain preserved
+    assert DNSDiagnosticEngine.normalize_domain("mail.example.com") == "mail.example.com"
+    assert DNSDiagnosticEngine.normalize_domain("store.myshopify.com") == "store.myshopify.com"
+    # Full URL with scheme, path, and port
+    assert DNSDiagnosticEngine.normalize_domain("https://brandshop.com:443/products/receipt?id=123#ref") == "brandshop.com"
+    assert DNSDiagnosticEngine.normalize_domain("http://www.megastore.com/checkout/") == "megastore.com"
+    # Leading/trailing whitespace and trailing dot
+    assert DNSDiagnosticEngine.normalize_domain("   acme-corp.org.  ") == "acme-corp.org"
+
+    # Invalid inputs must raise ValueError
+    with pytest.raises(ValueError):
+        DNSDiagnosticEngine.normalize_domain("")
+    with pytest.raises(ValueError):
+        DNSDiagnosticEngine.normalize_domain("not-a-domain")
+    with pytest.raises(ValueError):
+        DNSDiagnosticEngine.normalize_domain("http://localhost:3000")
+    with pytest.raises(ValueError):
+        DNSDiagnosticEngine.normalize_domain("127.0.0.1")
+
+
+def test_scorer_evidence_and_checks_summary():
+    """Verify DeliverabilityScorer generates evidence, remediation records, and checks summary."""
+    from app.schemas.dns import (
+        DiagnosticSummary,
+        MXSummary,
+        MXRecordItem,
+        SPFSummary,
+        DKIMSummary,
+        DMARCSummary,
+        BIMISummary,
+        DNSRecordsSummary,
+        MailInfrastructureSummary,
+        ReputationSummary,
+    )
+
+    summary = DiagnosticSummary(
+        mx=MXSummary(
+            status="optimal",
+            record_count=2,
+            records=[
+                MXRecordItem(host="aspmx.l.google.com", preference=1, ipv4=["142.250.185.26"]),
+                MXRecordItem(host="alt1.aspmx.l.google.com", preference=5, ipv4=["142.250.185.27"])
+            ],
+            raw=["1 aspmx.l.google.com", "5 alt1.aspmx.l.google.com"]
+        ),
+        spf=SPFSummary(
+            status="missing",
+            raw=None,
+            all_mechanism=None,
+            syntax_valid=False
+        ),
+        dkim=DKIMSummary(
+            status="missing",
+            tested_selectors=["shopify", "google"],
+            found_selectors=[],
+            records=[]
+        ),
+        dmarc=DMARCSummary(
+            status="critical",
+            raw=None,
+            policy=None,
+            syntax_valid=False
+        ),
+        bimi=BIMISummary(status="missing"),
+        dns_records=DNSRecordsSummary(
+            status="warning",
+            a_records=["93.184.216.34"],
+            ns_records=["ns1.example.com", "ns2.example.com"],
+            ns_count=2,
+            has_caa=False
+        ),
+        mail_infrastructure=MailInfrastructureSummary(
+            status="optimal",
+            mx_hosts_count=2,
+            resolved_mail_ips=["142.250.185.26"],
+            ptr_records={"142.250.185.26": ["mail.google.com"]},
+            all_mx_valid=True,
+            has_redundancy=True
+        ),
+        reputation=ReputationSummary(
+            clean_count=10,
+            listed_count=0,
+            unknown_count=0,
+            error_count=0,
+            total_providers=10,
+            overall_status="clean"
+        )
+    )
+
+    score, status, breakdown, issues, fixes = DeliverabilityScorer.calculate_health_score(
+        "mybrand.com",
+        summary
+    )
+
+    # Health score must reflect missing SPF, DKIM, DMARC
+    assert score < 50
+    assert status == "critical"
+
+    # Checks summary must be populated
+    checks_summary = DeliverabilityScorer.calculate_checks_summary(issues, summary.reputation)
+    assert checks_summary.total_checks > 0
+    assert checks_summary.failure_count > 0
+
+    risk_level = DeliverabilityScorer.calculate_risk_level(score)
+    assert risk_level == "Critical Risk"
+
+    # Every critical issue must contain evidence and remediation record where applicable
+    dmarc_issue = next(i for i in issues if i.id == "dmarc-missing")
+    assert dmarc_issue.evidence is not None
+    assert dmarc_issue.remediation_record is not None
+    assert dmarc_issue.remediation_record.record_type == "TXT"
+    assert "_dmarc" in dmarc_issue.remediation_record.host
+
+    spf_issue = next(i for i in issues if i.id == "spf-missing")
+    assert spf_issue.evidence is not None
+    assert spf_issue.remediation_record is not None
+    assert "v=spf1" in spf_issue.remediation_record.value

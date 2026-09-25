@@ -80,7 +80,7 @@ export default function RadarBeamCanvas({ className = "" }: { className?: string
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, []);
+  }, [isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <canvas

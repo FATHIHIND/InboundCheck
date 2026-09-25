@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useApiResource } from "@/hooks/useApiResource";
+import { formatApiErrorMessage } from "@/lib/apiResource";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
 import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
 import { OperationalLoadingState } from "@/components/operational/OperationalLoadingState";
@@ -417,15 +418,31 @@ export default function DashboardOverviewPage() {
     setPipelineError(null);
     try {
       setPipelineStep("1/3 Querying Multi-Resolver DNS Records (SPF, DKIM, DMARC)...");
-      await new Promise((r) => setTimeout(r, 600));
+      const currentStores = domainsResource.state === "ready" ? domainsResource.data : [];
+      if (currentStores && currentStores.length > 0) {
+        for (const store of currentStores.slice(0, 3)) {
+          if (store.id && store.domain_name) {
+            try {
+              await apiFetch(`/api/v1/domains/${store.id}/audit?domain_name=${encodeURIComponent(store.domain_name)}`, { method: "POST" });
+            } catch {
+              // Proceed through pipeline
+            }
+          }
+        }
+      }
 
-      setPipelineStep("2/3 Simulating Order Receipt & Verifying Customer Inbox Delivery...");
-      await new Promise((r) => setTimeout(r, 700));
+      setPipelineStep("2/3 Querying Global Blacklist & Reputation Radar Databases...");
+      const targetDomain = (currentStores && currentStores[0]?.domain_name) || "myshopify.com";
+      try {
+        await apiFetch("/api/v1/dns/rbl-scan", {
+          method: "POST",
+          body: JSON.stringify({ domain: targetDomain }),
+        });
+      } catch {
+        // Proceed through pipeline
+      }
 
-      setPipelineStep("3/3 Scanning 10 Global Blacklist & Reputation Databases...");
-      await new Promise((r) => setTimeout(r, 600));
-
-      // Re-fetch genuine domain states from backend
+      setPipelineStep("3/3 Syncing Deliverability Analytics & Protection Posture...");
       await reloadDomains();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to execute complete diagnostic pipeline.";
@@ -438,6 +455,7 @@ export default function DashboardOverviewPage() {
 
   const handleReAudit = async (domainId: string, domainName: string) => {
     setAuditingId(domainId);
+    setPipelineError(null);
     if (isDemoActive && domainId === DEMO_STORE_RECORD.id) {
       await new Promise((r) => setTimeout(r, 650));
       setAuditingId(null);
@@ -450,9 +468,12 @@ export default function DashboardOverviewPage() {
       );
       if (res.ok) {
         await reloadDomains();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setPipelineError(formatApiErrorMessage(body.detail || body.message || body) || "Audit request failed");
       }
-    } catch {
-      // Retain state without manufacturing fake scores
+    } catch (err: unknown) {
+      setPipelineError(err instanceof Error ? err.message : "Audit request failed");
     } finally {
       setAuditingId(null);
     }
@@ -470,6 +491,7 @@ export default function DashboardOverviewPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          domain: clean,
           domain_name: clean,
           shopify_store: `${clean.replace(/\.[^/.]+$/, "")}.myshopify.com`,
         }),
@@ -477,7 +499,7 @@ export default function DashboardOverviewPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Failed to register domain");
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Failed to register domain");
       }
 
       await reloadDomains();
@@ -515,7 +537,7 @@ export default function DashboardOverviewPage() {
       const res = await apiFetch(`/api/v1/domains/${storeToDelete.id}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || body.error || "Failed to remove domain from monitoring.");
+        throw new Error(formatApiErrorMessage(body.detail || body.error || body) || "Failed to remove domain from monitoring.");
       }
       setStoreToDelete(null);
       await reloadDomains();
@@ -531,8 +553,8 @@ export default function DashboardOverviewPage() {
     ? stores
     : stores.filter((s) => s.shopify_store === selectedStore);
 
-  const avgUnifiedScore = stores.length > 0
-    ? Math.round(stores.reduce((acc, s) => acc + s.unified_score, 0) / stores.length)
+  const avgUnifiedScore = filteredStores.length > 0
+    ? Math.round(filteredStores.reduce((acc, s) => acc + s.unified_score, 0) / filteredStores.length)
     : null;
 
   // Deliverability Health Score & Status Tier (Optimal / Warning / Critical) derived from DeliverabilityScorer
@@ -555,12 +577,12 @@ export default function DashboardOverviewPage() {
   const hasValidRevenueData = (hasConnectedShopify || isDemoActive) && stores.length > 0 && monthlyGmvCents > 0;
 
   // Radar & Telegram Guardian Status
-  const lowestRblClean = stores.length > 0 ? Math.min(...stores.map((s) => s.rbl_clean_count)) : 10;
+  const lowestRblClean = filteredStores.length > 0 ? Math.min(...filteredStores.map((s) => s.rbl_clean_count)) : 10;
   const isTelegramActive = Boolean(telegramConfig?.is_enabled && telegramConfig?.telegram_chat_id);
   const hasValidDomain = stores.some((s) => Boolean(s.domain_name && s.domain_name !== "yourstore.com" && s.domain_name.trim() !== ""));
 
   // Critical SPF/DMARC Misalignment Detection
-  const misalignedStores = stores.filter(
+  const misalignedStores = filteredStores.filter(
     (s) =>
       s.spf_status === "critical" ||
       s.spf_status === "missing" ||

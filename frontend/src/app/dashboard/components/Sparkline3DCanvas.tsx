@@ -92,7 +92,7 @@ export default function Sparkline3DCanvas({ className = "" }: { className?: stri
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, []);
+  }, [isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <canvas

@@ -136,7 +136,7 @@ export default function ScoreGauge3DCanvas({
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, [score]);
+  }, [score, isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <div

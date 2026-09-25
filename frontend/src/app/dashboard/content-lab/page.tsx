@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { apiFetch } from "@/lib/api";
+import { formatApiErrorMessage } from "@/lib/apiResource";
 import {
   Sparkles,
   ShieldCheck,
@@ -133,7 +134,7 @@ export default function AIContentLabPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Failed to audit template content.");
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Failed to audit template content.");
       }
 
       const data = await res.json();
@@ -175,7 +176,7 @@ export default function AIContentLabPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Failed to generate polymorphic copy variants.");
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Failed to generate polymorphic copy variants.");
       }
 
       const data = await res.json();

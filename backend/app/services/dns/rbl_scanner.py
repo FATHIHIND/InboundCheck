@@ -349,15 +349,24 @@ class RBLScannerService:
                 "target": target,
             }
 
-    async def scan_domain(self, domain: str) -> RBLScanResult:
+    async def scan_domain(self, domain: str, additional_ips: Optional[List[str]] = None) -> RBLScanResult:
         """
-        Scan all enabled DNSBL providers against apex public A records and domain URI lists.
+        Scan all enabled DNSBL providers against apex public A records, resolved mail server IPs, and domain URI lists.
         """
         start_time = time.perf_counter()
         clean_domain = domain.strip().lower()
 
         # Resolve public A records
         resolved_ips = await self.resolve_public_a_records(clean_domain)
+        if additional_ips:
+            for ip in additional_ips:
+                try:
+                    ip_obj = ipaddress.ip_address(ip)
+                    if ip_obj.version == 4 and ip_obj.is_global and not ip_obj.is_private and not ip_obj.is_loopback:
+                        if ip not in resolved_ips:
+                            resolved_ips.append(ip)
+                except ValueError:
+                    continue
         resolver = self._get_resolver()
 
         results: List[RBLListingResult] = []

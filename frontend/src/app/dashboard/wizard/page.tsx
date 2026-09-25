@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -25,6 +25,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { formatApiErrorMessage } from "@/lib/apiResource";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 
 export interface ReadinessCheckItem {
@@ -103,6 +104,7 @@ function SetupWizardContent() {
 
   const queryDomain = searchParams?.get("domain") || "";
   const [domainInput, setDomainInput] = useState<string>(queryDomain);
+  const lastSyncedDomainRef = useRef<string | null>(null);
   const [activeStep, setActiveStep] = useState<number>(0); // 0 = Overview, 1..6 = Specific check, 7 = Activation
   const [data, setData] = useState<ShopifyReadinessData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -146,12 +148,11 @@ function SetupWizardContent() {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || `Readiness check failed (HTTP ${res.status})`);
+          throw new Error(formatApiErrorMessage(errData.detail || errData.message || errData) || `Readiness check failed (HTTP ${res.status})`);
         }
 
         const json: ShopifyReadinessData = await res.json();
         setData(json);
-        setDomainInput(json.domain || cleanDomain);
       } catch (err: unknown) {
         console.error("Readiness evaluation error:", err);
         const msg = err instanceof Error ? err.message : "Failed to evaluate deliverability readiness";
@@ -165,9 +166,12 @@ function SetupWizardContent() {
 
   // Initial load: Only auto-run if an explicit domain is supplied via URL query parameter
   useEffect(() => {
-    if (queryDomain && queryDomain.trim()) {
-      runEvaluation(queryDomain.trim());
-    }
+    const clean = (queryDomain || "").trim();
+    if (!clean) return;
+    if (lastSyncedDomainRef.current === clean) return;
+    lastSyncedDomainRef.current = clean;
+    setDomainInput(clean);
+    runEvaluation(clean);
   }, [queryDomain, runEvaluation]);
 
   const handleCopy = (text: string) => {
@@ -222,14 +226,18 @@ function SetupWizardContent() {
         }),
       });
 
+      if (res.status === 403) {
+        setFixErrorMessage("1-Click Automated DNS Fixer requires a Growth or Enterprise subscription plan. Upgrade in Billing or copy snippet manually below.");
+        return;
+      }
+
       const resData = await res.json().catch(() => ({}));
       if (res.ok && resData.success) {
         setFixSuccessMessage(resData.message || "DNS record successfully injected via API.");
         setTimeout(() => runEvaluation(), 1500);
       } else {
         setFixErrorMessage(
-          resData.detail ||
-          resData.error ||
+          formatApiErrorMessage(resData.detail || resData.error || resData.message || resData) ||
           "Auto-fix failed. Please verify API token in Settings or insert snippet manually."
         );
       }

@@ -91,7 +91,7 @@ export default function WireframeGridCanvas({ className = "" }: { className?: st
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, []);
+  }, [isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <canvas

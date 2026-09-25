@@ -56,7 +56,7 @@ def test_failover_logs_required_columns_and_zero_phone():
     """Verify all required failover_logs columns are populated and customer phone is not."""
     user_id = str(uuid.uuid4())
     event_id = str(uuid.uuid4())
-    
+
     # 1. Create with defaults/empty values -> must fallback to 'unknown'
     log = failover_repository.create_telegram_incident_log(
         delivery_failure_event_id=event_id,
@@ -86,38 +86,41 @@ def test_failover_logs_required_columns_and_zero_phone():
 
 def test_claim_pending_delivery_failure_events_semantics():
     """Verify claim_pending_delivery_failure_events only claims received events and marks them queued."""
-    worker_id = str(uuid.uuid4())
-    
-    # Seed events
-    evt_received = supabase_service.record_delivery_failure_event(
-        esp_provider="postmark",
-        provider_event_id=f"evt_{uuid.uuid4()}",
-        provider_message_id=f"msg_{uuid.uuid4()}",
-        event_type="bounce",
-        processing_status="received",
-    )
-    evt_processed = supabase_service.record_delivery_failure_event(
-        esp_provider="postmark",
-        provider_event_id=f"evt_{uuid.uuid4()}",
-        provider_message_id=f"msg_{uuid.uuid4()}",
-        event_type="bounce",
-        processing_status="processed",
-    )
+    from unittest.mock import patch
+    with patch.object(supabase_service, "_client", None):
+        supabase_service._in_memory_delivery_failure_events.clear()
+        worker_id = str(uuid.uuid4())
 
-    # Claim
-    claimed = failover_repository.claim_pending_delivery_failure_events(
-        worker_id=worker_id,
-        limit=20,
-    )
+        # Seed events
+        evt_received = supabase_service.record_delivery_failure_event(
+            esp_provider="postmark",
+            provider_event_id=f"evt_{uuid.uuid4()}",
+            provider_message_id=f"msg_{uuid.uuid4()}",
+            event_type="bounce",
+            processing_status="received",
+        )
+        evt_processed = supabase_service.record_delivery_failure_event(
+            esp_provider="postmark",
+            provider_event_id=f"evt_{uuid.uuid4()}",
+            provider_message_id=f"msg_{uuid.uuid4()}",
+            event_type="bounce",
+            processing_status="processed",
+        )
 
-    claimed_ids = [e["id"] for e in claimed]
-    assert evt_received["id"] in claimed_ids
-    assert evt_processed["id"] not in claimed_ids
+        # Claim
+        claimed = failover_repository.claim_pending_delivery_failure_events(
+            worker_id=worker_id,
+            limit=20,
+        )
 
-    # The claimed event must now be queued
-    for c in claimed:
-        if c["id"] == evt_received["id"]:
-            assert c["processing_status"] == "queued"
+        claimed_ids = [e["id"] for e in claimed]
+        assert evt_received["id"] in claimed_ids
+        assert evt_processed["id"] not in claimed_ids
+
+        # The claimed event must now be queued
+        for c in claimed:
+            if c["id"] == evt_received["id"]:
+                assert c["processing_status"] == "queued"
 
 
 def test_transactional_message_zero_phone_storage():

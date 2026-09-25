@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import dynamic from "next/dynamic";
 import {
   ShieldCheck,
@@ -23,13 +23,14 @@ import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
 import { apiFetch } from "@/lib/api";
-import { ApiError, normalizeApiError } from "@/lib/apiResource";
+import { ApiError, normalizeApiError, formatApiErrorMessage } from "@/lib/apiResource";
+import { normalizeDomainInput } from "@/lib/domain";
 
 const RblTopology3DCanvas = dynamic(() => import("../components/RblTopology3DCanvas"), {
   ssr: false,
 });
 
-export type RBLStatus = "clean" | "listed" | "unknown" | "error";
+export type RBLStatus = "clean" | "listed" | "unknown" | "error" | "timeout";
 export type RBLTargetType = "ip" | "domain";
 export type RBLSeverity = "none" | "low" | "medium" | "high" | "critical";
 
@@ -75,8 +76,8 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
 
   try {
     const json = await response.json();
-    if (json.detail) {
-      detail = typeof json.detail === "string" ? json.detail : JSON.stringify(json.detail);
+    if (json.detail || json.message) {
+      detail = formatApiErrorMessage(json.detail || json.message || json);
     }
   } catch {}
 
@@ -102,6 +103,7 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
 
 export default function BlacklistRadarPage() {
   const [target, setTarget] = useState("");
+  const lastSyncedDomainRef = useRef<string | null>(null);
   const [scan, setScan] = useState<RblScanResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -126,7 +128,7 @@ export default function BlacklistRadarPage() {
   }, [rateLimitCountdown]);
 
   const loadLatest = useCallback(async (domainToQuery?: string) => {
-    const dom = (domainToQuery || target).trim();
+    const dom = normalizeDomainInput(domainToQuery || target);
     if (!dom) return;
 
     setIsLoading(true);
@@ -155,11 +157,20 @@ export default function BlacklistRadarPage() {
 
   const runScan = async (domainOverride?: string) => {
     setExpandedRows({});
-    const domainToScan = (domainOverride || target).trim();
+    const domainToScan = normalizeDomainInput(domainOverride || target);
     if (!domainToScan) {
+      setError({
+        message: "Please enter a valid sending domain (e.g. store.com) before scanning.",
+        status: 400,
+        retryable: false,
+        endpoint: "/api/v1/dns/rbl-scan",
+      });
       const input = document.querySelector<HTMLInputElement>("input[placeholder*='store.com']");
       input?.focus();
       return;
+    }
+    if (domainToScan !== target) {
+      setTarget(domainToScan);
     }
 
     setIsScanning(true);
@@ -203,6 +214,8 @@ export default function BlacklistRadarPage() {
       const paramDom = urlParams.get("domain");
       if (paramDom && paramDom.trim()) {
         const clean = paramDom.trim().toLowerCase();
+        if (lastSyncedDomainRef.current === clean) return;
+        lastSyncedDomainRef.current = clean;
         setTarget(clean);
         loadLatest(clean);
       }
@@ -440,6 +453,8 @@ export default function BlacklistRadarPage() {
           badgeText={
             !scan
               ? "Pending"
+              : scan.overall_status === "partial" && scan.rbl_listed_count === 0
+              ? "Partial Scan"
               : scan.rbl_listed_count === 0
               ? "Clean Posture"
               : `${scan.rbl_listed_count} Listed`
@@ -447,6 +462,8 @@ export default function BlacklistRadarPage() {
           badgeVariant={
             !scan
               ? undefined
+              : scan.overall_status === "partial" && scan.rbl_listed_count === 0
+              ? "amber"
               : scan.rbl_listed_count === 0
               ? "emerald"
               : "rose"
@@ -602,9 +619,22 @@ export default function BlacklistRadarPage() {
               <tbody className="divide-y divide-slate-100 text-slate-800">
                 {scan.results.map((rbl) => {
                   const isListed = rbl.status === "listed";
-                  const isUnknown = rbl.status === "unknown";
+                  const isTimeout =
+                    rbl.status === "timeout" ||
+                    (rbl.status === "unknown" &&
+                      (rbl.message?.toLowerCase().includes("timeout") ||
+                        rbl.message?.toLowerCase().includes("timed out") ||
+                        rbl.latency_ms === null));
+                  const isUnknown = rbl.status === "unknown" && !isTimeout;
                   const isError = rbl.status === "error";
                   const isExpanded = !!expandedRows[rbl.provider_id];
+                  const safeDelistingUrl =
+                    rbl.delisting_url &&
+                    (rbl.delisting_url.startsWith("http://") || rbl.delisting_url.startsWith("https://"))
+                      ? rbl.delisting_url
+                      : rbl.delisting_url
+                      ? `https://${rbl.delisting_url}`
+                      : "#";
 
                   return (
                     <Fragment key={rbl.provider_id}>
@@ -658,14 +688,19 @@ export default function BlacklistRadarPage() {
                               <XCircle className="w-3 h-3 text-rose-600" />
                               LISTED
                             </span>
-                          ) : isUnknown ? (
+                          ) : isTimeout ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-amber-800 bg-amber-50 border border-amber-200">
-                              <AlertCircle className="w-3 h-3 text-amber-600" />
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              TIMEOUT
+                            </span>
+                          ) : isUnknown ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-700 bg-slate-100 border border-slate-200">
+                              <AlertCircle className="w-3 h-3 text-slate-500" />
                               UNKNOWN
                             </span>
                           ) : isError ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-slate-700 bg-slate-100 border border-slate-200">
-                              <HelpCircle className="w-3 h-3 text-slate-500" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold text-rose-700 bg-rose-50 border border-rose-200">
+                              <HelpCircle className="w-3 h-3 text-rose-500" />
                               ERROR
                             </span>
                           ) : (
@@ -680,7 +715,7 @@ export default function BlacklistRadarPage() {
                         </td>
                         <td className="py-2.5 px-3 text-xs font-mono text-right" onClick={(e) => e.stopPropagation()}>
                           <a
-                            href={rbl.delisting_url}
+                            href={safeDelistingUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-slate-600 hover:text-emerald-700 font-mono text-xs inline-flex items-center gap-1 transition-colors min-h-[32px] px-2 py-1 rounded hover:bg-slate-100"

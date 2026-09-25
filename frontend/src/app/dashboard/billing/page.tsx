@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
-import { ApiError } from "@/lib/apiResource";
+import { ApiError, formatApiErrorMessage } from "@/lib/apiResource";
 
 interface SubscriptionInfo {
   tier: "starter" | "growth" | "enterprise" | string;
@@ -265,7 +265,7 @@ export default function BillingPortalPage() {
         };
         console.error("[CHECKOUT_ERROR]", errorObj);
 
-        const errorMsg = data.detail || data.message || `Checkout initiation failed (HTTP ${res.status}: ${res.statusText || "Server Error"}).`;
+        const errorMsg = formatApiErrorMessage(data.detail || data.message || data) || `Checkout initiation failed (HTTP ${res.status}: ${res.statusText || "Server Error"}).`;
         setCheckoutError(errorMsg);
         return;
       }

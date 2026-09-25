@@ -26,8 +26,10 @@ diagnostic_engine = DNSDiagnosticEngine()
 
 
 class CreateDomainRequest(BaseModel):
-    domain: str = Field(..., description="Apex or subdomain to monitor, e.g. store.com", min_length=3)
+    domain: Optional[str] = Field(None, description="Apex or subdomain to monitor, e.g. store.com")
+    domain_name: Optional[str] = Field(None, description="Alternative field for domain name")
     custom_selectors: Optional[List[str]] = None
+    shopify_store: Optional[str] = None
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -62,9 +64,8 @@ async def add_monitored_domain(
     """
     user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
-        clean_domain = request.domain.strip().lower()
-        if not clean_domain or len(clean_domain) < 3:
-            raise HTTPException(status_code=400, detail="Valid domain name is required.")
+        raw_domain = request.domain or request.domain_name or ""
+        clean_domain = DNSDiagnosticEngine.normalize_domain(raw_domain)
 
         # Enforce tier-based domain quota limits
         tier = (user_profile.get("subscription_tier") or user_profile.get("tier") or "starter").lower()
@@ -138,7 +139,7 @@ async def re_audit_domain(
     Verifies that the target domain_id belongs to the authenticated user.
     Updates the health score, status pill badges, and appends a new audit log.
     """
-    clean_domain = domain_name.strip().lower()
+    clean_domain = DNSDiagnosticEngine.normalize_domain(domain_name)
 
     # Tenant isolation validation: verify domain ownership before auditing
     existing_domains = supabase_service.get_user_domains(user_id=user_id, limit=100)

@@ -28,27 +28,29 @@ from app.services.supabase_client import supabase_service
 @pytest.mark.asyncio
 async def test_claim_received_delivery_failure_events_atomic():
     """Verify that claiming atomically moves events from 'received' to 'queued'."""
-    worker_1 = str(uuid.uuid4())
-    worker_2 = str(uuid.uuid4())
+    with patch.object(supabase_service, "_client", None):
+        supabase_service._in_memory_delivery_failure_events.clear()
+        worker_1 = str(uuid.uuid4())
+        worker_2 = str(uuid.uuid4())
 
-    event_id = f"evt_{uuid.uuid4()}"
-    evt = supabase_service.record_delivery_failure_event(
-        esp_provider="sendgrid",
-        provider_event_id=event_id,
-        provider_message_id="msg_test_claim_1",
-        event_type="bounce",
-        processing_status="received"
-    )
+        event_id = f"evt_{uuid.uuid4()}"
+        evt = supabase_service.record_delivery_failure_event(
+            esp_provider="sendgrid",
+            provider_event_id=event_id,
+            provider_message_id="msg_test_claim_1",
+            event_type="bounce",
+            processing_status="received"
+        )
 
-    # Worker 1 claims
-    claimed_w1 = repository.claim_received_delivery_failure_events(worker_id=worker_1, limit=100)
-    claimed_ids = [e.get("id") for e in claimed_w1]
-    assert evt["id"] in claimed_ids
+        # Worker 1 claims
+        claimed_w1 = repository.claim_received_delivery_failure_events(worker_id=worker_1, limit=100)
+        claimed_ids = [e.get("id") for e in claimed_w1]
+        assert evt["id"] in claimed_ids
 
-    # Worker 2 attempts to claim simultaneously -> must NOT receive the already queued event
-    claimed_w2 = repository.claim_received_delivery_failure_events(worker_id=worker_2, limit=100)
-    w2_ids = [e.get("id") for e in claimed_w2]
-    assert evt["id"] not in w2_ids
+        # Worker 2 attempts to claim simultaneously -> must NOT receive the already queued event
+        claimed_w2 = repository.claim_received_delivery_failure_events(worker_id=worker_2, limit=100)
+        w2_ids = [e.get("id") for e in claimed_w2]
+        assert evt["id"] not in w2_ids
 
 
 @pytest.mark.asyncio

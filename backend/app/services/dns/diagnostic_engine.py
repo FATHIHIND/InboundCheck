@@ -45,7 +45,12 @@ from app.schemas.dns import (
     DKIMSummary,
     DMARCSummary,
     BIMISummary,
-    DiagnosticSummary
+    DiagnosticSummary,
+    SOARecordItem,
+    CAARecordItem,
+    DNSRecordsSummary,
+    MailInfrastructureSummary,
+    ReputationSummary,
 )
 
 logger = logging.getLogger("DNSDiagnosticEngine")
@@ -139,27 +144,54 @@ class DNSDiagnosticEngine:
 
         return False
 
-    def _clean_domain(self, domain: str) -> str:
-        """Sanitize domain string and prevent SSRF / injection attacks."""
-        d = domain.strip().lower()
-        d = re.sub(r"^https?://", "", d)
-        d = re.sub(r"/.*$", "", d)
-        d = re.sub(r":\d+$", "", d)
-        d = d.strip(".")
+    @classmethod
+    def normalize_domain(cls, domain: str) -> str:
+        """
+        Normalize and sanitize domain string from user input or URLs.
+        - Strips whitespace
+        - Lowercases
+        - Removes leading http:// or https:// or any scheme
+        - Removes user:pass@ if present
+        - Removes path, query string, hash fragment
+        - Removes port (:80, :443, etc.)
+        - Normalizes www. prefix (for email deliverability, apex is authoritative for SPF/DMARC/MX unless subdomain has specific MX)
+        - Removes trailing slashes and dots
+        - Validates RFC 1035 compliance and SSRF restrictions
+        """
+        if not domain or not isinstance(domain, str):
+            raise ValueError("Domain must be a non-empty string.")
 
-        # SSRF & Injection checks
+        d = domain.strip().lower()
+        # Remove scheme
+        d = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", "", d)
+        # Remove userinfo
+        d = re.sub(r"^[^@/]+@", "", d)
+        # Remove path, query string, fragment
+        d = re.sub(r"[/?#].*$", "", d)
+        # Remove port
+        d = re.sub(r":\d+$", "", d)
+        # Strip trailing dots and slashes
+        d = d.strip("./")
+
+        # Strip www. prefix for apex email deliverability analysis if standard domain
+        if d.startswith("www.") and len(d.split(".")) > 2:
+            d = d[4:]
+
         if not d or len(d) > 253:
             raise ValueError(f"Invalid domain length: '{domain}'")
 
-        if self.is_ssrf_restricted(d):
+        if cls.is_ssrf_restricted(d):
             raise ValueError(f"SSRF Protection: Domain or target '{d}' is restricted or points to a private/internal network.")
 
-        # RFC 1035 Domain Format Validation
         domain_pattern = r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
         if not re.match(domain_pattern, d):
             raise ValueError(f"Invalid domain format: '{d}'")
 
         return d
+
+    def _clean_domain(self, domain: str) -> str:
+        """Sanitize domain string using class normalize_domain."""
+        return self.normalize_domain(domain)
 
     def _sanitize_selector(self, selector: str) -> Optional[str]:
         """Validate and sanitize DKIM selector string."""
@@ -183,8 +215,134 @@ class DNSDiagnosticEngine:
             logger.debug(f"TXT resolve error for {qname}: {e}")
             return []
 
-    async def check_mx(self, domain: str, resolver: dns.asyncresolver.Resolver) -> Tuple[MXSummary, List[str]]:
-        """Query and evaluate MX records for the apex domain."""
+    async def check_dns_records(self, domain: str, resolver: dns.asyncresolver.Resolver) -> Tuple[DNSRecordsSummary, Dict[str, Any]]:
+        """
+        Query core DNS infrastructure records: A, AAAA, NS, SOA, CAA, and apex CNAME.
+        Detects misconfigurations such as apex CNAME (RFC 1912/2181), missing CAA (RFC 6844),
+        or insufficient nameserver redundancy (RFC 2182).
+        """
+        a_records: List[str] = []
+        aaaa_records: List[str] = []
+        ns_records: List[str] = []
+        soa_item: Optional[SOARecordItem] = None
+        caa_records: List[CAARecordItem] = []
+        cname_records: List[str] = []
+        has_apex_cname = False
+
+        # 1. A records (IPv4)
+        try:
+            a_ans = await asyncio.wait_for(resolver.resolve(domain, dns.rdatatype.A), timeout=2.0)
+            for r in a_ans:
+                ip_str = str(getattr(r, "address", r)).strip()
+                if ip_str and ip_str not in a_records:
+                    a_records.append(ip_str)
+        except Exception:
+            pass
+
+        # 2. AAAA records (IPv6)
+        try:
+            aaaa_ans = await asyncio.wait_for(resolver.resolve(domain, dns.rdatatype.AAAA), timeout=2.0)
+            for r in aaaa_ans:
+                ip_str = str(getattr(r, "address", r)).strip()
+                if ip_str and ip_str not in aaaa_records:
+                    aaaa_records.append(ip_str)
+        except Exception:
+            pass
+
+        # 3. NS records (Nameservers)
+        try:
+            ns_ans = await asyncio.wait_for(resolver.resolve(domain, dns.rdatatype.NS), timeout=2.0)
+            for r in ns_ans:
+                ns_name = str(getattr(r, "target", r)).rstrip(".")
+                if ns_name and ns_name not in ns_records:
+                    ns_records.append(ns_name)
+        except Exception:
+            pass
+
+        # 4. SOA record (Start of Authority)
+        try:
+            soa_ans = await asyncio.wait_for(resolver.resolve(domain, dns.rdatatype.SOA), timeout=2.0)
+            if soa_ans:
+                rdata = soa_ans[0]
+                soa_item = SOARecordItem(
+                    mname=str(rdata.mname).rstrip("."),
+                    rname=str(rdata.rname).rstrip("."),
+                    serial=int(rdata.serial),
+                    refresh=int(rdata.refresh),
+                    retry=int(rdata.retry),
+                    expire=int(rdata.expire),
+                    minimum=int(rdata.minimum)
+                )
+        except Exception:
+            pass
+
+        # 5. CAA records (Certificate Authority Authorization, RFC 6844)
+        try:
+            caa_ans = await asyncio.wait_for(resolver.resolve(domain, dns.rdatatype.CAA), timeout=2.0)
+            for r in caa_ans:
+                tag = str(r.tag.decode("utf-8") if isinstance(r.tag, bytes) else r.tag).strip()
+                val = str(r.value.decode("utf-8") if isinstance(r.value, bytes) else r.value).strip()
+                caa_records.append(CAARecordItem(tag=tag, value=val, flags=int(r.flags)))
+        except Exception:
+            pass
+
+        # 6. CNAME at apex domain (RFC 1912 §2.4 / RFC 2181 §10.1 error)
+        try:
+            cname_ans = await asyncio.wait_for(resolver.resolve(domain, dns.rdatatype.CNAME), timeout=2.0)
+            for r in cname_ans:
+                cname_val = str(getattr(r, "target", r)).rstrip(".")
+                if cname_val:
+                    cname_records.append(cname_val)
+                    has_apex_cname = True
+        except Exception:
+            pass
+
+        has_caa = len(caa_records) > 0
+        ns_count = len(ns_records)
+
+        # Status evaluation
+        if has_apex_cname or (not a_records and not aaaa_records and not ns_records):
+            status = "critical"
+        elif ns_count < 2 or not has_caa or (not a_records and not aaaa_records):
+            status = "warning"
+        else:
+            status = "optimal"
+
+        dns_summary = DNSRecordsSummary(
+            status=status,
+            a_records=a_records,
+            aaaa_records=aaaa_records,
+            ns_records=ns_records,
+            soa=soa_item,
+            caa_records=caa_records,
+            cname_records=cname_records,
+            has_apex_cname=has_apex_cname,
+            ns_count=ns_count,
+            has_caa=has_caa
+        )
+
+        raw_dns = {
+            "a": a_records,
+            "aaaa": aaaa_records,
+            "ns": ns_records,
+            "soa": soa_item.model_dump() if soa_item else None,
+            "caa": [c.model_dump() for c in caa_records],
+            "cname": cname_records,
+            "has_apex_cname": has_apex_cname
+        }
+
+        return dns_summary, raw_dns
+
+    async def check_mx(
+        self,
+        domain: str,
+        resolver: dns.asyncresolver.Resolver
+    ) -> Tuple[MXSummary, List[str], MailInfrastructureSummary]:
+        """
+        Query and evaluate MX records for domain. Resolves host IPs (IPv4/IPv6),
+        validates hostnames against RFC 5321/2181, performs reverse DNS (PTR),
+        and verifies that mail hosts do not route to private/internal networks.
+        """
         raw_lines = []
         records: List[MXRecordItem] = []
         primary_provider = None
@@ -216,6 +374,119 @@ class DNSDiagnosticEngine:
 
         records.sort(key=lambda x: x.preference)
 
+        # Inspect Mail Infrastructure for each MX host (A, AAAA, CNAME, PTR)
+        async def _inspect_mx_host(rec: MXRecordItem) -> Dict[str, Any]:
+            h = rec.host
+            ipv4_list: List[str] = []
+            ipv6_list: List[str] = []
+            is_cname = False
+            is_null = h in [".", ""]
+            is_ip_literal = bool(re.match(r"^\d+\.\d+\.\d+\.\d+$", h))
+            ptr_map: Dict[str, List[str]] = {}
+            is_private = False
+
+            if not is_null and not is_ip_literal:
+                # Check CNAME on MX host (RFC 2181 §10.3 violation if True)
+                try:
+                    c_ans = await asyncio.wait_for(resolver.resolve(h, dns.rdatatype.CNAME), timeout=1.5)
+                    if c_ans:
+                        is_cname = True
+                except Exception:
+                    pass
+
+                # Resolve IPv4
+                try:
+                    a_ans = await asyncio.wait_for(resolver.resolve(h, dns.rdatatype.A), timeout=1.5)
+                    for r in a_ans:
+                        ip_s = str(getattr(r, "address", r)).strip()
+                        if ip_s and ip_s not in ipv4_list:
+                            ipv4_list.append(ip_s)
+                            if self.is_ssrf_restricted(ip_s):
+                                is_private = True
+                except Exception:
+                    pass
+
+                # Resolve IPv6
+                try:
+                    aaaa_ans = await asyncio.wait_for(resolver.resolve(h, dns.rdatatype.AAAA), timeout=1.5)
+                    for r in aaaa_ans:
+                        ip_s = str(getattr(r, "address", r)).strip()
+                        if ip_s and ip_s not in ipv6_list:
+                            ipv6_list.append(ip_s)
+                except Exception:
+                    pass
+
+                # Query reverse DNS (PTR) for public IPv4
+                for ip_s in ipv4_list:
+                    if not self.is_ssrf_restricted(ip_s):
+                        try:
+                            rev_name = dns.reversename.from_address(ip_s)
+                            ptr_ans = await asyncio.wait_for(resolver.resolve(rev_name, dns.rdatatype.PTR), timeout=1.5)
+                            ptrs = [str(r.target).rstrip(".") for r in ptr_ans]
+                            ptr_map[ip_s] = ptrs
+                        except Exception:
+                            ptr_map[ip_s] = []
+
+            rec.ipv4 = ipv4_list
+            rec.ipv6 = ipv6_list
+
+            return {
+                "host": h,
+                "preference": rec.preference,
+                "provider": rec.provider_detected,
+                "ipv4": ipv4_list,
+                "ipv6": ipv6_list,
+                "ptr": ptr_map,
+                "is_cname": is_cname,
+                "is_null": is_null,
+                "is_ip_literal": is_ip_literal,
+                "is_private": is_private,
+                "resolves": len(ipv4_list) > 0 or len(ipv6_list) > 0,
+            }
+
+        mx_details: List[Dict[str, Any]] = []
+        if records:
+            mx_details = await asyncio.gather(*[_inspect_mx_host(r) for r in records])
+
+        all_mail_ips: List[str] = []
+        all_ptrs: Dict[str, List[str]] = {}
+        for d in mx_details:
+            for ip in d["ipv4"]:
+                if ip not in all_mail_ips and not d["is_private"]:
+                    all_mail_ips.append(ip)
+            all_ptrs.update(d.get("ptr", {}))
+
+        has_cname_mx = any(d["is_cname"] for d in mx_details)
+        has_private_ip = any(d["is_private"] for d in mx_details)
+        has_unresolvable = any(not d["resolves"] and not d["is_null"] for d in mx_details)
+        has_null_mx = any(d["is_null"] for d in mx_details)
+        all_mx_valid = not has_cname_mx and not has_private_ip and not has_unresolvable and not has_null_mx
+        has_redundancy = len(records) >= 2
+
+        # Infrastructure status
+        if len(records) == 0:
+            infra_status = "missing"
+        elif has_private_ip or has_unresolvable or has_null_mx:
+            infra_status = "critical"
+        elif not has_redundancy or has_cname_mx or any(len(p) == 0 for p in all_ptrs.values()):
+            infra_status = "warning"
+        else:
+            infra_status = "optimal"
+
+        mail_infra = MailInfrastructureSummary(
+            status=infra_status,
+            mx_hosts_count=len(records),
+            mx_host_count=len(records),
+            mx_records=mx_details,
+            resolved_mail_ips=all_mail_ips,
+            ptr_records=all_ptrs,
+            all_mx_valid=all_mx_valid,
+            has_redundancy=has_redundancy,
+            has_private_ip=has_private_ip,
+            has_cname_mx=has_cname_mx,
+            details=mx_details
+        )
+
         status = "missing"
         if len(records) >= 2:
             status = "optimal"
@@ -228,7 +499,7 @@ class DNSDiagnosticEngine:
             records=records,
             raw=raw_lines,
             primary_provider=primary_provider
-        ), raw_lines
+        ), raw_lines, mail_infra
 
     async def check_spf(self, domain: str, resolver: dns.asyncresolver.Resolver) -> Tuple[SPFSummary, List[str]]:
         """Query, parse, and validate SPF TXT record according to RFC 7208."""
@@ -517,24 +788,86 @@ class DNSDiagnosticEngine:
     async def audit_domain(
         self,
         domain: str,
-        custom_selectors: Optional[List[str]] = None
+        custom_selectors: Optional[List[str]] = None,
+        include_reputation: bool = True
     ) -> Tuple[DiagnosticSummary, Dict[str, Any], float]:
         """
-        Execute full asynchronous parallel DNS audit across MX, SPF, DKIM, DMARC, and BIMI.
+        Execute full asynchronous parallel DNS audit across:
+        1. DNS core records (A, AAAA, NS, SOA, CAA, CNAME)
+        2. Email Authentication (SPF, DKIM, DMARC, BIMI)
+        3. Mail Infrastructure (MX hosts, IPs, PTR reverse DNS)
+        4. Reputation / DNSBL scans (domain + mail server IPs)
         """
         start_time = time.perf_counter()
         clean_domain = self._clean_domain(domain)
         resolver = self._get_resolver()
 
+        dns_task = self.check_dns_records(clean_domain, resolver)
         mx_task = self.check_mx(clean_domain, resolver)
         spf_task = self.check_spf(clean_domain, resolver)
         dkim_task = self.check_dkim(clean_domain, custom_selectors, resolver)
         dmarc_task = self.check_dmarc(clean_domain, resolver)
         bimi_task = self.check_bimi(clean_domain, resolver)
 
-        (mx_res, raw_mx), (spf_res, raw_spf), (dkim_res, raw_dkim), (dmarc_res, raw_dmarc), (bimi_res, raw_bimi) = (
-            await asyncio.gather(mx_task, spf_task, dkim_task, dmarc_task, bimi_task)
-        )
+        (
+            (dns_summary, raw_dns),
+            (mx_res, raw_mx, mail_infra_res),
+            (spf_res, raw_spf),
+            (dkim_res, raw_dkim),
+            (dmarc_res, raw_dmarc),
+            (bimi_res, raw_bimi)
+        ) = await asyncio.gather(dns_task, mx_task, spf_task, dkim_task, dmarc_task, bimi_task)
+
+        # Reputation / RBL Check (Domain + Mail Server IPs)
+        rep_summary = None
+        raw_rep: Dict[str, Any] = {}
+        if include_reputation:
+            try:
+                from app.services.dns.rbl_scanner import rbl_scanner
+                mail_ips = mail_infra_res.resolved_mail_ips if mail_infra_res else []
+                rbl_result = await asyncio.wait_for(
+                    rbl_scanner.scan_domain(clean_domain, additional_ips=mail_ips),
+                    timeout=4.0
+                )
+                rep_summary = ReputationSummary(
+                    clean_count=rbl_result.rbl_clean_count,
+                    listed_count=rbl_result.rbl_listed_count,
+                    unknown_count=rbl_result.rbl_unknown_count,
+                    error_count=rbl_result.rbl_error_count,
+                    total_providers=rbl_result.rbl_total_count,
+                    overall_status=rbl_result.overall_status,
+                    highest_severity=rbl_result.highest_severity,
+                    listings=[
+                        {
+                            "provider_id": r.provider_id,
+                            "provider_name": r.provider_name,
+                            "zone": r.zone,
+                            "target_type": r.target_type,
+                            "status": r.status,
+                            "severity": r.severity,
+                            "queried_target": r.queried_target,
+                            "response_codes": r.response_codes,
+                            "latency_ms": r.latency_ms,
+                            "message": r.message,
+                            "delisting_url": r.delisting_url,
+                        }
+                        for r in rbl_result.results
+                    ]
+                )
+                raw_rep = rbl_result.model_dump()
+            except Exception as e:
+                logger.warning(f"RBL reputation scan notice for {clean_domain}: {e}")
+                rep_summary = ReputationSummary(
+                    clean_count=0,
+                    listed_count=0,
+                    unknown_count=0,
+                    error_count=10,
+                    total_providers=10,
+                    overall_status="unavailable",
+                    highest_severity="none",
+                    listings=[]
+                )
+                raw_rep = {"error": str(e), "overall_status": "unavailable"}
 
         exec_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
@@ -543,15 +876,21 @@ class DNSDiagnosticEngine:
             spf=spf_res,
             dkim=dkim_res,
             dmarc=dmarc_res,
-            bimi=bimi_res
+            bimi=bimi_res,
+            dns_records=dns_summary,
+            mail_infrastructure=mail_infra_res,
+            reputation=rep_summary
         )
 
         raw_responses = {
+            "dns": raw_dns,
             "mx": raw_mx,
+            "mail_infrastructure": mail_infra_res.model_dump() if mail_infra_res else None,
             "spf": raw_spf,
             "dkim": raw_dkim,
             "dmarc": raw_dmarc,
-            "bimi": raw_bimi
+            "bimi": raw_bimi,
+            "reputation": raw_rep
         }
 
         return summary, raw_responses, exec_ms

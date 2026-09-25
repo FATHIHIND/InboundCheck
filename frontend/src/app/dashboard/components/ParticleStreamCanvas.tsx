@@ -81,7 +81,7 @@ export default function ParticleStreamCanvas({
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, [isOptimizing]);
+  }, [isOptimizing, isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <canvas

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { formatApiErrorMessage } from "@/lib/apiResource";
 import { useApiResource } from "@/hooks/useApiResource";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
 import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
@@ -155,9 +156,10 @@ export default function ShopifyHubPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Unable to simulate order delivery. Please verify that your store connection is active.");
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Unable to simulate order delivery. Please verify that your store connection is active.");
       }
-      setSimulationResult(await res.json());
+      const data = await res.json();
+      setSimulationResult(data.simulation || data);
       reloadStores();
       reloadFailoverLogs();
     } catch (err: any) {
@@ -182,7 +184,7 @@ export default function ShopifyHubPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Unable to verify sender address alignment. Please check your store configuration.");
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Unable to verify sender address alignment. Please check your store configuration.");
       }
 
       const data = await res.json();

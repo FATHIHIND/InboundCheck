@@ -4,10 +4,10 @@ InboundCheck - DNS API Routes (v1)
 Endpoints for real-time DNS diagnostic audits, health scoring, record generation, and automated Telegram notification.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Query
 from datetime import datetime, timezone
 import uuid
-from typing import List
+from typing import List, Optional, Dict, Any
 import logging
 
 from app.core.config import settings
@@ -52,19 +52,44 @@ async def execute_dns_audit(
     and automatic degradation alerts on threshold dips.
     """
     try:
-        clean_domain = request.domain.strip().lower()
-        if not clean_domain or len(clean_domain) < 3:
-            raise HTTPException(status_code=400, detail="A valid domain name is required.")
+        clean_domain = DNSDiagnosticEngine.normalize_domain(request.domain)
 
+        include_rep = getattr(request, "include_reputation", True)
         summary, raw_responses, exec_ms = await diagnostic_engine.audit_domain(
             domain=clean_domain,
-            custom_selectors=request.selectors
+            custom_selectors=request.selectors,
+            include_reputation=include_rep
         )
 
         health_score, overall_status, breakdown, issues, fixes = DeliverabilityScorer.calculate_health_score(
             domain=clean_domain,
             summary=summary
         )
+
+        checks_summary = DeliverabilityScorer.calculate_checks_summary(
+            issues=issues,
+            reputation=summary.reputation
+        )
+        risk_level = DeliverabilityScorer.calculate_risk_level(health_score)
+
+        # Persist audit log for user history and telemetry
+        try:
+            audit_payload = {
+                "health_score": health_score,
+                "status": overall_status,
+                "summary": summary.model_dump(),
+                "issues": [i.model_dump() for i in issues],
+                "fixes": [f.model_dump() for f in fixes],
+                "raw_responses": raw_responses
+            }
+            supabase_service.save_audit_log(
+                user_id=user_id,
+                domain_id=None,
+                domain_name=clean_domain,
+                audit_result=audit_payload
+            )
+        except Exception as persist_err:
+            logger.warning(f"Audit log persistence skipped for {clean_domain}: {persist_err}")
 
         # Real-time Degradation Alert Dispatcher: Alert on score dip below threshold or protocol failure
         try:
@@ -83,6 +108,8 @@ async def execute_dns_audit(
             domain=clean_domain,
             health_score=health_score,
             status=overall_status,
+            risk_level=risk_level,
+            checks_summary=checks_summary,
             timestamp=datetime.utcnow(),
             execution_time_ms=exec_ms,
             category_scores=breakdown,
@@ -90,6 +117,14 @@ async def execute_dns_audit(
             issues=issues,
             fixes=fixes,
             raw_responses=raw_responses
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.warning(f"Validation error in DNS audit for {request.domain}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
     except Exception as e:
         logger.error(f"Error executing DNS audit for {request.domain}: {e}")
@@ -110,6 +145,14 @@ async def generate_dns_records(
     """
     try:
         return DNSRecordGenerator.generate_full_stack_records(request)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.warning(f"Validation error generating records for {request.domain}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Error generating DNS records: {e}")
         raise HTTPException(
@@ -152,14 +195,14 @@ async def scan_domain_rbl(
     Persists granular evidence for auditability.
     """
     try:
-        clean_domain = request.domain.strip().lower()
-        if not clean_domain or len(clean_domain) < 3:
-            raise HTTPException(status_code=400, detail="A valid domain name or IP is required.")
+        clean_domain = DNSDiagnosticEngine.normalize_domain(request.domain)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
-        # Anti-SSRF check
-        if DNSDiagnosticEngine.is_ssrf_restricted(clean_domain):
-            raise HTTPException(status_code=400, detail="Restricted IP or domain target is not permitted for scanning.")
-
+    try:
         result = await rbl_scanner.scan_domain(clean_domain)
 
         # Persist audit evidence
@@ -344,4 +387,28 @@ async def verify_remote_asset(
         failure_code=result.failure_code,
         error_message=result.error_message,
         created_at=now_iso,
+    )
+
+
+@router.get("/history", response_model=List[Dict[str, Any]])
+async def get_domain_scan_history(
+    domain: Optional[str] = Query(None, description="Optional domain to filter audit history"),
+    limit: int = Query(10, ge=1, le=50, description="Max audit logs to return"),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Retrieve previous DNS diagnostic scan history for the authenticated user.
+    Enforces tenant isolation by querying strictly with verified user_id.
+    """
+    clean_domain = None
+    if domain and domain.strip():
+        try:
+            clean_domain = DNSDiagnosticEngine.normalize_domain(domain)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return supabase_service.get_audit_history(
+        user_id=user_id,
+        domain_name=clean_domain,
+        limit=limit,
     )

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -20,26 +20,66 @@ import {
   Send,
   Server,
   ShieldCheck,
+  ShieldAlert,
   Lock,
   Globe,
   Layers,
   Radio,
   Cpu,
+  ExternalLink,
+  XCircle,
+  AlertCircle,
+  Info,
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
 import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
-import { ApiError } from "@/lib/apiResource";
+import { ApiError, formatApiErrorMessage } from "@/lib/apiResource";
+import { normalizeDomainInput } from "@/lib/domain";
 import { SpfMergePreview } from "./spf-merge-preview";
 import { AssetVerificationResult } from "./asset-verification-result";
 import { SeedTestingView } from "./SeedTestingView";
+
+interface DiagnosticIssueItem {
+  id: string;
+  category: string;
+  severity: "critical" | "warning" | "info" | string;
+  title?: string;
+  description?: string;
+  message?: string;
+  impact?: string;
+  recommendation?: string;
+  evidence?: string | null;
+  remediation_record?: {
+    record_type: string;
+    host: string;
+    value: string;
+    ttl?: string | number;
+  } | null;
+}
+
+interface ChecksSummaryItem {
+  total_checks: number;
+  passed?: number;
+  passed_count?: number;
+  warnings?: number;
+  warning_count?: number;
+  failures?: number;
+  failure_count?: number;
+  unavailable?: number;
+  unavailable_count?: number;
+}
 
 interface AuditResult {
   domain: string;
   health_score: number;
   status: "optimal" | "warning" | "critical" | string;
+  risk_level?: "Low Risk" | "Medium Risk" | "High Risk" | "Critical Risk" | string;
+  checks_summary?: ChecksSummaryItem;
   execution_time_ms: number;
+  issues?: DiagnosticIssueItem[];
+  fixes?: GeneratedFix[];
   category_scores: {
     dmarc_score: number;
     dmarc_max: number;
@@ -57,6 +97,7 @@ interface AuditResult {
       status: string;
       dns_lookup_count: number;
       record_count: number;
+      raw?: string;
       raw_record?: string;
     };
     dkim: {
@@ -68,12 +109,64 @@ interface AuditResult {
       status: string;
       policy?: string;
       rua_emails?: string[];
+      raw?: string;
       raw_record?: string;
       alignment_mode?: string;
     };
     bimi?: {
       status: string;
+      raw?: string;
+      logo_url?: string;
       svg_url?: string;
+    };
+    dns_records?: {
+      a_records: string[];
+      aaaa_records: string[];
+      ns_records: string[];
+      ns_count: number;
+      has_apex_cname: boolean;
+      apex_cname_target?: string | null;
+      soa?: {
+        primary_ns?: string;
+        contact?: string;
+        serial?: number;
+      } | null;
+      caa?: Array<{ flag: number; tag: string; value: string }>;
+      has_caa: boolean;
+      txt_records_count: number;
+    };
+    mail_infrastructure?: {
+      mx_records: Array<{
+        host: string;
+        preference: number;
+        ipv4?: string[];
+        ipv6?: string[];
+        is_resolvable: boolean;
+        is_private_ip: boolean;
+        is_cname: boolean;
+        ptr_records?: string[];
+      }>;
+      mx_host_count: number;
+      all_hosts_resolvable: boolean;
+      has_private_ips: boolean;
+      has_cname_mx: boolean;
+      ptr_valid_count: number;
+      ptr_total_checked: number;
+      is_deliverable: boolean;
+      detected_provider?: string | null;
+    };
+    mx?: Record<string, any>;
+    reputation?: {
+      overall_status: "clean" | "listed" | "partial" | "unavailable" | string;
+      total_checked: number;
+      listed_count: number;
+      clean_count: number;
+      unknown_count: number;
+      listings?: Array<{
+        rbl_server: string;
+        status: string;
+        response_ip?: string;
+      }>;
     };
   };
   raw_responses: any;
@@ -97,8 +190,9 @@ function DNSInspectorContent() {
   const queryTab = searchParams.get("tab");
 
   const [domainInput, setDomainInput] = useState(
-    queryDomain ? queryDomain.trim().toLowerCase() : ""
+    queryDomain ? normalizeDomainInput(queryDomain) : ""
   );
+  const lastSyncedQueryDomainRef = useRef<string | null>(null);
   const [customSelectors, setCustomSelectors] = useState("shopify, google, k1");
   const [activeTab, setActiveTab] = useState<"generator" | "inspector" | "spf-merge" | "seed-testing">(
     queryTab === "seed-testing" || queryTab === "seed" ? "seed-testing" : "generator"
@@ -182,8 +276,29 @@ function DNSInspectorContent() {
   }, []);
 
   const handleRunAudit = useCallback(async (targetDomain?: string) => {
-    const d = (targetDomain || domainInput).trim().toLowerCase();
-    if (!d) return;
+    const raw = (targetDomain || domainInput || "").trim();
+    if (!raw) {
+      setAuditError({
+        message: "Please enter a valid sending domain to inspect (e.g. store.com or https://store.com).",
+        retryable: false,
+        endpoint: "/api/v1/dns/audit",
+      });
+      return;
+    }
+
+    const d = normalizeDomainInput(raw);
+    if (!d || d.length < 3 || !d.includes(".")) {
+      setAuditError({
+        message: `Invalid domain format '${raw}'. Please provide a valid fully qualified domain name (e.g. store.com).`,
+        retryable: false,
+        endpoint: "/api/v1/dns/audit",
+      });
+      return;
+    }
+
+    if (d !== domainInput) {
+      setDomainInput(d);
+    }
 
     setIsLoading(true);
     try {
@@ -198,6 +313,7 @@ function DNSInspectorContent() {
         body: JSON.stringify({
           domain: d,
           selectors: selectorsList,
+          include_reputation: true,
         }),
       });
 
@@ -208,7 +324,7 @@ function DNSInspectorContent() {
       } else {
         const body = await res.json().catch(() => ({}));
         setAuditError({
-          message: body.detail || "DNS resolution failed for the specified domain. Verify your authoritative nameservers, DNS zone propagation, and published TXT/CNAME records.",
+          message: formatApiErrorMessage(body.detail || body.message || body) || "DNS resolution failed for the specified domain. Verify your authoritative nameservers, DNS zone propagation, and published TXT/CNAME records.",
           status: res.status,
           retryable: true,
           endpoint: "/api/v1/dns/audit",
@@ -229,7 +345,7 @@ function DNSInspectorContent() {
   }, [domainInput, customSelectors]);
 
   const handleGenerateRecords = useCallback(async (targetDomain?: string, targetEmail?: string) => {
-    const d = (targetDomain || domainInput).trim().toLowerCase();
+    const d = normalizeDomainInput(targetDomain || domainInput);
     if (!d) {
       setGeneratedRecords([]);
       return;
@@ -277,6 +393,10 @@ function DNSInspectorContent() {
   // Initial load and URL param deep-link reactivity
   useEffect(() => {
     const target = (queryDomain || "").trim().toLowerCase();
+    if (lastSyncedQueryDomainRef.current === target) {
+      return;
+    }
+    lastSyncedQueryDomainRef.current = target;
 
     if (target) {
       setDomainInput(target);
@@ -284,11 +404,6 @@ function DNSInspectorContent() {
       setDmarcReportEmail(targetEmail);
       handleRunAudit(target);
       handleGenerateRecords(target, targetEmail);
-    } else {
-      setDomainInput("");
-      setDmarcReportEmail("");
-      setGeneratedRecords([]);
-      setAuditData(null);
     }
   }, [queryDomain, handleRunAudit, handleGenerateRecords]);
 
@@ -312,15 +427,7 @@ function DNSInspectorContent() {
 
     try {
       setVerifyPollingText("Querying multi-resolver nameservers (1.1.1.1 & 8.8.8.8)...");
-      await new Promise((r) => setTimeout(r, 600));
-
-      setVerifyPollingText("Validating SPF 10-lookup limits and DKIM CNAME selectors...");
-      await new Promise((r) => setTimeout(r, 600));
-
-      setVerifyPollingText("Auditing DMARC enforcement policy and reporting targets...");
-      await new Promise((r) => setTimeout(r, 500));
-
-      const selectorsList = customSelectors.split(",").map((s) => s.trim());
+      const selectorsList = customSelectors.split(",").map((s) => s.trim()).filter(Boolean);
 
       const res = await apiFetch("/api/v1/dns/audit", {
         method: "POST",
@@ -331,9 +438,17 @@ function DNSInspectorContent() {
       if (res.ok) {
         const data: AuditResult = await res.json();
         setAuditData(data);
+        if (data.status === "critical") {
+          setVerifyOutcome("error");
+          setTelegramAlertDispatched(false);
+        } else {
+          setVerifyOutcome("success");
+          setTelegramAlertDispatched(true);
+        }
+      } else {
+        setVerifyOutcome("error");
+        setTelegramAlertDispatched(false);
       }
-      setVerifyOutcome("success");
-      setTelegramAlertDispatched(true);
     } catch {
       setVerifyOutcome("error");
       setTelegramAlertDispatched(false);
@@ -516,7 +631,21 @@ function DNSInspectorContent() {
                 type="text"
                 value={domainInput}
                 onChange={(e) => setDomainInput(e.target.value)}
-                placeholder="Enter store domain (e.g. store.com)"
+                onBlur={() => {
+                  if (domainInput) {
+                    const norm = normalizeDomainInput(domainInput);
+                    if (norm !== domainInput) setDomainInput(norm);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const norm = normalizeDomainInput(domainInput);
+                    if (norm !== domainInput) setDomainInput(norm);
+                    handleRunAudit(norm);
+                    handleGenerateRecords(norm);
+                  }
+                }}
+                placeholder="Enter store domain (e.g. store.com or https://store.com)"
                 className="bg-transparent text-slate-900 placeholder:text-slate-400 font-medium w-full focus:outline-none font-mono text-xs leading-none"
               />
             </div>
@@ -591,6 +720,7 @@ function DNSInspectorContent() {
                 handleGenerateRecords();
               }}
               isLoading={isLoading}
+              disabled={isLoading || !domainInput.trim()}
               loadingText="Querying DNS..."
               icon={<Zap className="w-3.5 h-3.5 fill-current" />}
               size="sm"
@@ -1006,6 +1136,51 @@ function DNSInspectorContent() {
           {activeTab === "inspector" && (
             auditData ? (
               <div className="space-y-5">
+                {/* Risk Level & Multi-Protocol Checks Counter */}
+                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Security Risk Posture:</span>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                      auditData.risk_level === "Low Risk" || auditData.health_score >= 85
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : auditData.risk_level === "Medium Risk" || auditData.health_score >= 60
+                        ? "bg-amber-50 text-amber-800 border-amber-300"
+                        : "bg-rose-50 text-rose-800 border-rose-300"
+                    }`}>
+                      {auditData.risk_level === "Low Risk" || auditData.health_score >= 85 ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                      )}
+                      {auditData.risk_level || (auditData.health_score >= 85 ? "Low Risk" : auditData.health_score >= 60 ? "Medium Risk" : "Critical Risk")}
+                    </span>
+                  </div>
+
+                  {auditData.checks_summary && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-500 uppercase font-mono mr-1">Audit Checks:</span>
+                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200" title="Checks Passed">
+                        ✓ {auditData.checks_summary.passed ?? auditData.checks_summary.passed_count ?? 0} Passed
+                      </span>
+                      {(auditData.checks_summary.warnings ?? auditData.checks_summary.warning_count ?? 0) > 0 && (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200" title="Checks with Warnings">
+                          ⚠ {auditData.checks_summary.warnings ?? auditData.checks_summary.warning_count ?? 0} Warnings
+                        </span>
+                      )}
+                      {(auditData.checks_summary.failures ?? auditData.checks_summary.failure_count ?? 0) > 0 && (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-800 border border-rose-200" title="Failed Checks">
+                          ✕ {auditData.checks_summary.failures ?? auditData.checks_summary.failure_count ?? 0} Failures
+                        </span>
+                      )}
+                      {(auditData.checks_summary.unavailable ?? auditData.checks_summary.unavailable_count ?? 0) > 0 && (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200" title="Unavailable Checks">
+                          — {auditData.checks_summary.unavailable ?? auditData.checks_summary.unavailable_count ?? 0} Unavailable
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Top Diagnostic KPI Tiles */}
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="bg-white border border-slate-200 rounded-lg shadow-xs p-4 space-y-1">
@@ -1058,7 +1233,7 @@ function DNSInspectorContent() {
                         DNS Protocol Verification &amp; Merchant Diagnostics
                       </h3>
                       <p className="text-xs text-slate-600 mt-0.5">
-                        Deep inspection across SPF, DKIM, DMARC, and BIMI records with Polaris merchant impact analysis.
+                        Deep inspection across SPF, DKIM, DMARC, BIMI, MX routing, Core DNS, and Blacklist reputation.
                       </p>
                     </div>
                     <span className="text-[10px] font-mono font-semibold text-emerald-800 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200">
@@ -1087,8 +1262,8 @@ function DNSInspectorContent() {
                             </span>
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
-                            <code className="text-slate-800 text-[11px] break-all line-clamp-2 block" title={auditData.summary.spf.raw_record}>
-                              {auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
+                            <code className="text-slate-800 text-[11px] break-all line-clamp-2 block" title={auditData.summary.spf.raw || auditData.summary.spf.raw_record}>
+                              {auditData.summary.spf.raw || auditData.summary.spf.raw_record || "v=spf1 include:shops.shopify.com ~all"}
                             </code>
                           </td>
                           <td className="py-3 px-3 text-slate-500 text-[11px]">
@@ -1132,23 +1307,33 @@ function DNSInspectorContent() {
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
                             <div className="flex flex-wrap gap-1">
-                              {auditData.summary.dkim.found_selectors.map((s, i) => (
-                                <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700">
-                                  {s}
-                                </span>
-                              ))}
+                              {auditData.summary.dkim?.found_selectors && auditData.summary.dkim.found_selectors.length > 0 ? (
+                                auditData.summary.dkim.found_selectors.map((s, i) => (
+                                  <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700">
+                                    {s}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[11px] text-slate-500 italic">None detected</span>
+                              )}
                             </div>
                           </td>
                           <td className="py-3 px-3 text-slate-500 text-[11px]">
                             RFC 6376 (2048-bit RSA)
                           </td>
                           <td className="py-3 px-3 text-center">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              OPTIMAL
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              auditData.summary.dkim?.found_selectors && auditData.summary.dkim.found_selectors.length > 0
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-rose-50 text-rose-800 border-rose-200"
+                            }`}>
+                              {auditData.summary.dkim?.found_selectors && auditData.summary.dkim.found_selectors.length > 0 ? "OPTIMAL" : "CRITICAL"}
                             </span>
                           </td>
                           <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
-                            Cryptographic signatures verified. Protects order emails from in-flight tampering or forgery.
+                            {auditData.summary.dkim?.found_selectors && auditData.summary.dkim.found_selectors.length > 0
+                              ? "Cryptographic signatures verified. Protects order emails from in-flight tampering or forgery."
+                              : "No active DKIM selectors discovered. Transactional emails cannot be cryptographically authenticated."}
                           </td>
                           <td className="py-3 px-4 text-right">
                             <button
@@ -1169,8 +1354,8 @@ function DNSInspectorContent() {
                             </span>
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
-                            <code className="text-slate-800 text-[11px] break-all line-clamp-2 block" title={auditData.summary.dmarc.raw_record}>
-                              {auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100;"}
+                            <code className="text-slate-800 text-[11px] break-all line-clamp-2 block" title={auditData.summary.dmarc.raw || auditData.summary.dmarc.raw_record}>
+                              {auditData.summary.dmarc.raw || auditData.summary.dmarc.raw_record || "v=DMARC1; p=reject; pct=100;"}
                             </code>
                           </td>
                           <td className="py-3 px-3 text-slate-500 text-[11px]">
@@ -1215,34 +1400,315 @@ function DNSInspectorContent() {
                             </span>
                           </td>
                           <td className="py-3 px-4 max-w-[200px]">
-                            <code className="text-slate-600 text-[11px] truncate block" title={auditData.summary.bimi?.svg_url || "default._bimi"}>
-                              {auditData.summary.bimi?.svg_url || "default._bimi"}
+                            <code className="text-slate-600 text-[11px] truncate block" title={auditData.summary.bimi?.logo_url || auditData.summary.bimi?.svg_url || auditData.summary.bimi?.raw || "default._bimi"}>
+                              {auditData.summary.bimi?.logo_url || auditData.summary.bimi?.svg_url || auditData.summary.bimi?.raw || "default._bimi (None)"}
                             </code>
                           </td>
                           <td className="py-3 px-3 text-slate-500 text-[11px]">
                             Brand Indicators (SVG Tiny-PS)
                           </td>
                           <td className="py-3 px-3 text-center">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              VERIFIED
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                              auditData.summary.bimi?.status === "optimal"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-slate-100 text-slate-700 border-slate-200"
+                            }`}>
+                              {auditData.summary.bimi?.status === "optimal" ? "VERIFIED" : "OPTIONAL"}
                             </span>
                           </td>
                           <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
-                            Displays your official store logo directly beside checkout receipts in Gmail and Apple Mail.
+                            {auditData.summary.bimi?.status === "optimal"
+                              ? "Displays your official store logo directly beside checkout receipts in Gmail and Apple Mail."
+                              : "No BIMI record published. (Optional: Requires VMC certificate to display brand logo in supported inboxes)."}
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <span className="text-[11px] text-slate-500 font-mono">Active</span>
+                            <span className="text-[11px] text-slate-500 font-mono">
+                              {auditData.summary.bimi?.status === "optimal" ? "Active" : "Optional"}
+                            </span>
                           </td>
                         </tr>
+
+                        {/* Row 5: MX Mail Infrastructure */}
+                        {(auditData.summary.mail_infrastructure || auditData.summary.mx) && (
+                          <tr className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                                MX ROUTE
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 max-w-[200px]">
+                              <div className="space-y-0.5">
+                                {(auditData.summary.mail_infrastructure?.mx_records || auditData.summary.mx?.records || []).slice(0, 2).map((mx: any, i: number) => (
+                                  <code key={i} className="text-slate-800 text-[11px] block truncate" title={`${mx.host} (pref ${mx.preference})`}>
+                                    {mx.host}
+                                  </code>
+                                ))}
+                                {((auditData.summary.mail_infrastructure?.mx_host_count ?? (auditData.summary.mail_infrastructure as any)?.mx_hosts_count ?? auditData.summary.mx?.record_count ?? 0) > 2) && (
+                                  <span className="text-[10px] text-slate-500 font-mono">
+                                    +{(auditData.summary.mail_infrastructure?.mx_host_count ?? (auditData.summary.mail_infrastructure as any)?.mx_hosts_count ?? auditData.summary.mx?.record_count ?? 0) - 2} more hosts
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 text-[11px]">
+                              RFC 5321 ({auditData.summary.mail_infrastructure?.ptr_valid_count ?? 0}/{auditData.summary.mail_infrastructure?.ptr_total_checked ?? 0} PTR Valid)
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                ((auditData.summary.mail_infrastructure?.is_deliverable ?? (auditData.summary.mx?.status !== "critical")) && !auditData.summary.mail_infrastructure?.has_private_ips)
+                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                  : "bg-rose-50 text-rose-800 border-rose-200"
+                              }`}>
+                                {((auditData.summary.mail_infrastructure?.is_deliverable ?? (auditData.summary.mx?.status !== "critical")) && !auditData.summary.mail_infrastructure?.has_private_ips)
+                                  ? "OPTIMAL"
+                                  : "CRITICAL"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
+                              {auditData.summary.mail_infrastructure?.detected_provider && (
+                                <span className="font-semibold text-slate-900 block mb-0.5">
+                                  {auditData.summary.mail_infrastructure.detected_provider}
+                                </span>
+                              )}
+                              {auditData.summary.mail_infrastructure?.has_private_ips ? (
+                                <span className="text-rose-700 font-medium">
+                                  RFC 1918 private IPs detected on mail servers. External senders cannot deliver mail.
+                                </span>
+                              ) : auditData.summary.mail_infrastructure?.has_cname_mx ? (
+                                <span className="text-amber-700 font-medium">
+                                  MX records point to CNAME aliases violating RFC 2181.
+                                </span>
+                              ) : (
+                                <span>Mail servers resolvable with reverse DNS PTR alignment.</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="text-[11px] text-slate-500 font-mono">
+                                {auditData.summary.mail_infrastructure?.mx_host_count ?? (auditData.summary.mail_infrastructure as any)?.mx_hosts_count ?? auditData.summary.mx?.record_count ?? 0} Hosts
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* Row 6: Core DNS Records (A, AAAA, NS, SOA, CAA) */}
+                        {auditData.summary.dns_records && (
+                          <tr className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-purple-50 text-purple-800 border border-purple-200">
+                                DNS CORE
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 max-w-[200px]">
+                              <div className="space-y-0.5 text-[11px]">
+                                <span className="text-slate-700 block truncate">
+                                  A: {auditData.summary.dns_records.a_records.length > 0 ? auditData.summary.dns_records.a_records[0] : "None"}
+                                </span>
+                                <span className="text-slate-500 text-[10px] block">
+                                  NS Count: {auditData.summary.dns_records.ns_count} | SOA: {auditData.summary.dns_records.soa?.serial || "Active"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 text-[11px]">
+                              RFC 1035 / RFC 8659
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                auditData.summary.dns_records.ns_count >= 2 && !auditData.summary.dns_records.has_apex_cname
+                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                  : "bg-amber-50 text-amber-800 border-amber-200"
+                              }`}>
+                                {auditData.summary.dns_records.has_apex_cname ? "APEX CNAME" : auditData.summary.dns_records.ns_count < 2 ? "LOW NS" : "OPTIMAL"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
+                              {auditData.summary.dns_records.has_caa ? (
+                                <span>CAA record active. SSL/TLS issuance strictly constrained to authorized CAs.</span>
+                              ) : (
+                                <span className="text-amber-800">
+                                  CAA record missing. Any public CA can issue certificates for this domain.
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="text-[11px] text-slate-500 font-mono">
+                                {auditData.summary.dns_records.has_caa ? "CAA OK" : "No CAA"}
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* Row 7: Global Blacklist Radar */}
+                        {auditData.summary.reputation && (
+                          <tr className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+                                REPUTATION
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 max-w-[200px]">
+                              <span className="text-[11px] font-mono text-slate-800 block">
+                                {auditData.summary.reputation.listed_count === 0
+                                  ? "0 Listed / 10 RBLs Clean"
+                                  : `${auditData.summary.reputation.listed_count} Listed on Blacklists`}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-slate-500 text-[11px]">
+                              RFC 5782 (10 RBLs Probed)
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                auditData.summary.reputation.overall_status === "clean"
+                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                  : auditData.summary.reputation.overall_status === "listed"
+                                  ? "bg-rose-50 text-rose-800 border-rose-200"
+                                  : "bg-slate-100 text-slate-700 border-slate-200"
+                              }`}>
+                                {auditData.summary.reputation.overall_status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-sans text-xs text-slate-600 max-w-xs">
+                              {auditData.summary.reputation.listed_count === 0 ? (
+                                <span>No domain or mail IP listings on Spamhaus, Barracuda, SpamCop, or Invaluement.</span>
+                              ) : (
+                                <span className="text-rose-700 font-medium">
+                                  Domain or mail IP is actively blacklisted. Receipts risk being sent to the spam folder.
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <Link
+                                href={`/dashboard/radar?domain=${encodeURIComponent(auditData.domain)}`}
+                                className="px-2.5 py-1 text-xs font-mono font-semibold rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 shadow-2xs transition inline-flex items-center gap-1"
+                              >
+                                Radar
+                                <ExternalLink className="w-3 h-3 text-slate-500" />
+                              </Link>
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
 
+                {/* Diagnostic Findings & Actionable Remediation Records */}
+                {auditData.issues && auditData.issues.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden">
+                    <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        <h4 className="text-sm font-bold text-slate-900 font-mono">
+                          Diagnostic Findings ({auditData.issues.length})
+                        </h4>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500">
+                        Evidence &amp; Recommended Zone Records
+                      </span>
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      {auditData.issues.map((issue) => (
+                        <div
+                          key={issue.id}
+                          className={`p-3.5 rounded-lg border text-xs font-mono space-y-2.5 ${
+                            issue.severity === "critical"
+                              ? "bg-rose-50/40 border-rose-200"
+                              : issue.severity === "warning"
+                              ? "bg-amber-50/40 border-amber-200"
+                              : "bg-blue-50/40 border-blue-200"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
+                                issue.severity === "critical"
+                                  ? "bg-rose-100 text-rose-800"
+                                  : issue.severity === "warning"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }`}>
+                                {issue.severity}
+                              </span>
+                              <div className="space-y-0.5">
+                                {issue.title && issue.title !== (issue.message || issue.description) && (
+                                  <div className="text-slate-900 font-sans font-semibold text-xs">
+                                    {issue.title}
+                                  </div>
+                                )}
+                                <div className="text-slate-800 font-sans text-xs">
+                                  {issue.message || issue.description || issue.title}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-slate-500 uppercase font-mono shrink-0">
+                              {issue.category}
+                            </span>
+                          </div>
+
+                          {/* Technical Evidence */}
+                          {issue.evidence && (
+                            <div className="bg-white p-2.5 rounded border border-slate-200 text-[11px] text-slate-700">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                                Technical Evidence:
+                              </span>
+                              <code className="text-slate-800 break-all select-all font-mono">
+                                {issue.evidence}
+                              </code>
+                            </div>
+                          )}
+
+                          {/* Remediation Record (Copyable) */}
+                          {issue.remediation_record && (
+                            <div className="bg-white p-2.5 rounded border border-emerald-200 text-[11px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                              <div>
+                                <span className="text-[10px] font-bold text-emerald-800 uppercase block mb-0.5">
+                                  Recommended DNS Record:
+                                </span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                                    {issue.remediation_record.record_type}
+                                  </span>
+                                  <span className="text-slate-500 text-[10px]">Host:</span>
+                                  <code className="text-slate-800 font-bold">{issue.remediation_record.host}</code>
+                                  <span className="text-slate-500 text-[10px]">Value:</span>
+                                  <code className="text-slate-900 break-all select-all">{issue.remediation_record.value}</code>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (issue.remediation_record?.value) {
+                                    navigator.clipboard.writeText(issue.remediation_record.value);
+                                    setCopiedIdx(`rec-${issue.id}`);
+                                    setTimeout(() => setCopiedIdx(null), 2000);
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px] transition shrink-0 cursor-pointer flex items-center gap-1"
+                              >
+                                {copiedIdx === `rec-${issue.id}` ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-700" />
+                                    <span>Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>Copy Record</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* BIMI Remote Asset Security Verification */}
                 <AssetVerificationResult
                   domain={domainInput}
-                  initialUrl={auditData.summary.bimi?.svg_url || ""}
+                  initialUrl={auditData.summary.bimi?.logo_url || auditData.summary.bimi?.svg_url || ""}
                 />
               </div>
             ) : (

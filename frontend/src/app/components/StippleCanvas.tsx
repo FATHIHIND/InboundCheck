@@ -128,7 +128,7 @@ export default function StippleCanvas({ className = "" }: { className?: string }
       window.removeEventListener("resize", handleResize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <canvas

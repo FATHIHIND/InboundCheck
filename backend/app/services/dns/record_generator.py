@@ -113,12 +113,17 @@ class DNSRecordGenerator:
         """Generate a complete set of tailored records based on user request."""
         records: List[DNSRecordFix] = []
 
+        clean_domain = request.domain.strip().lower()
+        include_google = bool(request.include_google or request.include_google_workspace)
+        include_microsoft = bool(request.include_microsoft or request.include_microsoft_365)
+        report_email = request.dmarc_report_email or request.rua_email
+
         # 1. SPF
         spf_rec = DNSRecordGenerator.generate_spf_record(
-            domain=request.domain,
+            domain=clean_domain,
             include_shopify=request.include_shopify,
-            include_google=request.include_google,
-            include_microsoft=request.include_microsoft,
+            include_google=include_google,
+            include_microsoft=include_microsoft,
             include_klaviyo=request.include_klaviyo,
             include_sendgrid=request.include_sendgrid
         )
@@ -126,14 +131,14 @@ class DNSRecordGenerator:
 
         # 2. DMARC
         dmarc_rec = DNSRecordGenerator.generate_dmarc_record(
-            domain=request.domain,
+            domain=clean_domain,
             policy=request.dmarc_policy,
-            report_email=request.dmarc_report_email
+            report_email=report_email
         )
         records.append(dmarc_rec)
 
         # 3. Shopify DKIM (if requested)
         if request.include_shopify:
-            records.extend(DNSRecordGenerator.generate_shopify_dkim_records(request.domain))
+            records.extend(DNSRecordGenerator.generate_shopify_dkim_records(clean_domain))
 
         return records

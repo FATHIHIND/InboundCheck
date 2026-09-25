@@ -5,7 +5,7 @@ Pydantic v2 schemas for DNS diagnostic audit, scoring, and record generation.
 """
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
 
 
@@ -16,6 +16,7 @@ class DNSAuditRequest(BaseModel):
         description="Optional list of DKIM selectors to query in addition to defaults"
     )
     user_id: Optional[str] = Field(default=None, description="Optional authenticated user ID")
+    include_reputation: bool = Field(default=True, description="Whether to include DNSBL/RBL reputation check")
 
 
 class MXRecordItem(BaseModel):
@@ -77,6 +78,72 @@ class DMARCSummary(BaseModel):
     syntax_valid: bool = False
 
 
+class SOARecordItem(BaseModel):
+    mname: str
+    rname: str
+    serial: int
+    refresh: int
+    retry: int
+    expire: int
+    minimum: int
+
+
+class CAARecordItem(BaseModel):
+    tag: str
+    value: str
+    flags: int = 0
+
+
+class DNSRecordsSummary(BaseModel):
+    status: str = Field(default="optimal", description="optimal | warning | critical")
+    a_records: List[str] = []
+    aaaa_records: List[str] = []
+    ns_records: List[str] = []
+    soa: Optional[SOARecordItem] = None
+    caa_records: List[CAARecordItem] = []
+    cname_records: List[str] = []
+    has_apex_cname: bool = False
+    ns_count: int = 0
+    has_caa: bool = False
+
+
+class MailInfrastructureSummary(BaseModel):
+    status: str = Field(default="optimal", description="optimal | warning | critical | missing")
+    mx_hosts_count: int = 0
+    mx_host_count: int = 0
+    mx_records: List[Dict[str, Any]] = []
+    resolved_mail_ips: List[str] = []
+    ptr_records: Dict[str, List[str]] = {}
+    all_mx_valid: bool = True
+    has_redundancy: bool = True
+    has_private_ip: bool = False
+    has_cname_mx: bool = False
+    details: List[Dict[str, Any]] = []
+
+
+class ReputationSummary(BaseModel):
+    clean_count: int = 0
+    listed_count: int = 0
+    unknown_count: int = 0
+    error_count: int = 0
+    total_providers: int = 10
+    overall_status: str = Field(default="clean", description="clean | listed | partial | unavailable")
+    highest_severity: str = Field(default="none", description="none | low | medium | high | critical")
+    listings: List[Dict[str, Any]] = []
+
+
+class ChecksSummary(BaseModel):
+    total_checks: int = 0
+    passed: int = 0
+    passed_count: int = 0
+    warnings: int = 0
+    warning_count: int = 0
+    failures: int = 0
+    failure_count: int = 0
+    unavailable: int = 0
+    unavailable_count: int = 0
+
+
 class BIMISummary(BaseModel):
     status: str = Field(..., description="optimal | missing")
     raw: Optional[str] = None
@@ -90,16 +157,28 @@ class DiagnosticSummary(BaseModel):
     dkim: DKIMSummary
     dmarc: DMARCSummary
     bimi: BIMISummary
+    dns_records: Optional[DNSRecordsSummary] = None
+    mail_infrastructure: Optional[MailInfrastructureSummary] = None
+    reputation: Optional[ReputationSummary] = None
 
 
 class DiagnosticIssue(BaseModel):
     id: str
     severity: str = Field(..., description="critical | warning | optimal")
-    category: str = Field(..., description="DMARC | SPF | DKIM | MX | BIMI | GENERAL")
+    category: str = Field(..., description="DMARC | SPF | DKIM | MX | BIMI | DNS | INFRASTRUCTURE | REPUTATION | GENERAL")
     title: str
     description: str
+    message: Optional[str] = None
     impact: str
     recommendation: str
+    evidence: Optional[str] = None
+    remediation_record: Optional["DNSRecordFix"] = None
+
+    @model_validator(mode="after")
+    def populate_message(self) -> "DiagnosticIssue":
+        if not self.message:
+            self.message = self.description or self.title
+        return self
 
 
 class DNSRecordFix(BaseModel):
@@ -128,6 +207,8 @@ class DNSAuditResponse(BaseModel):
     domain: str
     health_score: int = Field(..., ge=0, le=100)
     status: str = Field(..., description="optimal | warning | critical")
+    risk_level: Optional[str] = "Low Risk"
+    checks_summary: Optional[ChecksSummary] = None
     timestamp: datetime
     execution_time_ms: float
     category_scores: CategoryScoreBreakdown
@@ -141,11 +222,14 @@ class GenerateRecordRequest(BaseModel):
     domain: str
     include_shopify: bool = True
     include_google: bool = False
+    include_google_workspace: Optional[bool] = None
     include_microsoft: bool = False
+    include_microsoft_365: Optional[bool] = None
     include_klaviyo: bool = False
     include_sendgrid: bool = False
     dmarc_policy: str = Field(default="quarantine", description="reject | quarantine | none")
     dmarc_report_email: Optional[str] = None
+    rua_email: Optional[str] = None
     custom_dkim_selector: Optional[str] = "shopify"
 
 

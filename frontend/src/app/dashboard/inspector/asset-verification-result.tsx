@@ -17,6 +17,7 @@ import {
   Info
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { formatApiErrorMessage } from "@/lib/apiResource";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 
 export interface RemoteAssetAuditData {
@@ -55,6 +56,12 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
   const [error, setError] = useState<string | null>(null);
   const [copiedHash, setCopiedHash] = useState<boolean>(false);
 
+  React.useEffect(() => {
+    if (initialUrl) {
+      setUrlInput(initialUrl);
+    }
+  }, [initialUrl]);
+
   const handleVerify = async () => {
     if (!domain || domain.trim().length < 3) return;
     setIsLoading(true);
@@ -73,7 +80,7 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `Asset verification failed (HTTP ${res.status})`);
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || `Asset verification failed (HTTP ${res.status})`);
       }
 
       const data: RemoteAssetAuditData = await res.json();

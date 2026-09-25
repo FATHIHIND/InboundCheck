@@ -145,7 +145,7 @@ export default function RblTopology3DCanvas({
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animId);
     };
-  }, [rbls]);
+  }, [rbls, isVisibleRef, prefersReducedMotionRef]);
 
   return (
     <div className={`relative ${className}`}>
