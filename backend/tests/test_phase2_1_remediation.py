@@ -383,6 +383,10 @@ async def test_ai_rate_limiter_enforces_quota_per_user():
     # Reset any existing test tokens for this user
     supabase_service._in_memory_rate_limits.clear()
 
+    # Ensure test does not execute across a 60-second fixed window boundary
+    if (int(time.time()) % 60) >= 58:
+        await asyncio.sleep(2.5)
+
     # First 10 requests must succeed
     for _ in range(10):
         ai_rate_limiter.check(user_id)

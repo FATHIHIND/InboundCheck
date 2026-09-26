@@ -13,6 +13,7 @@ import logging
 import signal
 from typing import Optional
 
+from app.core.env_guard import validate_runtime_environment
 from app.workers.audit_worker import run_audit_worker
 from app.workers.failover_worker import run_failover_worker
 
@@ -25,6 +26,9 @@ logger = logging.getLogger("WorkerRunner")
 
 
 async def main(worker_type: str = "audit"):
+    # Fail-Fast Runtime Environment Integrity Validation
+    validate_runtime_environment()
+
     stop_event = asyncio.Event()
 
     # Graceful shutdown handling

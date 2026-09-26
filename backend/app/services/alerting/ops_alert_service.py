@@ -67,8 +67,18 @@ class OpsAlertService:
 
     def __init__(self):
         self.webhook_url = getattr(settings, "OPS_ALERT_WEBHOOK_URL", None) or os.getenv("OPS_ALERT_WEBHOOK_URL", "")
-        self.telegram_bot_token = getattr(settings, "OPS_ALERT_TELEGRAM_BOT_TOKEN", None) or os.getenv("OPS_ALERT_TELEGRAM_BOT_TOKEN", "")
-        self.telegram_chat_id = getattr(settings, "OPS_ALERT_TELEGRAM_CHAT_ID", None) or os.getenv("OPS_ALERT_TELEGRAM_CHAT_ID", "")
+        self.telegram_bot_token = (
+            getattr(settings, "OPS_ALERT_TELEGRAM_BOT_TOKEN", None)
+            or os.getenv("OPS_ALERT_TELEGRAM_BOT_TOKEN", "")
+            or getattr(settings, "TELEGRAM_BOT_TOKEN", "")
+            or os.getenv("TELEGRAM_BOT_TOKEN", "")
+        )
+        self.telegram_chat_id = (
+            getattr(settings, "OPS_ALERT_TELEGRAM_CHAT_ID", None)
+            or os.getenv("OPS_ALERT_TELEGRAM_CHAT_ID", "")
+            or getattr(settings, "TELEGRAM_CHAT_ID", "")
+            or os.getenv("TELEGRAM_CHAT_ID", "")
+        )
         self.environment = getattr(settings, "ENVIRONMENT", "development")
 
     def is_configured(self) -> bool:

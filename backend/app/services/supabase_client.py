@@ -471,9 +471,12 @@ class SupabaseService:
 
         # In-memory fallback
         log_key = domain_id or clean_domain or "default"
-        logs = self._in_memory_logs.get(log_key, [])
+        logs = list(self._in_memory_logs.get(log_key, []))
         if not logs and clean_domain:
-            logs = self._in_memory_logs.get(clean_domain, [])
+            for entry_list in self._in_memory_logs.values():
+                for entry in entry_list:
+                    if entry.get("domain_name") == clean_domain and entry not in logs:
+                        logs.append(entry)
         user_logs = [entry for entry in logs if entry.get("user_id") == user_id]
         return user_logs[:limit]
 
@@ -661,7 +664,14 @@ class SupabaseService:
             "status": "purged"
         }
 
-    def persist_rbl_scan(self, user_id: str, domain_name: str, scan: Any) -> None:
+    def persist_rbl_scan(
+        self,
+        user_id: str,
+        domain_name: str,
+        scan: Any,
+        domain_id: Optional[str] = None,
+        **kwargs
+    ) -> None:
         """
         Persist normalized per-provider RBL scan evidence and update reputation snapshot.
         """
@@ -674,7 +684,7 @@ class SupabaseService:
 
         now_iso = datetime.now(timezone.utc).isoformat()
         snapshot = {
-            "domain_id": None,
+            "domain_id": domain_id,
             "user_id": user_id,
             "domain_name": domain_name,
             "score": max(0, 100 - (scan_dict.get("rbl_listed_count", 0) * 20)),

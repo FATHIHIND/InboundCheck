@@ -12,7 +12,7 @@ Verifies:
 import pytest
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, AsyncMock
 
 from app.services.supabase_client import supabase_service
@@ -265,3 +265,128 @@ async def test_telegram_failure_marks_event_failed():
     assert cached_evt is not None
     assert cached_evt["processing_status"] == "failed"
     assert "Bot blocked" in (cached_evt.get("processing_error") or "")
+
+
+# =====================================================================
+# PHASE 2.3 WORKER PRODUCTION READINESS & SCHEDULER TESTS
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_worker_runner_main_validates_environment():
+    """Verify that worker runner main() executes fail-fast validate_runtime_environment()."""
+    from app.workers.runner import main as runner_main
+
+    with patch("app.workers.runner.validate_runtime_environment") as mock_val, \
+         patch("app.workers.runner.run_audit_worker", new_callable=AsyncMock) as mock_worker:
+        await runner_main("audit")
+        mock_val.assert_called_once()
+        mock_worker.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_worker_runner_all_mode_concurrent_dispatch():
+    """Verify that runner main('all') concurrently launches both audit and failover workers."""
+    from app.workers.runner import main as runner_main
+
+    with patch("app.workers.runner.validate_runtime_environment"), \
+         patch("app.workers.runner.run_audit_worker", new_callable=AsyncMock) as mock_audit, \
+         patch("app.workers.runner.run_failover_worker", new_callable=AsyncMock) as mock_failover:
+        await runner_main("all")
+        mock_audit.assert_called_once()
+        mock_failover.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_ops_alert_service_telegram_settings_fallback():
+    """Verify OpsAlertService correctly detects TELEGRAM_BOT_TOKEN when OPS_ALERT_ prefix is omitted."""
+    from app.services.alerting.ops_alert_service import OpsAlertService
+    from app.core.config import settings
+
+    with patch.object(settings, "OPS_ALERT_TELEGRAM_BOT_TOKEN", ""), \
+         patch.object(settings, "OPS_ALERT_TELEGRAM_CHAT_ID", ""), \
+         patch.object(settings, "TELEGRAM_BOT_TOKEN", "fallback_token_12345"), \
+         patch.object(settings, "TELEGRAM_CHAT_ID", "-100123456789"):
+        svc = OpsAlertService()
+        assert svc.telegram_bot_token == "fallback_token_12345"
+        assert svc.telegram_chat_id == "-100123456789"
+        assert svc.is_configured() is True
+
+
+@pytest.mark.asyncio
+async def test_ops_alert_service_webhook_dispatch_success():
+    """Verify OpsAlertService dispatches sanitized incident to configured webhook."""
+    from app.services.alerting.ops_alert_service import OpsAlertService, OpsIncident
+    from unittest.mock import MagicMock
+
+    svc = OpsAlertService()
+    svc.webhook_url = "https://hooks.slack.com/services/test/mock/webhook"
+    svc.telegram_bot_token = ""
+    svc.telegram_chat_id = ""
+
+    mock_resp = MagicMock(status_code=200)
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        incident = OpsIncident(
+            alert_id="ALERT-TEST-OPS",
+            severity="P1",
+            summary="Worker heartbeat probe",
+            details={"api_key": "secret_abc_123", "normal": "value"},
+        )
+        sent = await svc.dispatch_incident(incident)
+        assert sent is True
+        mock_post.assert_called_once()
+
+        call_kwargs = mock_post.call_args[1]
+        sent_json = call_kwargs.get("json", {})
+        assert sent_json.get("alert_id") == "ALERT-TEST-OPS"
+        # Verify sanitization
+        assert sent_json["details"]["api_key"] == "[REDACTED]"
+        assert sent_json["details"]["normal"] == "value"
+
+
+@pytest.mark.asyncio
+async def test_audit_worker_scheduled_sweep_lifecycle():
+    """
+    Verify complete scheduled audit worker cycle:
+    1. Discovers due domain
+    2. Claims lease via claim_due_domain_audits
+    3. Runs DNS and RBL audits
+    4. Persists audit log to dns_audit_logs
+    5. Releases lease and sets last_audited_at
+    """
+    user_id = str(uuid.uuid4())
+    dom_id = str(uuid.uuid4())
+    now_past = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+
+    domain = {
+        "id": dom_id,
+        "user_id": user_id,
+        "domain_name": "auto-scheduled-audit.com",
+        "is_active": True,
+        "last_audited_at": now_past,
+    }
+    supabase_service._in_memory_domains[user_id] = [domain]
+
+    stop_event = asyncio.Event()
+
+    # Run one pass of audit worker and stop after first batch
+    orig_claim = supabase_service.claim_due_domain_audits
+    def claim_and_stop(*args, **kwargs):
+        res = orig_claim(*args, **kwargs)
+        stop_event.set()
+        return res
+
+    with patch.object(supabase_service, "_client", None):
+        with patch.object(supabase_service, "claim_due_domain_audits", side_effect=claim_and_stop):
+            await run_audit_worker(stop_event=stop_event, idle_sleep_seconds=1)
+
+        # Assert domain was audited and lease released
+        assert domain.get("audit_lease_owner") is None
+        assert domain.get("last_audited_at") is not None
+        assert domain.get("health_score") is not None
+        assert domain.get("spf_status") is not None
+
+        # Assert audit log was recorded
+        history = supabase_service.get_audit_history(user_id=user_id, domain_name="auto-scheduled-audit.com")
+        assert len(history) >= 1
+        assert history[0]["domain_name"] == "auto-scheduled-audit.com"

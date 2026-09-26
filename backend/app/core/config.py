@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""
 
+    # Phase 2.3 Operational Incident Alerting (OpsAlertService)
+    OPS_ALERT_WEBHOOK_URL: str = ""
+    OPS_ALERT_TELEGRAM_BOT_TOKEN: str = ""
+    OPS_ALERT_TELEGRAM_CHAT_ID: str = ""
+
     # V3 Roadmap - DNS Provider APIs
     CLOUDFLARE_API_TOKEN: str = ""
     GODADDY_API_KEY: str = ""
