@@ -1,10 +1,11 @@
 """
 InboundCheck - 1-Click Auto-DNS Fixer REST Router (v1)
 ======================================================
-Endpoints for managing Cloudflare/GoDaddy API credentials, 1-click DNS record auto-insertion, and rollback operations.
+Endpoints for managing Cloudflare API credentials, 1-click DNS record auto-remediation,
+and audited rollback operations.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from starlette.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
@@ -13,6 +14,7 @@ import logging
 from app.core.security import get_current_user_id
 from app.core.tier_guards import require_growth_or_enterprise_tier
 from app.services.dns.auto_fixer import dns_auto_fixer_service
+from app.services.supabase_client import supabase_service
 
 logger = logging.getLogger("AutoFixRoutes")
 
@@ -25,17 +27,21 @@ class SaveCredentialsRequest(BaseModel):
     secret_or_zone: Optional[str] = Field(None, description="Cloudflare Zone ID or GoDaddy API Secret")
 
 
+class RevokeCredentialsRequest(BaseModel):
+    provider_name: str = Field(default="cloudflare", description="cloudflare | godaddy")
+
+
 class ApplyAutoFixRequest(BaseModel):
     domain_name: str = Field(..., description="e.g. brandshop.com")
     provider_name: str = Field(default="cloudflare", description="cloudflare | godaddy")
-    record_type: str = Field(default="TXT", description="TXT | CNAME")
+    record_type: str = Field(default="TXT", description="TXT | CNAME | MX")
     host: str = Field(..., description="e.g. _dmarc.brandshop.com")
     record_value: str = Field(..., description="Full record payload string")
     ttl: Optional[int] = 3600
 
 
 class RollbackFixRequest(BaseModel):
-    fix_id: str = Field(..., description="Auto-fix ID to restore")
+    fix_id: str = Field(..., description="Auto-fix ID / Operation ID to restore")
 
 
 class VerifyCredentialsRequest(BaseModel):
@@ -73,7 +79,7 @@ async def save_provider_credentials(
     user_id: str = Depends(get_current_user_id)
 ):
     """
-    Save or update Cloudflare API tokens or GoDaddy API keys.
+    Save or update Cloudflare API tokens with Fernet authenticated encryption at rest.
     """
     updated = dns_auto_fixer_service.save_credentials(
         user_id=user_id,
@@ -82,6 +88,18 @@ async def save_provider_credentials(
         secret_or_zone=payload.secret_or_zone
     )
     return {"success": True, "credentials": updated}
+
+
+@router.delete("/credentials")
+async def revoke_provider_credentials(
+    provider_name: str = Query(default="cloudflare"),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Revoke and disconnect active DNS provider credentials for user.
+    """
+    revoked = dns_auto_fixer_service.revoke_credentials(user_id, provider_name)
+    return {"success": True, "revoked": revoked, "provider": provider_name}
 
 
 @router.post("/verify")
@@ -135,7 +153,7 @@ async def apply_auto_fix(
     user_profile: dict = Depends(require_growth_or_enterprise_tier)
 ):
     """
-    Execute 1-click automatic insertion of SPF, DKIM CNAME, or DMARC records via provider API.
+    Execute 1-click automatic insertion of SPF, DKIM CNAME, or DMARC records via Cloudflare API.
     Fails closed: if provider API operation fails, returns HTTP 502 with error details.
     """
     user_id = user_profile.get("id") or user_profile.get("user_id")
@@ -172,14 +190,24 @@ async def rollback_auto_fix(
     user_profile: dict = Depends(require_growth_or_enterprise_tier)
 ):
     """
-    Roll back an applied DNS record change to its prior snapshot.
+    Roll back an applied DNS record change to its prior snapshot via real Cloudflare API call.
     """
     user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
-        result = dns_auto_fixer_service.rollback_dns_fix(
+        result = await dns_auto_fixer_service.rollback_dns_fix(
             user_id=user_id,
             fix_id=payload.fix_id
         )
+        if not result.get("rolled_back", False):
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "success": False,
+                    "rolled_back": False,
+                    "reason": result.get("reason") or result.get("error", "Rollback operation failed."),
+                    "fix_id": payload.fix_id,
+                }
+            )
         return {"success": True, **result}
     except Exception as e:
         logger.error(f"Error executing DNS rollback: {e}")
@@ -189,7 +217,21 @@ async def rollback_auto_fix(
 @router.get("/logs")
 async def get_auto_fix_logs(user_id: str = Depends(get_current_user_id)):
     """
-    Get all DNS auto-fix and rollback execution logs.
+    Get all DNS auto-fix and rollback execution logs strictly scoped to user tenant.
     """
     logs = dns_auto_fixer_service.get_logs(user_id)
     return {"success": True, "logs": logs}
+
+
+@router.get("/operations/{operation_id}")
+async def get_auto_fix_operation(
+    operation_id: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Retrieve details and verification status of a specific DNS operation.
+    """
+    op = supabase_service.get_dns_auto_fix_operation(operation_id, user_id=user_id)
+    if not op:
+        raise HTTPException(status_code=404, detail="DNS operation not found.")
+    return {"success": True, "operation": op}

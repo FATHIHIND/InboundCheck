@@ -41,6 +41,8 @@ class SupabaseService:
         self._in_memory_spf_merge_plans: Dict[str, Dict[str, Any]] = {}
         self._in_memory_asset_audits: Dict[str, Dict[str, Any]] = {}
         self._in_memory_rate_limits: Dict[str, int] = {}
+        self._in_memory_dns_provider_creds: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_dns_auto_fix_logs: Dict[str, List[Dict[str, Any]]] = {}
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -1498,6 +1500,361 @@ class SupabaseService:
             "remaining": max(0, max_requests - current),
             "reset_seconds": reset_seconds,
         }
+
+    # =====================================================================
+    # 1-CLICK DNS AUTO-FIXER & CREDENTIALS REPOSITORY METHODS (PHASE 1B)
+    # =====================================================================
+
+    def save_dns_provider_credential(
+        self,
+        user_id: str,
+        provider_name: str,
+        api_token_encrypted: str,
+        zone_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Persist encrypted DNS provider credentials with tenant ownership and idempotency.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        clean_provider = provider_name.lower().strip()
+        cred_data = {
+            "user_id": user_id,
+            "provider_name": clean_provider,
+            "zone_id": zone_id,
+            "api_token_encrypted": api_token_encrypted,
+            "is_active": True,
+            "revoked_at": None,
+            "metadata": metadata or {},
+            "updated_at": now_iso,
+        }
+
+        if self._client:
+            try:
+                res = self._client.table("dns_provider_credentials").upsert(
+                    cred_data,
+                    on_conflict="user_id,provider_name"
+                ).execute()
+                if res.data and len(res.data) > 0:
+                    record = res.data[0]
+                    self._in_memory_dns_provider_creds.setdefault(user_id, {})[clean_provider] = record
+                    return record
+            except Exception as e:
+                logger.error(f"Failed to upsert dns_provider_credentials in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error saving provider credential: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        record = {
+            "id": str(uuid.uuid4()),
+            "created_at": now_iso,
+            **cred_data,
+        }
+        self._in_memory_dns_provider_creds.setdefault(user_id, {})[clean_provider] = record
+        return record
+
+    def get_dns_provider_credential(self, user_id: str, provider_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch active, non-revoked DNS provider credential for user.
+        """
+        clean_provider = provider_name.lower().strip()
+        if self._client:
+            try:
+                res = (
+                    self._client.table("dns_provider_credentials")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .eq("provider_name", clean_provider)
+                    .eq("is_active", True)
+                    .is_("revoked_at", "null")
+                    .execute()
+                )
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                return None
+            except Exception as e:
+                logger.error(f"Failed to query dns_provider_credentials from Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error querying provider credential: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        user_creds = self._in_memory_dns_provider_creds.get(user_id, {})
+        cred = user_creds.get(clean_provider)
+        if cred and cred.get("is_active") and not cred.get("revoked_at"):
+            return cred
+        return None
+
+    def revoke_dns_provider_credential(self, user_id: str, provider_name: str) -> bool:
+        """
+        Mark a DNS provider credential as revoked and inactive.
+        """
+        clean_provider = provider_name.lower().strip()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if self._client:
+            try:
+                self._client.table("dns_provider_credentials").update({
+                    "is_active": False,
+                    "revoked_at": now_iso,
+                    "updated_at": now_iso,
+                }).eq("user_id", user_id).eq("provider_name", clean_provider).execute()
+                return True
+            except Exception as e:
+                logger.error(f"Failed to revoke dns_provider_credentials in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error revoking provider credential: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        user_creds = self._in_memory_dns_provider_creds.get(user_id, {})
+        if clean_provider in user_creds:
+            user_creds[clean_provider]["is_active"] = False
+            user_creds[clean_provider]["revoked_at"] = now_iso
+            return True
+        return True
+
+    def update_dns_provider_credential_last_used(self, user_id: str, provider_name: str) -> bool:
+        """
+        Update last_used_at timestamp on provider credential.
+        """
+        clean_provider = provider_name.lower().strip()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if self._client:
+            try:
+                self._client.table("dns_provider_credentials").update({
+                    "last_used_at": now_iso,
+                    "updated_at": now_iso,
+                }).eq("user_id", user_id).eq("provider_name", clean_provider).execute()
+                return True
+            except Exception as e:
+                logger.debug(f"Could not update last_used_at for provider credential: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error updating credential last_used: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        user_creds = self._in_memory_dns_provider_creds.get(user_id, {})
+        if clean_provider in user_creds:
+            user_creds[clean_provider]["last_used_at"] = now_iso
+        return True
+
+    def create_dns_auto_fix_operation(self, op_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Persist a DNS auto-fix operation record with immutable pre-mutation snapshot.
+        """
+        op_id = op_data.get("id") or str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        record = {
+            "id": op_id,
+            "user_id": op_data["user_id"],
+            "domain_name": op_data["domain_name"],
+            "provider_name": op_data.get("provider_name", "cloudflare"),
+            "record_type": op_data.get("record_type", "TXT"),
+            "host": op_data["host"],
+            "record_value": op_data["record_value"],
+            "status": op_data.get("status", "PLANNED"),
+            "snapshot_before": op_data.get("snapshot_before") or {},
+            "snapshot_after": op_data.get("snapshot_after") or {},
+            "target_record_id": op_data.get("target_record_id"),
+            "zone_id": op_data.get("zone_id"),
+            "started_at": op_data.get("started_at") or now_iso,
+            "completed_at": op_data.get("completed_at"),
+            "error_message": op_data.get("error_message"),
+            "verification_result": op_data.get("verification_result") or {},
+            "ttl": op_data.get("ttl", 3600),
+            "fingerprint": op_data.get("fingerprint"),
+            "idempotency_key": op_data.get("idempotency_key"),
+            "created_at": now_iso,
+        }
+
+        if self._client:
+            try:
+                res = self._client.table("dns_auto_fix_logs").insert(record).execute()
+                if res.data and len(res.data) > 0:
+                    record = res.data[0]
+                    self._in_memory_dns_auto_fix_logs.setdefault(op_data["user_id"], []).insert(0, record)
+                    return record
+            except Exception as e:
+                logger.error(f"Failed to insert dns_auto_fix_logs in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error persisting auto-fix operation: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        uid = op_data["user_id"]
+        self._in_memory_dns_auto_fix_logs.setdefault(uid, []).insert(0, record)
+        return record
+
+    def update_dns_auto_fix_operation(
+        self,
+        operation_id: str,
+        updates: Dict[str, Any],
+        user_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Update status, completed_at, error, or snapshot_after on an operation.
+        """
+        if self._client:
+            try:
+                query = self._client.table("dns_auto_fix_logs").update(updates).eq("id", operation_id)
+                if user_id:
+                    query = query.eq("user_id", user_id)
+                res = query.execute()
+                if res.data and len(res.data) > 0:
+                    updated_row = res.data[0]
+                    uid = user_id or updated_row.get("user_id")
+                    if uid and uid in self._in_memory_dns_auto_fix_logs:
+                        for idx, log in enumerate(self._in_memory_dns_auto_fix_logs[uid]):
+                            if log.get("id") == operation_id:
+                                self._in_memory_dns_auto_fix_logs[uid][idx].update(updates)
+                    return updated_row
+                return None
+            except Exception as e:
+                logger.error(f"Failed to update dns_auto_fix_logs in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error updating auto-fix operation: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        # In-memory update
+        for uid, logs in self._in_memory_dns_auto_fix_logs.items():
+            if user_id and uid != user_id:
+                continue
+            for log in logs:
+                if log.get("id") == operation_id:
+                    log.update(updates)
+                    return log
+        return None
+
+    def get_dns_auto_fix_operation(self, operation_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Fetch a specific operation record with tenant isolation.
+        """
+        if self._client:
+            try:
+                query = self._client.table("dns_auto_fix_logs").select("*").eq("id", operation_id)
+                if user_id:
+                    query = query.eq("user_id", user_id)
+                res = query.execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                return None
+            except Exception as e:
+                logger.error(f"Failed to query dns_auto_fix_logs from Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error querying auto-fix operation: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        for uid, logs in self._in_memory_dns_auto_fix_logs.items():
+            if user_id and uid != user_id:
+                continue
+            for log in logs:
+                if log.get("id") == operation_id:
+                    return log
+        return None
+
+    def get_active_operation_for_target(
+        self,
+        domain_name: str,
+        host: str,
+        record_type: str,
+        user_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Check for any concurrent in-flight operation on the same DNS target to prevent collisions.
+        """
+        active_statuses = ["APPLYING", "ROLLING_BACK", "SNAPSHOTTED"]
+        d_clean = domain_name.strip().lower()
+        h_clean = host.strip().lower()
+        t_clean = record_type.strip().upper()
+
+        if self._client:
+            try:
+                query = (
+                    self._client.table("dns_auto_fix_logs")
+                    .select("*")
+                    .eq("domain_name", d_clean)
+                    .eq("host", h_clean)
+                    .eq("record_type", t_clean)
+                    .in_("status", active_statuses)
+                )
+                if user_id:
+                    query = query.eq("user_id", user_id)
+                res = query.limit(1).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                return None
+            except Exception as e:
+                logger.error(f"Failed to check active operation for target: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error querying active operations: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        for uid, logs in self._in_memory_dns_auto_fix_logs.items():
+            if user_id and uid != user_id:
+                continue
+            for log in logs:
+                if (
+                    log.get("domain_name") == d_clean
+                    and log.get("host") == h_clean
+                    and log.get("record_type") == t_clean
+                    and log.get("status") in active_statuses
+                ):
+                    return log
+        return None
+
+    def get_dns_auto_fix_logs(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        Fetch execution history logs strictly scoped to user tenant.
+        """
+        if self._client:
+            try:
+                res = (
+                    self._client.table("dns_auto_fix_logs")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .range(offset, offset + limit - 1)
+                    .execute()
+                )
+                if res.data is not None:
+                    return res.data
+            except Exception as e:
+                logger.error(f"Failed to query dns_auto_fix_logs from Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error querying auto-fix logs: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        logs = self._in_memory_dns_auto_fix_logs.get(user_id, [])
+        return logs[offset : offset + limit]
+
+    def verify_domain_ownership(self, user_id: str, domain_name: str) -> bool:
+        """
+        Verify domain ownership against monitored_domains for tenant isolation.
+        """
+        clean_target = domain_name.strip().lower().rstrip(".")
+        user_domains = self.get_monitored_domains(user_id, limit=100)
+        if not user_domains:
+            return False
+
+        for d in user_domains:
+            registered_name = (d.get("domain_name") or d.get("domain") or "").strip().lower().rstrip(".")
+            if registered_name and (clean_target == registered_name or clean_target.endswith(f".{registered_name}")):
+                return True
+        return False
 
 
 supabase_service = SupabaseService()

@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     CLOUDFLARE_API_TOKEN: str = ""
     GODADDY_API_KEY: str = ""
     GODADDY_API_SECRET: str = ""
+    ENCRYPTION_KEY: str = ""
 
     # Distributed Worker & Scheduler Configuration (Phase 4)
     RUN_IN_PROCESS_SCHEDULER: bool = False
@@ -76,6 +77,10 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    @property
+    def is_production(self) -> bool:
+        return (self.ENVIRONMENT or "development").lower() in ("production", "prod")
 
 
 settings = Settings()
