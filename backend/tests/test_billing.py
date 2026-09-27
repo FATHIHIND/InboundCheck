@@ -320,3 +320,147 @@ async def test_webhook_lifecycle_ingestion():
     prof_after = supabase_service.get_user_profile(user_id)
     assert prof_after["subscription_tier"] == "starter"
     assert prof_after["subscription_status"] == "canceled"
+
+
+@pytest.mark.asyncio
+async def test_customer_portal_bola_rejection_and_ownership():
+    """
+    Verify customer portal rejects foreign customer_ids (BOLA/IDOR) with 403
+    and resolves own or omitted customer_id safely.
+    """
+    transport = ASGITransport(app=app)
+    user_a = "bola-test-user-a"
+    user_b = "bola-test-user-b"
+    supabase_service.update_user_profile(user_a, {"stripe_customer_id": "cus_user_a_123"})
+    supabase_service.update_user_profile(user_b, {"stripe_customer_id": "cus_victim_b_456"})
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_a)) as ac:
+        # 1. Foreign customer_id rejected with 403 Forbidden
+        res_foreign = await ac.post("/api/v1/billing/customer-portal", json={"customer_id": "cus_victim_b_456"})
+        assert res_foreign.status_code == 403
+        assert res_foreign.json()["detail"] == "Access denied: customer ID does not belong to authenticated user"
+
+        # 2. Arbitrary non-existent customer_id also rejected with identical 403 (no existence leak)
+        res_fake = await ac.post("/api/v1/billing/customer-portal", json={"customer_id": "cus_fake_nonexistent"})
+        assert res_fake.status_code == 403
+        assert res_fake.json()["detail"] == "Access denied: customer ID does not belong to authenticated user"
+
+        # 3. Own customer_id accepted for backward compatibility
+        res_own = await ac.post("/api/v1/billing/customer-portal", json={"customer_id": "cus_user_a_123"})
+        assert res_own.status_code == 200
+        assert "portal_url" in res_own.json()
+        assert res_own.json()["has_customer"] is True
+
+        # 4. Omitted customer_id resolves authoritatively to authenticated tenant
+        res_omitted = await ac.post("/api/v1/billing/customer-portal", json={"return_url": "http://test/return"})
+        assert res_omitted.status_code == 200
+        assert "portal_url" in res_omitted.json()
+        assert res_omitted.json()["has_customer"] is True
+
+
+@pytest.mark.asyncio
+async def test_customer_portal_missing_stripe_customer_safe():
+    """
+    Verify tenant without stripe_customer_id is handled safely:
+    - Omitted customer_id returns has_customer=False (200 OK)
+    - Attempting to pass any customer_id returns 403 Forbidden
+    """
+    transport = ASGITransport(app=app)
+    user_c = "no-stripe-customer-user"
+    supabase_service.update_user_profile(user_c, {"stripe_customer_id": None})
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_c)) as ac:
+        # Omitted customer_id: safe response
+        res = await ac.post("/api/v1/billing/customer-portal", json={})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["has_customer"] is False
+        assert "No active Stripe customer account found" in data["message"]
+
+        # Supplying a customer_id when user has none: rejected
+        res_tamper = await ac.post("/api/v1/billing/customer-portal", json={"customer_id": "cus_someone_else"})
+        assert res_tamper.status_code == 403
+        assert res_tamper.json()["detail"] == "Access denied: customer ID does not belong to authenticated user"
+
+
+@pytest.mark.asyncio
+async def test_invoices_bola_rejection_and_ownership():
+    """
+    Verify invoices endpoint rejects foreign customer_ids (BOLA/IDOR) with 403
+    and permits own or omitted customer_id.
+    """
+    transport = ASGITransport(app=app)
+    user_a = "invoices-test-user-a"
+    user_b = "invoices-test-user-b"
+    supabase_service.update_user_profile(user_a, {"stripe_customer_id": "cus_user_a_inv"})
+    supabase_service.update_user_profile(user_b, {"stripe_customer_id": "cus_victim_b_inv"})
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_a)) as ac:
+        # 1. Foreign customer_id rejected with 403 Forbidden
+        res_foreign = await ac.get("/api/v1/billing/invoices?customer_id=cus_victim_b_inv")
+        assert res_foreign.status_code == 403
+        assert res_foreign.json()["detail"] == "Access denied: customer ID does not belong to authenticated user"
+
+        # 2. Non-existent customer_id rejected with identical 403 (no existence leak)
+        res_fake = await ac.get("/api/v1/billing/invoices?customer_id=cus_doesnotexist")
+        assert res_fake.status_code == 403
+        assert res_fake.json()["detail"] == "Access denied: customer ID does not belong to authenticated user"
+
+        # 3. Own customer_id accepted
+        res_own = await ac.get("/api/v1/billing/invoices?customer_id=cus_user_a_inv")
+        assert res_own.status_code == 200
+        assert res_own.json()["success"] is True
+
+        # 4. Omitted customer_id resolves to authenticated user
+        res_omitted = await ac.get("/api/v1/billing/invoices")
+        assert res_omitted.status_code == 200
+        assert res_omitted.json()["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_invoices_missing_stripe_customer_safe():
+    """
+    Verify tenant without stripe_customer_id:
+    - Omitted customer_id returns empty invoices list (200 OK)
+    - Supplying any customer_id returns 403 Forbidden
+    """
+    transport = ASGITransport(app=app)
+    user_d = "no-stripe-customer-inv-user"
+    supabase_service.update_user_profile(user_d, {"stripe_customer_id": None})
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_d)) as ac:
+        # Omitted customer_id: safe empty list
+        res = await ac.get("/api/v1/billing/invoices")
+        assert res.status_code == 200
+        assert res.json()["invoices"] == []
+        assert res.json()["total"] == 0
+
+        # Attempting foreign customer_id: rejected
+        res_tamper = await ac.get("/api/v1/billing/invoices?customer_id=cus_other_person")
+        assert res_tamper.status_code == 403
+        assert res_tamper.json()["detail"] == "Access denied: customer ID does not belong to authenticated user"
+
+
+@pytest.mark.asyncio
+async def test_stripe_service_direct_defense_in_depth():
+    """
+    Verify direct invocation of stripe_service methods enforces tenant ownership.
+    """
+    user_e = "direct-service-user"
+    supabase_service.update_user_profile(user_e, {"stripe_customer_id": "cus_legit_owner"})
+
+    # 1. create_customer_portal_session with mismatched customer_id raises ValueError
+    with pytest.raises(ValueError, match="Unauthorized customer ID"):
+        await stripe_service.create_customer_portal_session(user_id=user_e, customer_id="cus_foreign")
+
+    # 2. get_customer_invoices with mismatched customer_id raises ValueError
+    with pytest.raises(ValueError, match="Unauthorized customer ID"):
+        await stripe_service.get_customer_invoices(user_id=user_e, customer_id="cus_foreign")
+
+    # 3. Matching customer_id succeeds
+    portal = await stripe_service.create_customer_portal_session(user_id=user_e, customer_id="cus_legit_owner")
+    assert portal["has_customer"] is True
+
+    # 4. Omitted customer_id succeeds using owner profile
+    portal_omitted = await stripe_service.create_customer_portal_session(user_id=user_e)
+    assert portal_omitted["has_customer"] is True

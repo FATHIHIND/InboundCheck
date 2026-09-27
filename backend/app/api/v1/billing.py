@@ -203,14 +203,36 @@ async def create_customer_portal(
 ):
     """
     Create a Stripe Customer Portal Session for managing active payment methods and invoices.
+    Enforces strict tenant boundary on customer_id to prevent BOLA/IDOR vulnerabilities.
     """
+    profile = supabase_service.get_user_profile(user_id) or {}
+    owner_customer_id = profile.get("stripe_customer_id")
+
+    supplied_customer = payload.customer_id.strip() if payload.customer_id and payload.customer_id.strip() else None
+    if supplied_customer:
+        if not owner_customer_id or supplied_customer != owner_customer_id:
+            logger.warning(
+                f"BOLA attempt detected in customer-portal: user_id={user_id} supplied foreign customer_id={payload.customer_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: customer ID does not belong to authenticated user",
+            )
+
     try:
         portal_data = await stripe_service.create_customer_portal_session(
             user_id=user_id,
-            customer_id=payload.customer_id,
+            customer_id=owner_customer_id,
             return_url=payload.return_url,
         )
         return {"success": True, **portal_data}
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: customer ID does not belong to authenticated user",
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating customer portal session: {e}")
         raise HTTPException(status_code=500, detail="Failed to create customer portal session")
@@ -218,15 +240,42 @@ async def create_customer_portal(
 
 @router.get("/invoices")
 async def get_billing_invoices(
+    customer_id: Optional[str] = Query(None, description="Optional customer ID for backward compatibility"),
     limit: int = Query(10, ge=1, le=50),
     user_id: str = Depends(get_current_user_id),
 ):
     """
     Retrieve paid and processing Stripe invoice receipts for the authenticated user.
+    Enforces strict tenant boundary on customer_id to prevent BOLA/IDOR vulnerabilities.
     """
+    profile = supabase_service.get_user_profile(user_id) or {}
+    owner_customer_id = profile.get("stripe_customer_id")
+
+    supplied_customer = customer_id.strip() if customer_id and customer_id.strip() else None
+    if supplied_customer:
+        if not owner_customer_id or supplied_customer != owner_customer_id:
+            logger.warning(
+                f"BOLA attempt detected in invoices: user_id={user_id} supplied foreign customer_id={customer_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: customer ID does not belong to authenticated user",
+            )
+
     try:
-        invoices = await stripe_service.get_customer_invoices(user_id=user_id, limit=limit)
+        invoices = await stripe_service.get_customer_invoices(
+            user_id=user_id,
+            customer_id=owner_customer_id,
+            limit=limit,
+        )
         return {"success": True, "invoices": invoices, "total": len(invoices)}
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: customer ID does not belong to authenticated user",
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching invoices for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve billing invoices")

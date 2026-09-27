@@ -327,14 +327,18 @@ class StripeService:
     ) -> Dict[str, Any]:
         """
         Create a Stripe Customer Portal Session for managing active payment methods and invoices.
+        Enforces tenant boundary: client-supplied customer_id must match authenticated profile.
         """
         r_url = return_url or f"{settings.FRONTEND_URL}/dashboard/billing"
-        resolved_customer = customer_id
 
-        if not resolved_customer:
-            profile = supabase_service.get_user_profile(user_id)
-            if profile:
-                resolved_customer = profile.get("stripe_customer_id")
+        profile = supabase_service.get_user_profile(user_id) or {}
+        owner_customer = profile.get("stripe_customer_id")
+
+        supplied_customer = customer_id.strip() if customer_id and customer_id.strip() else None
+        if supplied_customer and (not owner_customer or supplied_customer != owner_customer):
+            raise ValueError(f"Unauthorized customer ID for authenticated user {user_id}")
+
+        resolved_customer = owner_customer
 
         if self.secret_key and resolved_customer and not resolved_customer.startswith("cus_mock_"):
             try:
@@ -366,12 +370,15 @@ class StripeService:
         customer_id: Optional[str] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Fetch invoices for the user."""
-        resolved_customer = customer_id
-        if not resolved_customer:
-            profile = supabase_service.get_user_profile(user_id)
-            if profile:
-                resolved_customer = profile.get("stripe_customer_id")
+        """Fetch invoices for the user with tenant boundary validation."""
+        profile = supabase_service.get_user_profile(user_id) or {}
+        owner_customer = profile.get("stripe_customer_id")
+
+        supplied_customer = customer_id.strip() if customer_id and customer_id.strip() else None
+        if supplied_customer and (not owner_customer or supplied_customer != owner_customer):
+            raise ValueError(f"Unauthorized customer ID for authenticated user {user_id}")
+
+        resolved_customer = owner_customer
 
         if self.secret_key and resolved_customer and not resolved_customer.startswith("cus_mock_"):
             try:
