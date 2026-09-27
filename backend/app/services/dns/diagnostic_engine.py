@@ -854,7 +854,7 @@ class DNSDiagnosticEngine:
                         for r in rbl_result.results
                     ]
                 )
-                raw_rep = rbl_result.model_dump()
+                raw_rep = rbl_result.model_dump(mode="json")
             except Exception as e:
                 logger.warning(f"RBL reputation scan notice for {clean_domain}: {e}")
                 rep_summary = ReputationSummary(
@@ -885,7 +885,7 @@ class DNSDiagnosticEngine:
         raw_responses = {
             "dns": raw_dns,
             "mx": raw_mx,
-            "mail_infrastructure": mail_infra_res.model_dump() if mail_infra_res else None,
+            "mail_infrastructure": mail_infra_res.model_dump(mode="json") if mail_infra_res else None,
             "spf": raw_spf,
             "dkim": raw_dkim,
             "dmarc": raw_dmarc,

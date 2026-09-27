@@ -96,9 +96,9 @@ async def audit_claimed_domain(domain: Dict[str, Any], worker_id: str) -> None:
         audit_payload = {
             "health_score": health_score,
             "status": overall_status,
-            "summary": summary.model_dump(),
-            "issues": [i.model_dump() for i in issues],
-            "fixes": [f.model_dump() for f in fixes],
+            "summary": summary.model_dump(mode="json"),
+            "issues": [i.model_dump(mode="json") for i in issues],
+            "fixes": [f.model_dump(mode="json") for f in fixes],
             "raw_responses": raw_responses
         }
 

@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional, Union
 import logging
 import uuid
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta
 from supabase import create_client, Client
 
 from app.core.config import settings
@@ -24,10 +24,33 @@ class DatabaseUnavailableError(Exception):
     pass
 
 
+def serialize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert datetime/date/UUID/Pydantic objects to JSON-serializable primitives.
+    Preserves timezone information for datetimes by using .isoformat().
+    """
+    if isinstance(obj, datetime):
+        if obj.tzinfo is None:
+            return obj.replace(tzinfo=timezone.utc).isoformat()
+        return obj.isoformat()
+    elif isinstance(obj, date):
+        return obj.isoformat()
+    elif isinstance(obj, uuid.UUID):
+        return str(obj)
+    elif hasattr(obj, "model_dump"):
+        return serialize_for_json(obj.model_dump(mode="json"))
+    elif isinstance(obj, dict):
+        return {k: serialize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [serialize_for_json(item) for item in obj]
+    return obj
+
+
 class SupabaseService:
     """
     Service wrapper for Supabase database operations and multi-tenant domain persistence.
     """
+    serialize_for_json = staticmethod(serialize_for_json)
 
     def __init__(self):
         self._client: Optional[Client] = None
@@ -396,8 +419,7 @@ class SupabaseService:
                 valid_domain_id = str(uuid.UUID(str(domain_id)))
             except (ValueError, AttributeError, TypeError):
                 valid_domain_id = None
-
-        now_iso = datetime.now(datetime.UTC).isoformat() if hasattr(datetime, "UTC") else datetime.utcnow().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
 
         log_entry = {
             "user_id": user_id,
@@ -418,12 +440,14 @@ class SupabaseService:
             "raw_responses": payload.get("raw_responses") or {},
             "created_at": now_iso,
         }
+        log_entry = serialize_for_json(log_entry)
 
         # Write to Supabase if connected
         if self._client:
             try:
                 # Omit domain_id if None to let DB handle default/NULL
                 insert_payload = {k: v for k, v in log_entry.items() if k != "domain_id" or v is not None}
+                insert_payload = serialize_for_json(insert_payload)
                 response = self._client.table("dns_audit_logs").insert(insert_payload).execute()
                 if response.data and len(response.data) > 0:
                     return response.data[0]
@@ -675,7 +699,7 @@ class SupabaseService:
         """
         Persist normalized per-provider RBL scan evidence and update reputation snapshot.
         """
-        scan_dict = scan.model_dump() if hasattr(scan, "model_dump") else dict(scan)
+        scan_dict = scan.model_dump(mode="json") if hasattr(scan, "model_dump") else serialize_for_json(dict(scan))
         results = scan_dict.get("results", [])
 
         # Store in-memory for testing and development
@@ -719,7 +743,7 @@ class SupabaseService:
                         "error_message": r.get("message"),
                         "delisting_url": r.get("delisting_url"),
                     }
-                    self._client.table("rbl_scan_results").insert(row).execute()
+                    self._client.table("rbl_scan_results").insert(serialize_for_json(row)).execute()
             except Exception as e:
                 logger.warning(f"Could not persist rbl_scan_results to database: {e}")
 

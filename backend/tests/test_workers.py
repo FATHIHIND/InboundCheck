@@ -11,8 +11,9 @@ Verifies:
 
 import pytest
 import asyncio
+import json
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta
 from unittest.mock import patch, AsyncMock
 
 from app.services.supabase_client import supabase_service
@@ -390,3 +391,105 @@ async def test_audit_worker_scheduled_sweep_lifecycle():
         history = supabase_service.get_audit_history(user_id=user_id, domain_name="auto-scheduled-audit.com")
         assert len(history) >= 1
         assert history[0]["domain_name"] == "auto-scheduled-audit.com"
+
+
+def test_save_audit_log_serializes_nested_datetime_objects():
+    """
+    Regression Test: Verify that save_audit_log recursively converts nested
+    datetime and date objects (e.g. from RBLScanResult or raw_responses)
+    into ISO-8601 strings and does NOT raise 'Object of type datetime is not JSON serializable'.
+    """
+    user_id = str(uuid.uuid4())
+    dom_id = str(uuid.uuid4())
+    now_dt = datetime.now(timezone.utc)
+    today = now_dt.date()
+
+    payload = {
+        "health_score": 88,
+        "status": "optimal",
+        "summary": {
+            "spf": {"status": "optimal", "raw": "v=spf1 -all", "checked_at": now_dt},
+        },
+        "fixes": [
+            {"record_type": "TXT", "host": "@", "value": "v=spf1 -all", "created_date": today}
+        ],
+        "raw_responses": {
+            "reputation": {
+                "scanned_at": now_dt,
+                "results": [
+                    {"provider": "spamhaus_zen", "checked_at": now_dt, "latency_ms": 25},
+                    {"provider": "barracuda", "checked_at": now_dt, "latency_ms": 30},
+                ]
+            }
+        }
+    }
+
+    # Test in-memory path and serialization
+    saved = supabase_service.save_audit_log(
+        user_id=user_id,
+        domain_id=dom_id,
+        domain_name="datetime-test.com",
+        audit_result=payload
+    )
+
+    # 1. Assert result entry contains string representations, not raw datetime objects
+    assert isinstance(saved["raw_responses"]["reputation"]["scanned_at"], str)
+    assert isinstance(saved["raw_responses"]["reputation"]["results"][0]["checked_at"], str)
+    assert isinstance(saved["fixes"][0]["created_date"], str)
+    assert isinstance(saved["created_at"], str)
+
+    # 2. Assert entire payload is 100% JSON-serializable
+    dumped = json.dumps(saved)
+    assert "spamhaus_zen" in dumped
+
+    # 3. Assert timezone preservation in serialized datetime
+    assert "+00:00" in saved["raw_responses"]["reputation"]["scanned_at"] or "Z" in saved["raw_responses"]["reputation"]["scanned_at"]
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_engine_raw_responses_json_serializable():
+    """
+    Regression Test: Verify that DNSDiagnosticEngine.audit_domain produces raw_responses
+    that can be serialized to JSON without TypeError.
+    """
+    from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
+    from app.services.dns.rbl_scanner import RBLScanResult, RBLListingResult
+
+    engine = DNSDiagnosticEngine()
+
+    now_dt = datetime.now(timezone.utc)
+    mock_rbl = RBLScanResult(
+        domain="serializable-test.com",
+        resolved_ips=["1.2.3.4"],
+        results=[
+            RBLListingResult(
+                provider_id="spamhaus_zen",
+                provider_name="Spamhaus ZEN",
+                zone="zen.spamhaus.org",
+                target_type="ip",
+                status="clean",
+                queried_target="1.2.3.4",
+                delisting_url="https://www.spamhaus.org",
+                checked_at=now_dt
+            )
+        ],
+        rbl_clean_count=1,
+        rbl_total_count=1,
+        rbl_listed_count=0,
+        rbl_unknown_count=0,
+        rbl_error_count=0,
+        overall_status="clean",
+        highest_severity="none",
+        execution_time_ms=10.0,
+        scanned_at=now_dt
+    )
+
+    with patch("app.services.dns.rbl_scanner.rbl_scanner.scan_domain", new_callable=AsyncMock) as mock_scan:
+        mock_scan.return_value = mock_rbl
+        summary, raw_responses, exec_ms = await engine.audit_domain("serializable-test.com", include_reputation=True)
+
+        # Must be strictly JSON-serializable without raising TypeError
+        json_dump = json.dumps(raw_responses)
+        assert "spamhaus_zen" in json_dump
+        assert isinstance(raw_responses["reputation"]["scanned_at"], str)
+        assert isinstance(raw_responses["reputation"]["results"][0]["checked_at"], str)
