@@ -238,10 +238,9 @@ class DNSAutoFixerService:
                 }
             }
 
-        # Validate domain ownership for tenant isolation
+        # Validate domain ownership for tenant isolation (UNCONDITIONAL)
         is_owned = supabase_service.verify_domain_ownership(user_id, clean_domain)
-        user_domains = supabase_service.get_monitored_domains(user_id, limit=1)
-        if not is_owned and len(user_domains) > 0 and is_production:
+        if not is_owned:
             error_msg = f"Tenant authorization failure: Domain '{clean_domain}' is not registered to your account."
             logger.warning(f"IDOR attempt: User {user_id} attempted DNS auto-fix on unauthorized domain {clean_domain}")
             return {

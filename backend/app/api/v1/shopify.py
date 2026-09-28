@@ -15,8 +15,9 @@ import json
 
 from app.core.security import get_current_user_id
 from app.core.config import settings
+from app.core.tier_guards import verify_active_subscription_or_trial, TIER_DOMAIN_LIMITS
 from app.services.shopify.shopify_service import shopify_service
-from app.services.supabase_client import supabase_service
+from app.services.supabase_client import supabase_service, QuotaExceededError
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.dns.scorer import DeliverabilityScorer
 from app.schemas.shopify_readiness import ShopifyReadinessRequest, ShopifyReadinessResponse
@@ -637,7 +638,84 @@ async def update_store_settings(
     try:
         from app.services.supabase_client import supabase_service
 
-        # 1. Update user profile company_name with store_name if supplied
+        # 1. Resolve and validate target store for tenant (SEC-STORE-CONFUSION-01)
+        existing_stores = supabase_service.get_user_stores(user_id)
+        existing_store = None
+        shop_dom = None
+
+        # Clean/validate shop_domain if provided
+        clean_shop = None
+        if payload.shop_domain:
+            try:
+                clean_shop = shopify_service.clean_shop_domain(payload.shop_domain)
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid Shopify store domain format: '{payload.shop_domain}'."
+                )
+
+        if payload.store_id:
+            matched_store = next((s for s in existing_stores if str(s.get("id")) == str(payload.store_id)), None)
+            if not matched_store:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Store with ID '{payload.store_id}' not found or unauthorized for current tenant."
+                )
+
+            # Reject conflicting selectors if both store_id and shop_domain are supplied
+            if clean_shop and matched_store.get("shop_domain") != clean_shop:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Conflicting store selectors: store_id and shop_domain do not point to the same store."
+                )
+
+            existing_store = matched_store
+            shop_dom = existing_store.get("shop_domain")
+
+        elif clean_shop:
+            matched_store = next((s for s in existing_stores if s.get("shop_domain") == clean_shop), None)
+            if matched_store:
+                existing_store = matched_store
+                shop_dom = clean_shop
+            else:
+                # Check cross-tenant ownership
+                is_foreign = False
+                if supabase_service.is_connected:
+                    try:
+                        res = supabase_service._client.table("shopify_stores").select("user_id").eq("shop_domain", clean_shop).execute()
+                        if res.data and any(str(r.get("user_id")) != str(user_id) for r in res.data):
+                            is_foreign = True
+                    except Exception as e:
+                        logger.warning(f"Error checking store ownership for {clean_shop}: {e}")
+                else:
+                    for other_uid, o_stores in supabase_service._in_memory_stores.items():
+                        if str(other_uid) != str(user_id) and any(s.get("shop_domain") == clean_shop for s in o_stores):
+                            is_foreign = True
+                            break
+
+                if is_foreign or len(existing_stores) > 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Shop domain '{clean_shop}' not found or not associated with your account."
+                    )
+                shop_dom = clean_shop
+
+        else:
+            if len(existing_stores) > 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Multiple stores connected. Please specify 'store_id' or 'shop_domain' to select which store to update."
+                )
+            elif len(existing_stores) == 1:
+                existing_store = existing_stores[0]
+                shop_dom = existing_store.get("shop_domain")
+            else:
+                slug = (payload.store_name or "brand-store").lower().replace(" ", "-")
+                shop_dom = f"{slug}.myshopify.com"
+
+        # 2. Update user profile company_name with store_name if supplied
         if payload.store_name:
             if supabase_service.is_connected:
                 try:
@@ -648,44 +726,67 @@ async def update_store_settings(
             if user_id in _mock_profiles:
                 _mock_profiles[user_id]["company_name"] = payload.store_name
 
-        # 2. Register/update custom sending domain in monitored_domains
+        # 3. Register/update custom sending domain in monitored_domains
+        clean_dom = None
         if payload.custom_domain:
-            clean_dom = payload.custom_domain.strip().lower()
-            supabase_service.create_or_update_domain(
-                user_id=user_id,
-                domain_name=clean_dom,
-                audit_result=None
-            )
+            try:
+                clean_dom = DNSDiagnosticEngine.normalize_domain(payload.custom_domain)
+            except ValueError as val_err:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
 
-        # 3. Retrieve or create store entry
-        existing_stores = supabase_service.get_user_stores(user_id)
-        existing_store = existing_stores[0] if existing_stores else None
+            # Enforce active subscription or valid trial entitlement
+            user_profile = await verify_active_subscription_or_trial(user_id=user_id)
+            tier = (user_profile.get("subscription_tier") or user_profile.get("tier") or "starter").lower()
+            quota_limit = TIER_DOMAIN_LIMITS.get(tier, 1)
 
-        shop_dom = payload.shop_domain or (existing_store.get("shop_domain") if existing_store else None)
-        if not shop_dom:
-            slug = (payload.store_name or "brand-store").lower().replace(" ", "-")
-            shop_dom = f"{slug}.myshopify.com"
+            # Check existing domain count and allow updating already-monitored domain without quota penalty
+            existing_domains = supabase_service.get_user_domains(user_id=user_id, limit=100)
+            is_already_monitored = any(d.get("domain_name") == clean_dom for d in existing_domains)
 
+            if not is_already_monitored and len(existing_domains) >= quota_limit:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=f"Domain quota reached ({len(existing_domains)}/{quota_limit}) for '{tier.capitalize()}' plan. Please upgrade your plan in Billing to add more domains."
+                )
+
+            try:
+                supabase_service.provision_monitored_domain(
+                    user_id=user_id,
+                    domain_name=clean_dom,
+                    quota_limit=quota_limit,
+                    audit_result=None
+                )
+            except QuotaExceededError:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=f"Domain quota reached ({len(existing_domains)}/{quota_limit}) for '{tier.capitalize()}' plan. Please upgrade your plan in Billing to add more domains."
+                )
+
+        # 4. Save and return store configuration
+        existing_meta = existing_store.get("metadata", {}) if existing_store else {}
+        clean_or_existing_custom = clean_dom or payload.custom_domain or existing_meta.get("custom_domain")
         updated_meta = {
-            "name": payload.store_name or (existing_store.get("metadata", {}).get("name") if existing_store else "Store"),
-            "email": payload.sender_email,
-            "custom_domain": payload.custom_domain,
-            "esp_provider": payload.esp_provider or "shopify",
-            "primary_domain": payload.custom_domain or shop_dom,
+            "name": payload.store_name or existing_meta.get("name", "Store"),
+            "email": payload.sender_email or (existing_store.get("sender_email") if existing_store else None),
+            "custom_domain": clean_or_existing_custom,
+            "esp_provider": payload.esp_provider or existing_meta.get("esp_provider", "shopify"),
+            "primary_domain": clean_or_existing_custom or shop_dom,
             "myshopify_domain": shop_dom,
         }
 
+        resolved_store_id = existing_store.get("id") if existing_store else payload.store_id
         saved = supabase_service.save_monitored_store(
             user_id=user_id,
             shop_domain=shop_dom,
             access_token_encrypted=existing_store.get("access_token_encrypted", "mock_token") if existing_store else "mock_token",
             scope="read_orders,write_orders",
-            sender_email=payload.sender_email,
+            sender_email=payload.sender_email or (existing_store.get("sender_email") if existing_store else None),
             store_metadata=updated_meta,
-            sender_alignment_status="aligned"
+            sender_alignment_status="aligned",
+            store_id=resolved_store_id
         )
-        if payload.custom_domain:
-            saved["custom_domain"] = payload.custom_domain
+        if clean_or_existing_custom:
+            saved["custom_domain"] = clean_or_existing_custom
         if payload.esp_provider:
             saved["esp_provider"] = payload.esp_provider
 
@@ -693,6 +794,8 @@ async def update_store_settings(
             "success": True,
             "store": saved
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to update store settings for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update store settings")

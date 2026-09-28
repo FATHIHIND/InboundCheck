@@ -470,8 +470,190 @@ async def test_tenant_cannot_read_another_users_logs():
 
 
 # =====================================================================
+# 6B. SEC-AUTOFIX-LOOSE-01: UNCONDITIONAL DOMAIN OWNERSHIP VERIFICATION
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_autofix_allowed_when_domain_owned_by_tenant():
+    """SEC-AUTOFIX-LOOSE-01: Authenticated tenant owns target domain -> auto-fix is allowed."""
+    user_id = str(uuid.uuid4())
+    domain = "tenant-owned-shop.com"
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service.create_or_update_domain(user_id, domain)
+    dns_auto_fixer.save_credentials(user_id, "cloudflare", "token-owned-1", "zone-owned-1")
+
+    mock_zone = {"zone_id": "zone-owned-1", "name": domain}
+    mock_created = {"id": "rec_owned_1", "type": "TXT", "name": f"_dmarc.{domain}", "content": "v=DMARC1; p=reject;", "ttl": 3600}
+
+    with patch.object(cloudflare_client, "get_zone_by_domain", new=AsyncMock(return_value=mock_zone)), \
+         patch.object(cloudflare_client, "get_dns_record", new=AsyncMock(side_effect=[None, mock_created])), \
+         patch.object(cloudflare_client, "create_dns_record", new=AsyncMock(return_value=mock_created)):
+        res = await dns_auto_fixer.apply_dns_fix(
+            user_id=user_id,
+            domain_name=domain,
+            provider_name="cloudflare",
+            record_type="TXT",
+            host=f"_dmarc.{domain}",
+            record_value="v=DMARC1; p=reject;",
+        )
+        assert res["applied"] is True
+        assert res["verified"] is True
+        assert res["fix_entry"]["status"] == "applied"
+
+
+@pytest.mark.asyncio
+async def test_autofix_rejected_when_tenant_has_zero_monitored_domains():
+    """SEC-AUTOFIX-LOOSE-01: Tenant with 0 monitored domains MUST be rejected unconditionally."""
+    user_id = str(uuid.uuid4())
+    domain = "unregistered-target.com"
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service._in_memory_domains[user_id] = []
+    dns_auto_fixer.save_credentials(user_id, "cloudflare", "token-zero-1", "zone-zero-1")
+
+    with patch.object(cloudflare_client, "create_dns_record", new=AsyncMock()) as mock_create:
+        res = await dns_auto_fixer.apply_dns_fix(
+            user_id=user_id,
+            domain_name=domain,
+            provider_name="cloudflare",
+            record_type="TXT",
+            host=f"_dmarc.{domain}",
+            record_value="v=DMARC1; p=reject;",
+        )
+        assert res["applied"] is False
+        assert res["fix_entry"]["status"] == "failed"
+        assert "Tenant authorization failure" in res["error"]
+        assert domain in res["error"]
+        mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_autofix_rejected_when_tenant_owns_other_domains_but_not_target():
+    """SEC-AUTOFIX-LOOSE-01: Tenant owns domain A but targets domain B -> MUST be rejected."""
+    user_id = str(uuid.uuid4())
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service.create_or_update_domain(user_id, "legitimate-domain-a.com")
+    dns_auto_fixer.save_credentials(user_id, "cloudflare", "token-other-1", "zone-other-1")
+
+    with patch.object(cloudflare_client, "create_dns_record", new=AsyncMock()) as mock_create:
+        res = await dns_auto_fixer.apply_dns_fix(
+            user_id=user_id,
+            domain_name="unauthorized-victim-b.com",
+            provider_name="cloudflare",
+            record_type="TXT",
+            host="_dmarc.unauthorized-victim-b.com",
+            record_value="v=DMARC1; p=reject;",
+        )
+        assert res["applied"] is False
+        assert res["fix_entry"]["status"] == "failed"
+        assert "Tenant authorization failure" in res["error"]
+        mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_autofix_rejected_in_non_production_environment():
+    """SEC-AUTOFIX-LOOSE-01: Non-production environment (dev/test/staging) MUST STILL reject unowned domains."""
+    user_id = str(uuid.uuid4())
+    target_domain = "staging-unowned.com"
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service._in_memory_domains[user_id] = []
+    dns_auto_fixer.save_credentials(user_id, "cloudflare", "token-nonprod-1", "zone-nonprod-1")
+
+    with patch.object(settings, "ENVIRONMENT", "development"):
+        assert settings.is_production is False
+        with patch.object(cloudflare_client, "create_dns_record", new=AsyncMock()) as mock_create:
+            res = await dns_auto_fixer.apply_dns_fix(
+                user_id=user_id,
+                domain_name=target_domain,
+                provider_name="cloudflare",
+                record_type="TXT",
+                host=f"_dmarc.{target_domain}",
+                record_value="v=DMARC1; p=reject;",
+            )
+            assert res["applied"] is False
+            assert "Tenant authorization failure" in res["error"]
+            mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_autofix_allowed_in_non_production_for_owned_domain():
+    """SEC-AUTOFIX-LOOSE-01: Non-production environment preserves legitimate auto-fix on owned domain."""
+    user_id = str(uuid.uuid4())
+    domain = "staging-owned.com"
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service.create_or_update_domain(user_id, domain)
+    dns_auto_fixer.save_credentials(user_id, "cloudflare", "token-nonprod-owned", "zone-nonprod-owned")
+
+    mock_zone = {"zone_id": "zone-nonprod-owned", "name": domain}
+    mock_created = {"id": "rec_nonprod_1", "type": "TXT", "name": f"_dmarc.{domain}", "content": "v=DMARC1; p=reject;", "ttl": 3600}
+
+    with patch.object(settings, "ENVIRONMENT", "development"):
+        with patch.object(cloudflare_client, "get_zone_by_domain", new=AsyncMock(return_value=mock_zone)), \
+             patch.object(cloudflare_client, "get_dns_record", new=AsyncMock(side_effect=[None, mock_created])), \
+             patch.object(cloudflare_client, "create_dns_record", new=AsyncMock(return_value=mock_created)):
+            res = await dns_auto_fixer.apply_dns_fix(
+                user_id=user_id,
+                domain_name=domain,
+                provider_name="cloudflare",
+                record_type="TXT",
+                host=f"_dmarc.{domain}",
+                record_value="v=DMARC1; p=reject;",
+            )
+            assert res["applied"] is True
+            assert res["fix_entry"]["status"] == "applied"
+
+
+@pytest.mark.asyncio
+async def test_autofix_rejection_does_not_mutate_dns_or_state():
+    """SEC-AUTOFIX-LOOSE-01: Proves rejection leaves Cloudflare and database operations completely unmutated."""
+    user_id = str(uuid.uuid4())
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service._in_memory_domains[user_id] = []
+    dns_auto_fixer.save_credentials(user_id, "cloudflare", "token-unmutated", "zone-unmutated")
+
+    with patch.object(cloudflare_client, "create_dns_record", new=AsyncMock()) as mock_create, \
+         patch.object(cloudflare_client, "update_dns_record", new=AsyncMock()) as mock_update, \
+         patch.object(cloudflare_client, "delete_dns_record", new=AsyncMock()) as mock_delete:
+        res = await dns_auto_fixer.apply_dns_fix(
+            user_id=user_id,
+            domain_name="unmutated-target.com",
+            provider_name="cloudflare",
+            record_type="TXT",
+            host="_dmarc.unmutated-target.com",
+            record_value="v=DMARC1; p=reject;",
+        )
+        assert res["applied"] is False
+        mock_create.assert_not_called()
+        mock_update.assert_not_called()
+        mock_delete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_autofix_error_does_not_leak_sensitive_credentials():
+    """SEC-AUTOFIX-LOOSE-01: Proves authorization rejection message contains no token, key, or internal details."""
+    user_id = str(uuid.uuid4())
+    secret_token = "cf-super-secret-token-do-not-leak"
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service._in_memory_domains[user_id] = []
+    dns_auto_fixer.save_credentials(user_id, "cloudflare", secret_token, "zone-leak-test")
+
+    res = await dns_auto_fixer.apply_dns_fix(
+        user_id=user_id,
+        domain_name="leak-test-domain.com",
+        provider_name="cloudflare",
+        record_type="TXT",
+        host="_dmarc.leak-test-domain.com",
+        record_value="v=DMARC1; p=reject;",
+    )
+    assert res["applied"] is False
+    error_text = json.dumps(res)
+    assert secret_token not in error_text
+    assert "zone-leak-test" not in error_text
+
+
+# =====================================================================
 # 7. BILLING TIER ENFORCEMENT & REST ENDPOINT INTEGRATION
 # =====================================================================
+
 
 @pytest.mark.asyncio
 async def test_starter_user_denied_auto_fix_apply():

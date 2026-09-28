@@ -14,7 +14,7 @@ import logging
 from app.core.security import get_current_user_id
 from app.core.rate_limiter import domain_re_audit_limiter, user_manual_audit_limiter
 from app.core.tier_guards import verify_active_subscription_or_trial, TIER_DOMAIN_LIMITS
-from app.services.supabase_client import supabase_service, DatabaseUnavailableError
+from app.services.supabase_client import supabase_service, DatabaseUnavailableError, QuotaExceededError
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.dns.scorer import DeliverabilityScorer
 from app.schemas.dns import DNSAuditResponse
@@ -101,12 +101,19 @@ async def add_monitored_domain(
             "raw_responses": raw_responses
         }
 
-        # Persist in Supabase monitored_domains
-        saved_domain = supabase_service.create_or_update_domain(
-            user_id=user_id,
-            domain_name=clean_domain,
-            audit_result=audit_payload
-        )
+        # Persist in Supabase monitored_domains via atomic provisioning RPC
+        try:
+            saved_domain = supabase_service.provision_monitored_domain(
+                user_id=user_id,
+                domain_name=clean_domain,
+                quota_limit=quota_limit,
+                audit_result=audit_payload
+            )
+        except QuotaExceededError as qe:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Domain quota reached ({len(existing_domains)}/{quota_limit}) for '{tier.capitalize()}' plan. Please upgrade your plan in Billing to add more domains."
+            )
 
         # Log audit entry in dns_audit_logs
         supabase_service.save_audit_log(

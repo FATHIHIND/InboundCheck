@@ -634,7 +634,9 @@ async def test_ops04_dns_auto_fix_fails_closed_on_cloudflare_error():
     host = "@"
     value = "v=spf1 include:_spf.google.com ~all"
 
-    # Configure credentials for this user
+    # Configure credentials and owned domain for this user
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service.create_or_update_domain(user_id, domain)
     dns_auto_fixer.save_credentials(user_id, "cloudflare", "cf-test-token-12345", "zone_1234567890abcdef")
 
     # Mock Cloudflare API to return HTTP 403 Forbidden
@@ -668,13 +670,16 @@ async def test_ops04_dns_auto_fix_fails_closed_on_timeout():
     """
     import httpx
     user_id = "test-user-cf-timeout"
+    domain = "ops4-timeout.com"
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "growth", "subscription_status": "active"})
+    supabase_service.create_or_update_domain(user_id, domain)
     dns_auto_fixer.save_credentials(user_id, "cloudflare", "cf-token", "zone-123")
 
     with patch.object(settings, "CLOUDFLARE_API_TOKEN", "server-cf-token"):
         with patch("app.services.dns.auto_fixer.httpx.AsyncClient.post", side_effect=httpx.TimeoutException("Connection timed out")):
             result = await dns_auto_fixer.apply_dns_fix(
                 user_id=user_id,
-                domain_name="ops4-timeout.com",
+                domain_name=domain,
                 record_type="TXT",
                 host="@",
                 record_value="v=spf1 -all",

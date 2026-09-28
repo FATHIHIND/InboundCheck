@@ -163,6 +163,7 @@ def test_bloc_c_auto_dns_fixer():
         "subscription_tier": "growth",
         "subscription_status": "active",
     })
+    supabase_service.create_or_update_domain("test-user-1", "brandshop.com")
 
     # 1. Save Provider Credentials
     cred_res = client.post(

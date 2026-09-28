@@ -7,6 +7,7 @@ profiles, and store integration metadata.
 
 import hashlib
 import random
+import threading
 from typing import List, Dict, Any, Optional, Union
 import logging
 import uuid
@@ -21,6 +22,11 @@ logger = logging.getLogger("SupabaseService")
 
 class DatabaseUnavailableError(Exception):
     """Raised when the database is unavailable in production environments."""
+    pass
+
+
+class QuotaExceededError(Exception):
+    """Raised when tenant has exceeded their tier-based domain quota."""
     pass
 
 
@@ -66,6 +72,7 @@ class SupabaseService:
         self._in_memory_rate_limits: Dict[str, int] = {}
         self._in_memory_dns_provider_creds: Dict[str, Dict[str, Any]] = {}
         self._in_memory_dns_auto_fix_logs: Dict[str, List[Dict[str, Any]]] = {}
+        self._in_memory_lock = threading.Lock()
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
             try:
@@ -305,6 +312,136 @@ class SupabaseService:
             self._in_memory_domains[user_id].insert(0, record)
             return record
 
+    def provision_monitored_domain(
+        self,
+        user_id: str,
+        domain_name: str,
+        quota_limit: int,
+        audit_result: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Atomically provisions or updates a monitored domain via PostgreSQL RPC.
+        Enforces tenant quota atomically at the database boundary under transaction advisory lock.
+        Raises QuotaExceededError if tenant has reached quota_limit.
+        """
+        domain_clean = domain_name.strip().lower()
+        now_str = datetime.now(timezone.utc).isoformat()
+
+        # Extract audit payload fields
+        health_score = 0
+        spf_status = "missing"
+        dkim_status = "missing"
+        dmarc_status = "missing"
+        mx_status = "missing"
+        bimi_status = "missing"
+        custom_selectors: List[str] = []
+
+        if audit_result:
+            health_score = audit_result.get("health_score", 0)
+            summary = audit_result.get("summary", {})
+            spf_status = summary.get("spf", {}).get("status", "missing")
+            dkim_status = summary.get("dkim", {}).get("status", "missing")
+            dmarc_status = summary.get("dmarc", {}).get("status", "missing")
+            mx_status = summary.get("mx", {}).get("status", "missing")
+            bimi_status = summary.get("bimi", {}).get("status", "missing")
+            custom_selectors = audit_result.get("custom_selectors", [])
+
+        # Validate status against allowed database CHECK constraints
+        valid_statuses = {"optimal", "warning", "critical", "missing"}
+        spf_status = spf_status if spf_status in valid_statuses else "missing"
+        dkim_status = dkim_status if dkim_status in valid_statuses else "missing"
+        dmarc_status = dmarc_status if dmarc_status in valid_statuses else "missing"
+        mx_status = mx_status if mx_status in valid_statuses else "missing"
+        bimi_status = bimi_status if bimi_status in valid_statuses else "missing"
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "provision_monitored_domain",
+                    {
+                        "p_user_id": user_id,
+                        "p_domain_name": domain_clean,
+                        "p_quota_limit": quota_limit,
+                        "p_health_score": health_score,
+                        "p_spf_status": spf_status,
+                        "p_dkim_status": dkim_status,
+                        "p_dmarc_status": dmarc_status,
+                        "p_mx_status": mx_status,
+                        "p_bimi_status": bimi_status,
+                        "p_custom_selectors": custom_selectors or [],
+                    }
+                ).execute()
+                if res.data:
+                    if isinstance(res.data, list) and len(res.data) > 0:
+                        return res.data[0]
+                    elif isinstance(res.data, dict):
+                        return res.data
+            except Exception as e:
+                err_msg = str(e)
+                if "DOMAIN_QUOTA_EXCEEDED" in err_msg:
+                    raise QuotaExceededError(f"Domain quota reached ({quota_limit}) for tenant plan.")
+                logger.error(f"Failed to provision domain via RPC in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database provisioning failed for domain {domain_clean}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database is unavailable in production; in-memory fallback rejected")
+
+        # Thread-safe in-memory fallback for local development and test environments
+        with self._in_memory_lock:
+            if user_id not in self._in_memory_domains:
+                self._in_memory_domains[user_id] = []
+
+            existing = next((d for d in self._in_memory_domains[user_id] if d["domain_name"] == domain_clean), None)
+            if existing:
+                # Update existing domain without consuming quota
+                record = {
+                    "health_score": health_score,
+                    "spf_status": spf_status,
+                    "dkim_status": dkim_status,
+                    "dmarc_status": dmarc_status,
+                    "mx_status": mx_status,
+                    "bimi_status": bimi_status,
+                    "custom_selectors": custom_selectors or [],
+                    "audit_failure_count": 0,
+                    "last_audit_error": None,
+                    "next_audit_retry_at": None,
+                    "audit_lease_until": None,
+                    "is_active": True,
+                    "last_checked_at": now_str,
+                    "updated_at": now_str,
+                }
+                existing.update(record)
+                return existing
+
+            # Check quota for new domain
+            current_count = len(self._in_memory_domains[user_id])
+            if current_count >= quota_limit:
+                raise QuotaExceededError(f"Domain quota reached ({current_count}/{quota_limit}) for tenant plan.")
+
+            new_record = {
+                "id": f"dom_{len(self._in_memory_domains[user_id]) + 1}_{int(time.time())}",
+                "user_id": user_id,
+                "domain_name": domain_clean,
+                "health_score": health_score,
+                "spf_status": spf_status,
+                "dkim_status": dkim_status,
+                "dmarc_status": dmarc_status,
+                "mx_status": mx_status,
+                "bimi_status": bimi_status,
+                "custom_selectors": custom_selectors or [],
+                "is_active": True,
+                "audit_failure_count": 0,
+                "last_audit_error": None,
+                "next_audit_retry_at": None,
+                "audit_lease_until": None,
+                "last_checked_at": now_str,
+                "created_at": now_str,
+                "updated_at": now_str,
+            }
+            self._in_memory_domains[user_id].insert(0, new_record)
+            return new_record
+
     def delete_domain(self, user_id: str, domain_id: str) -> bool:
         """Delete a monitored domain."""
         if self._client:
@@ -512,10 +649,12 @@ class SupabaseService:
         scope: str = "read_orders,read_fulfillments,read_merchant_managed_fulfillment_orders",
         sender_email: Optional[str] = None,
         store_metadata: Optional[Dict[str, Any]] = None,
-        sender_alignment_status: str = "pending"
+        sender_alignment_status: str = "pending",
+        store_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Persist connected Shopify store and encrypted access token to public.shopify_stores / public.monitored_stores.
+        Accepts optional store_id for deterministic store targeting.
         """
         now_iso = datetime.now(datetime.UTC).isoformat() if hasattr(datetime, "UTC") else datetime.utcnow().isoformat()
         clean_shop = shop_domain.strip().lower()
@@ -530,6 +669,8 @@ class SupabaseService:
             "is_active": True,
             "updated_at": now_iso,
         }
+        if store_id:
+            record["id"] = store_id
 
         # Attempt Supabase persistence into shopify_stores or monitored_stores
         if self._client:
@@ -556,7 +697,12 @@ class SupabaseService:
         if user_id not in self._in_memory_stores:
             self._in_memory_stores[user_id] = []
 
-        existing = next((s for s in self._in_memory_stores[user_id] if s.get("shop_domain") == clean_shop), None)
+        existing = None
+        if store_id:
+            existing = next((s for s in self._in_memory_stores[user_id] if str(s.get("id")) == str(store_id)), None)
+        if not existing:
+            existing = next((s for s in self._in_memory_stores[user_id] if s.get("shop_domain") == clean_shop), None)
+
         if existing:
             existing.update(record)
             if store_metadata:
@@ -564,7 +710,7 @@ class SupabaseService:
             return existing
         else:
             new_store = dict(record)
-            new_store["id"] = f"store_{len(self._in_memory_stores[user_id]) + 1}_{int(time.time())}"
+            new_store["id"] = store_id or f"store_{len(self._in_memory_stores[user_id]) + 1}_{int(time.time())}"
             new_store["created_at"] = now_iso
             if store_metadata:
                 new_store["metadata"] = store_metadata
