@@ -13,7 +13,7 @@ Verifies:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from pydantic import SecretStr
 from fastapi.testclient import TestClient
 
@@ -28,6 +28,7 @@ from app.services.ai.provider import (
     get_llm_provider,
 )
 from app.services.ai.content_optimizer import AIContentOptimizer, ai_content_service
+from app.core.config import settings
 from tests.conftest import auth_headers
 
 client = TestClient(app, headers=auth_headers("test-llm-user-1"))
@@ -112,8 +113,14 @@ def test_provider_factory_resolution():
 
 @pytest.mark.asyncio
 async def test_zero_network_calls_during_generation():
-    """Verify that polymorphic variant generation executes completely offline without external network calls."""
-    service = AIContentOptimizer()
+    """
+    Verify that polymorphic variant generation executes completely offline when
+    the HeuristicFallbackProvider is explicitly injected.
+    This test is provider-routing-agnostic: it uses explicit injection so that
+    AGENT_ROUTER_ENABLED in settings has no effect on the assertion.
+    """
+    # Explicitly inject HeuristicFallbackProvider to ensure offline-only execution
+    service = AIContentOptimizer(provider=HeuristicFallbackProvider())
 
     with patch("httpx.AsyncClient") as mock_client:
         variants = await service.generate_polymorphic_variants(
@@ -287,3 +294,153 @@ def test_api_endpoint_backward_compatibility():
         assert "body_html" in first_variant
         assert "estimated_spam_risk" in first_variant
         assert "rationale" in first_variant
+
+
+# =============================================================================
+# 8. Provider-Routing Invariant Regression Tests (Phase 2.4B Step 9D)
+# =============================================================================
+
+def test_content_optimizer_resolves_agent_router_when_enabled():
+    """
+    TEST 1 — AGENT_ROUTER_ENABLED=true with no explicit provider
+    => provider property must resolve to AgentRouterLLMProvider.
+    """
+    from app.services.ai.provider import AgentRouterLLMProvider
+
+    # Temporarily override AGENT_ROUTER_ENABLED on settings object
+    original = settings.AGENT_ROUTER_ENABLED
+    try:
+        settings.AGENT_ROUTER_ENABLED = True
+        service = AIContentOptimizer()  # no explicit provider
+        resolved = service.provider
+        assert isinstance(resolved, AgentRouterLLMProvider), (
+            f"Expected AgentRouterLLMProvider when AGENT_ROUTER_ENABLED=True, "
+            f"got {type(resolved).__name__}"
+        )
+    finally:
+        settings.AGENT_ROUTER_ENABLED = original
+
+
+def test_content_optimizer_resolves_heuristic_fallback_when_disabled():
+    """
+    TEST 2 — AGENT_ROUTER_ENABLED=false with no explicit provider
+    => provider property must resolve to HeuristicFallbackProvider.
+    """
+    original = settings.AGENT_ROUTER_ENABLED
+    try:
+        settings.AGENT_ROUTER_ENABLED = False
+        service = AIContentOptimizer()  # no explicit provider
+        resolved = service.provider
+        assert isinstance(resolved, HeuristicFallbackProvider), (
+            f"Expected HeuristicFallbackProvider when AGENT_ROUTER_ENABLED=False, "
+            f"got {type(resolved).__name__}"
+        )
+    finally:
+        settings.AGENT_ROUTER_ENABLED = original
+
+
+def test_content_optimizer_preserves_explicit_provider_injection():
+    """
+    TEST 3 — Explicit provider injection must be preserved regardless of AGENT_ROUTER_ENABLED.
+    Critical for tests and dependency injection.
+    """
+    from app.services.ai.provider import AgentRouterLLMProvider
+
+    injected = HeuristicFallbackProvider()
+    original = settings.AGENT_ROUTER_ENABLED
+    try:
+        # Even with AGENT_ROUTER_ENABLED=True, explicit injection must win
+        settings.AGENT_ROUTER_ENABLED = True
+        service = AIContentOptimizer(provider=injected)
+        resolved = service.provider
+        assert resolved is injected, (
+            "Explicit provider injection must be preserved; "
+            f"AGENT_ROUTER_ENABLED=True must NOT override it. Got: {type(resolved).__name__}"
+        )
+        assert isinstance(resolved, HeuristicFallbackProvider)
+        assert not isinstance(resolved, AgentRouterLLMProvider)
+    finally:
+        settings.AGENT_ROUTER_ENABLED = original
+
+
+@pytest.mark.asyncio
+async def test_content_optimizer_fallback_when_agent_router_fails():
+    """
+    TEST 4 — When agent_router provider fails with LLMGenerationError,
+    generate_polymorphic_variants must fall back to HeuristicFallbackProvider
+    and still return 3 valid candidates.
+    """
+    from app.services.ai.provider import LLMGenerationError
+
+    class _FailingProvider(BaseLLMProvider):
+        """Simulates an AgentRouter that raises LLMGenerationError."""
+        @property
+        def provider_name(self) -> str:
+            return "failing_agent_router"
+
+        @property
+        def is_available(self) -> bool:
+            return True
+
+        async def generate_variants(self, subject: str, body_content: str, count: int = 3, **kwargs):
+            raise LLMGenerationError("Simulated network timeout from agent router")
+
+    service = AIContentOptimizer(provider=_FailingProvider())
+    variants = await service.generate_polymorphic_variants(
+        subject="Order #{{ order.name }} confirmed",
+        body_content="<p>Hi {{ customer.first_name }}, your order #{{ order.name }} is confirmed.</p>"
+    )
+
+    # Fallback must recover and produce 3 valid, Liquid-preserving candidates
+    assert len(variants) == 3, (
+        f"Expected 3 fallback candidates after agent_router failure, got {len(variants)}"
+    )
+    for v in variants:
+        assert "{{ order.name }}" in v["body_html"]
+        assert "{{ customer.first_name }}" in v["body_html"]
+
+
+@pytest.mark.asyncio
+async def test_content_optimizer_liquid_gate_still_works_with_agent_router():
+    """
+    TEST 5 — Liquid preservation gate must still reject variants that corrupt
+    Liquid tags regardless of which provider is active.
+    Uses an explicit MockCorruptingProvider (no real HTTP call).
+    """
+    class _CorruptingProvider(BaseLLMProvider):
+        """Returns a candidate that strips a Liquid tag."""
+        @property
+        def provider_name(self) -> str:
+            return "corrupting_provider"
+
+        @property
+        def is_available(self) -> bool:
+            return True
+
+        async def generate_variants(self, subject: str, body_content: str, count: int = 3, **kwargs):
+            return [
+                {
+                    "variant_id": "v1_corrupted",
+                    "variant_name": "Corrupted",
+                    "subject": "Order receipt",
+                    # Liquid {{ order.name }} intentionally stripped
+                    "body_html": "<p>Hi {{ customer.first_name }}, your order is confirmed.</p>",
+                    "estimated_spam_risk": 1,
+                    "rationale": "Tag removed.",
+                }
+            ]
+
+    original = settings.AGENT_ROUTER_ENABLED
+    try:
+        settings.AGENT_ROUTER_ENABLED = True
+        service = AIContentOptimizer(provider=_CorruptingProvider())
+        variants = await service.generate_polymorphic_variants(
+            subject="Order #{{ order.name }} confirmed",
+            body_content="<p>Hi {{ customer.first_name }}, your order #{{ order.name }} is ready.</p>"
+        )
+        # Liquid gate must reject the corrupted candidate — variants must be empty
+        assert variants == [], (
+            f"Expected Liquid gate to reject all corrupted variants; got {len(variants)} variants"
+        )
+    finally:
+        settings.AGENT_ROUTER_ENABLED = original

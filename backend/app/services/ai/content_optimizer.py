@@ -99,7 +99,27 @@ class AIContentOptimizer:
         self.api_base = settings.LLM_API_BASE
         self.api_key = settings.LLM_API_KEY
         self.model_name = settings.LLM_MODEL_NAME
-        self.provider: BaseLLMProvider = provider or get_llm_provider("heuristic_fallback")
+        self._explicit_provider: Optional[BaseLLMProvider] = provider
+
+    @property
+    def provider(self) -> BaseLLMProvider:
+        """
+        Return explicitly injected provider if present, otherwise dynamically resolve
+        the default provider from server configuration.
+        """
+        if self._explicit_provider is not None:
+            return self._explicit_provider
+
+        target = "agent_router" if getattr(settings, "AGENT_ROUTER_ENABLED", False) else "heuristic_fallback"
+        return get_llm_provider(target)
+
+    @provider.setter
+    def provider(self, value: Optional[BaseLLMProvider]) -> None:
+        self._explicit_provider = value
+
+    @provider.deleter
+    def provider(self) -> None:
+        self._explicit_provider = None
 
     @staticmethod
     def extract_liquid_tags(text: str) -> Set[str]:
