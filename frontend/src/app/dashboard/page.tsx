@@ -35,6 +35,7 @@ import dynamic from "next/dynamic";
 import ReputationTrendChart, { ReputationPoint } from "./components/ReputationTrendChart";
 import CheckHistoryChart, { IMAPCheckLog } from "./components/CheckHistoryChart";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityRiskBanner";
 import { MerchantHealthBanner } from "@/components/dashboard/MerchantHealthBanner";
 import { StripeMetricTile } from "@/components/dashboard/StripeMetricTile";
@@ -385,18 +386,6 @@ export default function DashboardOverviewPage() {
     loadReputation();
   }, []);
 
-  // Close Add Store Modal or Delete Modal on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (showAddModal) setShowAddModal(false);
-        if (storeToDelete && !isDeletingStore) setStoreToDelete(null);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAddModal, storeToDelete, isDeletingStore]);
-
   // Auto-populate pending domain from bait audit on first-time mount when registry is empty
   useEffect(() => {
     if (domainsResource.state === "empty") {
@@ -623,7 +612,7 @@ export default function DashboardOverviewPage() {
               <select
                 value={selectedStore}
                 onChange={(e) => setSelectedStore(e.target.value)}
-                className="bg-white border border-slate-300 text-xs font-mono text-slate-900 rounded-md px-3 py-2 pr-8 appearance-none focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer shadow-2xs"
+                className="ic-select w-auto appearance-none pr-8 font-mono cursor-pointer"
               >
                 <option value="all">All Connected Stores ({stores.length})</option>
                 {stores.map((s) => (
@@ -661,6 +650,16 @@ export default function DashboardOverviewPage() {
           </button>
         </div>
       </div>
+
+      {isDemoActive && (
+        <div className="ic-alert-preview rounded-lg px-4 py-3 text-xs font-sans flex items-start gap-2.5" role="status">
+          <Sparkles className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" aria-hidden="true" />
+          <div>
+            <span className="font-semibold">Demo mode is active.</span>{" "}
+            Dashboard health, revenue-risk, and reputation values shown for this preview are simulated and are not live production telemetry.
+          </div>
+        </div>
+      )}
 
       {pipelineStep && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-mono text-emerald-800 flex items-center gap-2 animate-fadeIn">
@@ -1006,16 +1005,13 @@ export default function DashboardOverviewPage() {
 
       {/* Add Store Modal */}
       {showAddModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="add-domain-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+        <AccessibleDialog
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          labelledBy="add-domain-modal-title"
+          className="items-center justify-center p-4"
+          panelClassName="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 space-y-4 shadow-xl animate-fadeIn"
         >
-          <div className="rounded-lg border border-slate-200 bg-white max-w-md w-full p-6 space-y-4 animate-fadeIn shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 id="add-domain-modal-title" className="text-base font-bold text-slate-900">Add Monitored Store Domain</h3>
               <button
@@ -1066,22 +1062,20 @@ export default function DashboardOverviewPage() {
                 </EmeraldHoverButton>
               </div>
             </form>
-          </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Delete Confirmation Modal */}
       {storeToDelete && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-domain-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !isDeletingStore) setStoreToDelete(null);
+        <AccessibleDialog
+          isOpen={Boolean(storeToDelete)}
+          onClose={() => {
+            if (!isDeletingStore) setStoreToDelete(null);
           }}
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          labelledBy="delete-domain-modal-title"
+          className="items-center justify-center p-4"
+          panelClassName="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 space-y-4 shadow-xl animate-fadeIn"
         >
-          <div className="rounded-lg border border-slate-200 bg-white max-w-md w-full p-6 space-y-4 animate-fadeIn shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2 text-rose-600">
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
@@ -1141,8 +1135,7 @@ export default function DashboardOverviewPage() {
                 )}
               </button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Zero-Spam Multi-Step Readiness Wizard */}

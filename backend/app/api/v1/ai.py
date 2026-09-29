@@ -5,7 +5,7 @@ Endpoints for template spam risk diagnostics and polymorphic copy generation.
 """
 
 from fastapi import APIRouter, HTTPException, Query, status, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, Dict, Any, List
 import logging
 
@@ -19,19 +19,51 @@ router = APIRouter(prefix="/ai", tags=["AI Content Lab"])
 
 
 class TemplateAnalyzeRequest(BaseModel):
-    subject: str = Field(..., description="Email subject line")
-    body_content: Optional[str] = Field(None, description="Email body text or HTML template")
-    body: Optional[str] = Field(None, description="Alternative key for email body text or HTML template")
-    template_name: Optional[str] = "Shopify Order Template"
+    model_config = {"extra": "forbid"}
+
+    subject: str = Field(..., min_length=1, max_length=255, description="Email subject line")
+    body_content: Optional[str] = Field(None, max_length=15000, description="Email body text or HTML template")
+    body: Optional[str] = Field(None, max_length=15000, description="Alternative key for email body text or HTML template")
+    template_name: Optional[str] = Field("Shopify Order Template", max_length=100)
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Subject must not be empty or whitespace only")
+        return v
+
+    @model_validator(mode="after")
+    def validate_content_presence(self) -> "TemplateAnalyzeRequest":
+        content = self.get_content()
+        if not content:
+            raise ValueError("Email body content must not be empty or whitespace only")
+        return self
 
     def get_content(self) -> str:
         return (self.body_content or self.body or "").strip()
 
 
 class PolymorphicGenerateRequest(BaseModel):
-    subject: str = Field(..., description="Original subject line")
-    body_content: Optional[str] = Field(None, description="Original HTML/text content")
-    body: Optional[str] = Field(None, description="Alternative key for original HTML/text content")
+    model_config = {"extra": "forbid"}
+
+    subject: str = Field(..., min_length=1, max_length=255, description="Original subject line")
+    body_content: Optional[str] = Field(None, max_length=15000, description="Original HTML/text content")
+    body: Optional[str] = Field(None, max_length=15000, description="Alternative key for original HTML/text content")
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Subject must not be empty or whitespace only")
+        return v
+
+    @model_validator(mode="after")
+    def validate_content_presence(self) -> "PolymorphicGenerateRequest":
+        content = self.get_content()
+        if not content:
+            raise ValueError("Email body content must not be empty or whitespace only")
+        return self
 
     def get_content(self) -> str:
         return (self.body_content or self.body or "").strip()

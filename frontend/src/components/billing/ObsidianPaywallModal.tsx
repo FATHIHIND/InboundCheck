@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Check, Sparkles, ShieldAlert, ArrowRight, Loader2, Zap, ShieldCheck, Building2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 
 interface ObsidianPaywallModalProps {
   onPlanSelected?: (planTier: string) => void;
@@ -151,13 +152,15 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="paywall-title"
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
+    <AccessibleDialog
+      isOpen
+      onClose={onClose}
+      labelledBy="paywall-title"
+      closeOnBackdrop={false}
+      closeOnEscape={false}
+      className="items-center justify-center overflow-y-auto p-4 sm:p-6 animate-fadeIn"
+      panelClassName="relative my-8 w-full max-w-5xl rounded-lg border border-slate-200 bg-white p-6 sm:p-10 space-y-8 text-slate-900 shadow-xl"
     >
-      <div className="relative w-full max-w-5xl rounded-lg bg-white border border-slate-200 shadow-xl p-6 sm:p-10 space-y-8 text-slate-900 my-8">
         {/* Modal Header: High-Impact GMV Protection & ROI Framing */}
         <div className="text-center space-y-3 max-w-2xl mx-auto relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono font-bold uppercase tracking-wider">
@@ -338,7 +341,6 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

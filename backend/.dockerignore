@@ -10,3 +10,6 @@ env
 .git
 .gitignore
 .dockerignore
+.env
+.env.*
+.env.local

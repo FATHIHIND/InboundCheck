@@ -74,7 +74,7 @@ export const EmeraldHoverButton = forwardRef<
 
     // Base button structure
     const baseClasses =
-      "inline-flex items-center justify-center font-semibold select-none transition-colors duration-150 cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed shadow-xs";
+      "inline-flex items-center justify-center font-semibold select-none transition-colors duration-150 cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2";
 
     // Variant configurations
     let variantClasses = "";

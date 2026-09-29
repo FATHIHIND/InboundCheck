@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_MODEL_NAME: str = "moonshot-v1-8k"
 
+    # Phase 2.4B - Agent Router LLM Configuration
+    AGENT_ROUTER_API_BASE: str = ""
+    AGENT_ROUTER_API_KEY: str = ""
+    AGENT_ROUTER_MODEL_NAME: str = ""
+    AGENT_ROUTER_TIMEOUT_SECONDS: float = 10.0
+    AGENT_ROUTER_MAX_TOKENS: int = 1500
+    AGENT_ROUTER_TEMPERATURE: float = 0.7
+    AGENT_ROUTER_ENABLED: bool = False
+
     # Telegram Real-Time Bot Alert Engine Configuration
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_CHAT_ID: str = ""

@@ -73,7 +73,7 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`group relative overflow-hidden rounded-lg border border-slate-200 bg-white p-6 shadow-xs transition-all duration-200 hover:border-slate-300 hover:shadow-sm ${
+      className={`obsidian-card group relative overflow-hidden p-6 hover:shadow-sm ${
         onClick ? "cursor-pointer" : ""
       } ${className}`}
     >
@@ -97,7 +97,7 @@ export const GlassEmeraldCard: React.FC<GlassEmeraldCardProps> = ({
 
         {badgeText && (
           <div
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-mono font-medium tracking-tight ${BADGE_VARIANTS[badgeVariant]}`}
+            className={`ic-badge ${BADGE_VARIANTS[badgeVariant]}`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${DOT_VARIANTS[badgeVariant]}`}

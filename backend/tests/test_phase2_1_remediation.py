@@ -20,6 +20,7 @@ Validates:
    - Ops incident dispatch, sanitization, and anti-flapping suppression.
 """
 
+import asyncio
 import pytest
 import time
 import uuid
@@ -405,6 +406,10 @@ async def test_two_users_behind_same_ip_have_independent_quotas():
     user_b = f"corp-user-b-{uuid.uuid4().hex[:8]}"
 
     supabase_service._in_memory_rate_limits.clear()
+
+    # Ensure test does not execute across a 60-second fixed window boundary
+    if (int(time.time()) % 60) >= 58:
+        await asyncio.sleep(2.5)
 
     # User A consumes all 10 tokens
     for _ in range(10):

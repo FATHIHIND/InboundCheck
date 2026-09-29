@@ -73,16 +73,50 @@
   --accent-red: #DC2626;
   --card: 0 0% 100%;
   --card-foreground: 222.2 84% 4.9%;
+
+  /* Phase 1 semantic UI contracts. Keep these aliases close to the existing
+     palette so marketing can retain its dark treatment while the app uses
+     the light institutional surface system. */
+  --color-background: var(--sys-bg-canvas);
+  --color-surface: var(--sys-surface-base);
+  --color-surface-muted: var(--sys-surface-overlay);
+  --color-foreground: var(--sys-text-primary);
+  --color-foreground-muted: var(--sys-text-secondary);
+  --color-border: var(--sys-border-default);
+  --color-primary: #059669;
+  --color-primary-hover: #047857;
+  --color-success: #047857;
+  --color-warning: #b45309;
+  --color-danger: #be123c;
+  --color-info: #0369a1;
+
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-lg: 1rem;
+  --space-xl: 1.5rem;
+  --space-2xl: 2rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --elevation-subtle: var(--sys-shadow-ambient);
+  --elevation-card: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  --elevation-modal: 0 20px 40px -15px rgba(15, 23, 42, 0.25);
+  --motion-fast: 150ms;
+  --motion-normal: 200ms;
+  --motion-slow: 300ms;
 }
 
-/* Institutional Design Tokens & Base Panels */
+/* Institutional card contract. This is the single source of truth for the
+   legacy name while components migrate to semantic primitives. */
 .obsidian-card {
   position: relative;
-  background-color: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: 0.5rem; /* rounded-lg (8px) */
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.2s ease;
+  background-color: var(--color-surface);
+  border: 1px solid var(--sys-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-subtle);
+  transition: border-color var(--motion-normal) var(--ease-apple-spring),
+    box-shadow var(--motion-normal) var(--ease-apple-spring);
 }
 
 .obsidian-card:hover {
@@ -97,6 +131,11 @@
   border-radius: 0.5rem;
   box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .obsidian-card-elevated:hover {
@@ -294,20 +333,6 @@ body::before {
   z-index: 1;
 }
 
-/* Midnight Obsidian Surface Card */
-.obsidian-card {
-  background: #0E1217;
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 128, 96, 0.18);
-  border-radius: 1rem;
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
-  transition: all 0.25s ease-in-out;
-}
-
-.obsidian-card:hover {
-  border-color: rgba(16, 185, 129, 0.4);
-}
-
 @layer components {
   .btn-emerald-primary {
     @apply bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors shadow-xs active:scale-[0.99];
@@ -323,6 +348,19 @@ body::before {
   }
   .badge-status-neutral {
     @apply bg-slate-100 text-slate-600 border border-slate-200;
+  }
+  .ic-input,
+  .ic-select {
+    @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 shadow-2xs transition-colors placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600;
+  }
+  .ic-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide;
+  }
+  .ic-badge-preview {
+    @apply border-sky-200 bg-sky-50 text-sky-800;
+  }
+  .ic-alert-preview {
+    @apply border border-sky-200 bg-sky-50/80 text-sky-950;
   }
 }
 

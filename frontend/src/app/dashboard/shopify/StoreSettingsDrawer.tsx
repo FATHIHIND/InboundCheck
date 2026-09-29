@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { formatApiErrorMessage } from "@/lib/apiResource";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 
 export type EspProviderType = "shopify" | "klaviyo" | "postmark";
 
@@ -89,21 +90,6 @@ export function StoreSettingsDrawer({
     }
   }, [isOpen, initialStoreName, initialShopDomain, initialCustomDomain, initialSenderEmail, initialEsp]);
 
-  // Keyboard dismiss (Escape)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
-      }
-    };
-    if (isOpen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -142,19 +128,13 @@ export function StoreSettingsDrawer({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="store-drawer-title"
-      className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-sm flex justify-end animate-fadeIn"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <AccessibleDialog
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledBy="store-drawer-title"
+      className="justify-end overflow-hidden animate-fadeIn"
+      panelClassName="h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl animate-slideInRight flex flex-col justify-between"
     >
-      <div
-        className="w-full max-w-xl h-full bg-white border-l border-slate-200 shadow-2xl flex flex-col justify-between overflow-y-auto animate-slideInRight"
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Drawer Header */}
         <div className="p-6 border-b border-slate-200 bg-white sticky top-0 z-10">
           <div className="flex items-center justify-between">
@@ -218,7 +198,7 @@ export function StoreSettingsDrawer({
                 onChange={(e) => setStoreName(e.target.value)}
                 placeholder="e.g. Apex Apparel Store"
                 required
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-md text-slate-900 text-xs font-sans focus:outline-none transition shadow-2xs placeholder:text-slate-400"
+                className="ic-input font-sans"
               />
               <p className="text-[11px] text-slate-500">
                 The friendly brand display name shown on Order Confirmation Receipts and Tracking Notifications.
@@ -234,7 +214,7 @@ export function StoreSettingsDrawer({
                 value={shopDomain}
                 onChange={(e) => setShopDomain(e.target.value)}
                 placeholder="brand-store.myshopify.com"
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-md text-slate-900 text-xs font-mono focus:outline-none transition shadow-2xs placeholder:text-slate-400"
+                className="ic-input font-mono"
               />
               <p className="text-[11px] text-slate-500">
                 Internal Shopify administration handle.
@@ -262,7 +242,7 @@ export function StoreSettingsDrawer({
                 onChange={(e) => setCustomDomain(e.target.value)}
                 placeholder="e.g. apexapparel.com"
                 required
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-md text-slate-900 text-xs font-mono focus:outline-none transition shadow-2xs placeholder:text-slate-400"
+                className="ic-input font-mono"
               />
               <p className="text-[11px] text-slate-500">
                 Primary branded apex or subdomain. Official Domain DNS Records (SPF, DKIM, DMARC) will align to this domain.
@@ -279,7 +259,7 @@ export function StoreSettingsDrawer({
                 onChange={(e) => setSenderEmail(e.target.value)}
                 placeholder="e.g. orders@apexapparel.com"
                 required
-                className="w-full px-3.5 py-2 bg-white border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-md text-slate-900 text-xs font-mono focus:outline-none transition shadow-2xs placeholder:text-slate-400"
+                className="ic-input font-mono"
               />
               <p className="text-[11px] text-slate-500">
                 Used to dispatch customer receipts and tracking numbers. Must match your authenticated sending domain to avoid customer disputes (chargebacks).
@@ -301,10 +281,12 @@ export function StoreSettingsDrawer({
               {ESP_OPTIONS.map((esp) => {
                 const isSelected = espProvider === esp.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={esp.id}
                     onClick={() => setEspProvider(esp.id)}
-                    className={`p-3.5 rounded-lg border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-2xs ${
+                    aria-pressed={isSelected}
+                    className={`w-full p-3.5 rounded-lg border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-2xs text-left focus-visible:ring-2 focus-visible:ring-emerald-600 ${
                       isSelected
                         ? "bg-emerald-50/70 border-emerald-300"
                         : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
@@ -337,7 +319,7 @@ export function StoreSettingsDrawer({
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -385,7 +367,6 @@ export function StoreSettingsDrawer({
             )}
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 }

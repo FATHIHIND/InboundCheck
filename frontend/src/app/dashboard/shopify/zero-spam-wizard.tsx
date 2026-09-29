@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 
 export interface ReadinessCheckItem {
   check_id: string;
@@ -142,13 +143,16 @@ export const ZeroSpamWizardModal: React.FC<ZeroSpamWizardProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   const currentCheck = data && activeStep >= 1 && activeStep <= 6 ? data.checks[activeStep - 1] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl border border-white/10 bg-[#0A0A0E] shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden text-zinc-100">
+    <AccessibleDialog
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledBy="zero-spam-wizard-title"
+      className="items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200"
+      panelClassName="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0E] text-zinc-100 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+    >
         {/* Modal Top Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0E0E14]/80">
           <div className="flex items-center gap-3">
@@ -156,7 +160,7 @@ export const ZeroSpamWizardModal: React.FC<ZeroSpamWizardProps> = ({
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <h2 id="zero-spam-wizard-title" className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 Shopify Zero-Spam Readiness Wizard
                 {data && (
                   <span
@@ -560,8 +564,7 @@ export const ZeroSpamWizardModal: React.FC<ZeroSpamWizardProps> = ({
             </>
           ) : null}
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 };
 

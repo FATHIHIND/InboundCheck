@@ -8,10 +8,57 @@ email templates, identifying spam triggers, and generating polymorphic variants.
 import re
 import httpx
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
 from app.core.config import settings
+from app.services.ai.provider import (
+    BaseLLMProvider,
+    HeuristicFallbackProvider,
+    LLMProviderNotConfiguredError,
+    LLMGenerationError,
+    get_llm_provider,
+    LLMProviderConfig,
+)
 
 logger = logging.getLogger("AIContentOptimizer")
+
+# Liquid tag pattern: matches {{ ... }} output expressions and {% ... %} control tags non-greedily
+LIQUID_TAG_PATTERN = re.compile(r"(\{\{.*?\}\}|\{%.*?%\})", re.DOTALL)
+
+
+def extract_liquid_tags(text: str) -> Set[str]:
+    """
+    Extract all Shopify Liquid constructs from template text.
+    Captures both output tags ({{ ... }}) and logic/control tags ({% ... %}).
+    Preserves exact whitespace and tag contents.
+    """
+    if not text or not isinstance(text, str):
+        return set()
+
+    matches = LIQUID_TAG_PATTERN.findall(text)
+    return set(matches)
+
+
+def validate_liquid_preservation(original_tags: Set[str], variant_body: str) -> bool:
+    """
+    Validate that every Liquid tag extracted from the original template
+    is preserved exactly in the synthesized variant body.
+
+    Security Invariant:
+    A generated variant must NEVER be considered valid if it removes,
+    changes, corrupts, or partially rewrites an original Liquid tag.
+    Fails closed (returns False) on any missing, corrupted, or altered tag.
+    """
+    if not original_tags:
+        return True
+
+    if not variant_body or not isinstance(variant_body, str):
+        return False
+
+    for tag in original_tags:
+        if tag not in variant_body:
+            return False
+
+    return True
 
 SPAM_TRIGGER_PATTERNS = [
     r"\b(100% free|completely free|risk free|risk-free)\b",
@@ -48,10 +95,19 @@ class AIContentOptimizer:
     and polymorphic text transformation.
     """
 
-    def __init__(self):
+    def __init__(self, provider: Optional[BaseLLMProvider] = None):
         self.api_base = settings.LLM_API_BASE
         self.api_key = settings.LLM_API_KEY
         self.model_name = settings.LLM_MODEL_NAME
+        self.provider: BaseLLMProvider = provider or get_llm_provider("heuristic_fallback")
+
+    @staticmethod
+    def extract_liquid_tags(text: str) -> Set[str]:
+        return extract_liquid_tags(text)
+
+    @staticmethod
+    def validate_liquid_preservation(original_tags: Set[str], variant_body: str) -> bool:
+        return validate_liquid_preservation(original_tags, variant_body)
 
     def _rule_based_audit(self, text: str) -> Dict[str, Any]:
         """Perform instant deterministic rule-based analysis of spam triggers."""
@@ -148,48 +204,68 @@ class AIContentOptimizer:
     async def generate_polymorphic_variants(
         self,
         subject: str,
-        body_content: str
+        body_content: str,
+        candidate_variants: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Generate 3 deliverability-optimized polymorphic content variations
-        that preserve Liquid template variables (e.g. {{ order.name }}).
+        Generate deliverability-optimized polymorphic content variations
+        that strictly preserve Liquid template variables (e.g. {{ order.name }}).
+
+        Security Invariant:
+        Every candidate variant body is validated against all Liquid tags extracted
+        from the original body_content. Any variant missing, modifying, or corrupting
+        an original Liquid tag is rejected and excluded from the returned variants.
         """
-        # Preserving template tags
-        v1_subject = f"Order Confirmation: #{{{{ order.name }}}} - Receipt & Details"
-        v1_body = f"<p>Hello {{{{ customer.first_name }}}},</p><p>We have successfully received your order <strong>#{{{{ order.name }}}}</strong>. Your order is being processed and will ship shortly.</p><p>View your complete order receipt here: {{{{ checkout.order_status_url }}}}</p>"
+        # 1. Extract original Liquid tags from source body
+        original_tags = extract_liquid_tags(body_content)
 
-        v2_subject = f"Your order #{{{{ order.name }}}} has been received"
-        v2_body = f"<p>Hi {{{{ customer.first_name }}}},</p><p>Thank you for choosing our store. This email confirms order #{{{{ order.name }}}}. We will send you a tracking link as soon as your items dispatch.</p>"
+        # 2. Determine candidate variants via provider abstraction
+        if candidate_variants is not None:
+            candidates = candidate_variants
+        else:
+            try:
+                candidates = await self.provider.generate_variants(
+                    subject,
+                    body_content,
+                    liquid_tags=original_tags,
+                )
+            except (LLMProviderNotConfiguredError, LLMGenerationError) as e:
+                logger.warning(
+                    f"Configured provider '{self.provider.provider_name}' unavailable or failed ({e}); "
+                    "falling back safely to deterministic heuristic synthesis."
+                )
+                fallback_provider = HeuristicFallbackProvider()
+                candidates = await fallback_provider.generate_variants(subject, body_content)
 
-        v3_subject = f"Important details regarding order #{{{{ order.name }}}}"
-        v3_body = f"<p>Dear {{{{ customer.first_name }}}},</p><p>Your order receipt #{{{{ order.name }}}} is ready. You can inspect fulfillment progress anytime via your store profile.</p>"
+        # 3. Fail-closed validation gate: each candidate variant must preserve all original Liquid tags verbatim
+        valid_variants: List[Dict[str, Any]] = []
+        for variant in candidates:
+            # Check all candidate body fields present in the variant
+            candidate_bodies = [
+                variant[key]
+                for key in ("body_html", "body", "body_content")
+                if key in variant
+            ]
+            if not candidate_bodies:
+                if original_tags:
+                    logger.warning(
+                        f"Variant '{variant.get('variant_id')}' rejected: "
+                        f"Empty generated body when Liquid tags are required."
+                    )
+                    continue
+                else:
+                    valid_variants.append(variant)
+                    continue
 
-        return [
-            {
-                "variant_id": "v1_professional",
-                "variant_name": "High-Deliverability Professional",
-                "subject": v1_subject,
-                "body_html": v1_body,
-                "estimated_spam_risk": 2,
-                "rationale": "Uses strict transactional wording, removes promotional calls-to-action, and respects SPF/DKIM alignment."
-            },
-            {
-                "variant_id": "v2_conversational",
-                "variant_name": "Conversational Minimalist",
-                "subject": v2_subject,
-                "body_html": v2_body,
-                "estimated_spam_risk": 1,
-                "rationale": "Strips heavy formatting, minimizing HTML-to-text ratio penalties in Spamhaus and Barracuda."
-            },
-            {
-                "variant_id": "v3_vip",
-                "variant_name": "VIP Transactional Standard",
-                "subject": v3_subject,
-                "body_html": v3_body,
-                "estimated_spam_risk": 3,
-                "rationale": "Optimized for Gmail Priority Inbox sorting and Apple Mail privacy protection."
-            }
-        ]
+            if all(validate_liquid_preservation(original_tags, cb) for cb in candidate_bodies):
+                valid_variants.append(variant)
+            else:
+                logger.warning(
+                    f"Variant '{variant.get('variant_id')}' rejected: "
+                    f"Failed Liquid tag preservation safety check."
+                )
+
+        return valid_variants
 
 
 ai_content_service = AIContentOptimizer()

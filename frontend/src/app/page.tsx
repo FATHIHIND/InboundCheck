@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import FadeInUp from "@/components/landing/FadeInUp";
 import ShopifyAuditPasses from "@/components/landing/ShopifyAuditPass";
+import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
 
 // 5 Core High-Intent FAQ Items
 const FAQ_ITEMS = [
@@ -131,16 +132,6 @@ export default function LandingPage() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showStatusModal) {
-        setShowStatusModal(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showStatusModal]);
 
   // Lock document body scroll when mobile navigation drawer is active (prevents iOS scroll bleed)
   useEffect(() => {
@@ -522,6 +513,12 @@ export default function LandingPage() {
           {/* Interactive Live Bait Domain Health Check */}
           <FadeInUp delay={0.4} className="w-full max-w-xl mx-auto mt-8 mb-14">
             <div className="p-2.5 rounded-2xl border border-white/10 bg-[#0A0A0C]/90 backdrop-blur-xl shadow-2xl">
+              <div className="mb-2 flex items-center gap-2 px-1 text-left">
+                <span className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-sky-200">
+                  Interactive preview
+                </span>
+                <span className="text-[11px] text-zinc-400">Illustrative simulation — no live DNS query is run on this page.</span>
+              </div>
               <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
                 <div className="relative flex-1 min-w-0 w-full">
                   <Globe className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1531,16 +1528,13 @@ export default function LandingPage() {
 
       {/* System Status Modal */}
       {showStatusModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="status-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowStatusModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+        <AccessibleDialog
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+          labelledBy="status-modal-title"
+          className="items-center justify-center bg-black/80 p-4"
+          panelClassName="obsidian-card w-full max-w-lg rounded-2xl space-y-5 border border-white/[0.1] bg-[#0B0B0E] p-6 shadow-2xl animate-fadeIn"
         >
-          <div className="obsidian-card rounded-2xl max-w-lg w-full p-6 space-y-5 animate-fadeIn border border-white/[0.1] bg-[#0B0B0E] shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
@@ -1609,8 +1603,7 @@ export default function LandingPage() {
                 Close
               </button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       )}
     </div>
   );

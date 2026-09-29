@@ -89,22 +89,22 @@ export function DomainMatrixTable({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-xs">
-      {/* Live Mock Simulation Header Banner */}
+      {/* Demo telemetry is intentionally distinct from live monitored-domain data. */}
       {isDemoActive && (
-        <div className="p-4 border-b border-emerald-200 bg-emerald-50/70 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="p-4 border-b border-sky-200 bg-sky-50/80 flex flex-col sm:flex-row items-center justify-between gap-3" role="status">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4 text-emerald-700" />
+            <div className="w-8 h-8 rounded-lg bg-sky-100 border border-sky-300 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-sky-700" />
             </div>
             <div>
               <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                <span>Interactive Simulation Mode: {stores[0]?.domain_name || "allure-apparel.com"}</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold uppercase">
-                  Live Mock Scenario
+                <span>Demo mode: {stores[0]?.domain_name || "allure-apparel.com"}</span>
+                <span className="ic-badge ic-badge-preview">
+                  Simulated data — not live
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 mt-0.5">
-                Simulating store DNS audit scenario: 3 misconfigured records, estimated $2,400/wk delivery risk, and 1-click repair triggers.
+                Previewing a store DNS audit scenario with illustrative risk estimates and repair triggers. No production domain telemetry is shown.
               </p>
             </div>
           </div>
