@@ -32,6 +32,8 @@ from app.services.ai.provider import (
     LLMGenerationError,
     build_polymorphic_variant_prompt,
     parse_and_validate_agent_router_response,
+    get_shared_async_client,
+    close_shared_async_client,
 )
 from app.services.ai.content_optimizer import AIContentOptimizer, ai_content_service
 from tests.conftest import auth_headers
@@ -560,3 +562,82 @@ async def test_prompt_injection_safety_and_liquid_enforcement():
 
         # Downstream gate must have rejected the injected candidate because {{ order.name }} is missing
         assert len(valid_variants) == 0
+
+
+@pytest.mark.asyncio
+async def test_persistent_async_client_reuse():
+    """Verify that get_shared_async_client returns the identical persistent client instance across invocations."""
+    await close_shared_async_client()
+    client1 = get_shared_async_client(15.0)
+    client2 = get_shared_async_client(15.0)
+    assert client1 is client2
+    assert not client1.is_closed
+    await close_shared_async_client()
+    assert client1.is_closed
+
+
+@pytest.mark.asyncio
+async def test_persistent_async_client_lifecycle_close():
+    """Verify that close_shared_async_client properly closes connections and resets state."""
+    await close_shared_async_client()
+    cl = get_shared_async_client(10.0)
+    assert not cl.is_closed
+    await close_shared_async_client()
+    assert cl.is_closed
+
+    # Next call should safely create a fresh unclosed client
+    new_client = get_shared_async_client(10.0)
+    assert new_client is not cl
+    assert not new_client.is_closed
+    await close_shared_async_client()
+
+
+@pytest.mark.asyncio
+async def test_agent_router_provider_reuses_persistent_client():
+    """Verify AgentRouterLLMProvider uses the persistent client and makes exactly 1 upstream call."""
+    await close_shared_async_client()
+    shared_client = get_shared_async_client(15.0)
+
+    config = LLMProviderConfig(
+        provider_name="agent_router",
+        api_base="https://api.agentrouter.ai/v1",
+        api_key=SecretStr("sk-persistent-test-key-12345"),
+        enabled=True,
+    )
+    provider = AgentRouterLLMProvider(config=config)
+
+    mock_llm_json = {
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps({
+                        "variants": [
+                            {
+                                "variant_id": "v1_test",
+                                "variant_name": "Test Variant",
+                                "subject": "Order {{ order.name }} ready",
+                                "body_html": "<p>Hello {{ customer.first_name }}</p>",
+                                "estimated_spam_risk": 1,
+                                "rationale": "Clear transactional copy"
+                            }
+                        ]
+                    })
+                }
+            }
+        ]
+    }
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = mock_llm_json
+
+    with patch.object(shared_client, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        variants = await provider.generate_variants(
+            subject="Order {{ order.name }} ready",
+            body_content="<p>Hello {{ customer.first_name }}</p>",
+            count=1
+        )
+        assert len(variants) == 1
+        assert mock_post.await_count == 1
+
+    await close_shared_async_client()

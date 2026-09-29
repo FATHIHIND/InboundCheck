@@ -92,6 +92,7 @@ export default function AIContentLabPage() {
   const [variants, setVariants] = useState<VariantItem[]>([]);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
   const [variantError, setVariantError] = useState<string | null>(null);
+  const [emptyVariantsNotice, setEmptyVariantsNotice] = useState(false);
 
   // Copy state
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -107,6 +108,7 @@ export default function AIContentLabPage() {
       setBodyInput(p.body);
       setAuditResult(null);
       setVariants([]);
+      setEmptyVariantsNotice(false);
       setAuditError(null);
       setVariantError(null);
     }
@@ -162,6 +164,7 @@ export default function AIContentLabPage() {
     }
     setIsGeneratingVariants(true);
     setVariantError(null);
+    setEmptyVariantsNotice(false);
     setSelectedVariantIdx(0);
 
     try {
@@ -180,7 +183,11 @@ export default function AIContentLabPage() {
       }
 
       const data = await res.json();
-      setVariants(data.variants || []);
+      const returnedVariants = data.variants || [];
+      setVariants(returnedVariants);
+      if (returnedVariants.length === 0) {
+        setEmptyVariantsNotice(true);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error generating copy variants.";
       setVariantError(msg);
@@ -351,13 +358,58 @@ export default function AIContentLabPage() {
                 <span>{variantError}</span>
               </div>
             )}
+            {emptyVariantsNotice && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 font-mono flex items-start gap-2 animate-fadeIn">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <span className="font-bold block">Safety Validation Notice</span>
+                  <span className="font-sans text-xs block">
+                    No safe variants were generated because the generated content did not pass the template-variable safety check.
+                  </span>
+                </div>
+              </div>
+            )}
           </GlassEmeraldCard>
         </div>
 
         {/* Right Column (lg:col-span-6 space-y-4): Intelligence Stage */}
         <div className="lg:col-span-6 space-y-4">
-          {/* Awaiting State when no audit has been run and no variants generated */}
-          {!auditResult && variants.length === 0 && !isAuditing && !isGeneratingVariants && (
+          {/* Empty Variants Safety Notice when all candidates failed Liquid validation */}
+          {emptyVariantsNotice && variants.length === 0 && !isGeneratingVariants && (
+            <div className="rounded-xl bg-white border border-amber-200 p-8 flex flex-col items-center justify-center text-center min-h-[490px] space-y-4 shadow-xs animate-fadeIn">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-2xs">
+                <ShieldCheck className="w-7 h-7" />
+              </div>
+              <div className="space-y-2 max-w-md">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-amber-800 font-bold px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 inline-block mb-1">
+                  Safety Gate Enforced
+                </span>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                  No Safe Copy Variations Generated
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                  No safe variants were generated because the generated content did not pass the template-variable safety check. To protect transactional deliverability, all candidate copy must preserve 100% of your Shopify Liquid variables verbatim.
+                </p>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 font-mono text-left space-y-1 mt-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Recommended Action:</span>
+                  <p className="font-sans text-xs">Review your template copy, verify variable placement, or try generating again.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateVariants}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-all shadow-xs cursor-pointer active:scale-95 min-h-[40px]"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Try Again</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Awaiting State when no audit has been run and no variants generated and no empty notice */}
+          {!auditResult && variants.length === 0 && !isAuditing && !isGeneratingVariants && !emptyVariantsNotice && (
             <div className="rounded-xl bg-white border border-slate-200 p-8 flex flex-col items-center justify-center text-center min-h-[490px] space-y-4 shadow-xs animate-fadeIn">
               <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-2xs">
                 <Sparkles className="w-7 h-7" />

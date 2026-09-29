@@ -51,6 +51,13 @@ async def lifespan(app: FastAPI):
         logger.info("Stopping InboundCheck background auditor daemon...")
         await background_auditor.stop()
 
+    # Shutdown: Cleanly close shared AI HTTP client connection pool
+    try:
+        from app.services.ai.provider import close_shared_async_client
+        await close_shared_async_client()
+    except Exception as e:
+        logger.warning(f"Error closing shared AI HTTP client: {e}")
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

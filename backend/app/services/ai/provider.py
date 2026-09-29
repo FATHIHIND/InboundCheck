@@ -14,6 +14,7 @@ Security Controls:
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Set
+import asyncio
 import json
 import logging
 import httpx
@@ -319,6 +320,46 @@ def parse_and_validate_agent_router_response(
     return validated[:count]
 
 
+_shared_async_client: Optional[httpx.AsyncClient] = None
+_shared_client_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def get_shared_async_client(timeout_seconds: float = 15.0) -> httpx.AsyncClient:
+    """
+    Return an application-scoped persistent httpx.AsyncClient for connection reuse.
+    Safely recreates the client if the event loop changes (e.g. across tests)
+    or if the client is closed.
+    """
+    global _shared_async_client, _shared_client_loop
+
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if _shared_async_client is not None:
+        is_closed = getattr(_shared_async_client, "is_closed", False)
+        loop_mismatch = current_loop is not None and _shared_client_loop is not current_loop
+        if is_closed or loop_mismatch:
+            _shared_async_client = None
+            _shared_client_loop = None
+
+    if _shared_async_client is None:
+        _shared_async_client = httpx.AsyncClient(timeout=timeout_seconds)
+        _shared_client_loop = current_loop
+
+    return _shared_async_client
+
+
+async def close_shared_async_client() -> None:
+    """Cleanly close the persistent AsyncClient connection pool during application shutdown."""
+    global _shared_async_client, _shared_client_loop
+    if _shared_async_client is not None and not _shared_async_client.is_closed:
+        await _shared_async_client.aclose()
+    _shared_async_client = None
+    _shared_client_loop = None
+
+
 class AgentRouterLLMProvider(BaseLLMProvider):
     """
     OpenAI-compatible Agent Router LLM provider.
@@ -327,8 +368,13 @@ class AgentRouterLLMProvider(BaseLLMProvider):
     Never accepts client-controlled credentials or provider selection.
     """
 
-    def __init__(self, config: Optional[LLMProviderConfig] = None):
+    def __init__(
+        self,
+        config: Optional[LLMProviderConfig] = None,
+        http_client: Optional[httpx.AsyncClient] = None,
+    ):
         self.config = config or LLMProviderConfig.from_settings()
+        self._http_client = http_client
 
     @property
     def provider_name(self) -> str:
@@ -355,6 +401,7 @@ class AgentRouterLLMProvider(BaseLLMProvider):
         """
         Synthesize candidate polymorphic email variants via Agent Router API.
         Fails safely on network errors, timeouts, or malformed responses.
+        Reuses persistent HTTP connection pool for low-latency dispatch.
         """
         if not self.is_available:
             raise LLMProviderNotConfiguredError(
@@ -382,9 +429,9 @@ class AgentRouterLLMProvider(BaseLLMProvider):
             "response_format": {"type": "json_object"},
         }
 
+        client = self._http_client or get_shared_async_client(self.config.timeout_seconds)
         try:
-            async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
-                res = await client.post(api_url, headers=headers, json=payload)
+            res = await client.post(api_url, headers=headers, json=payload)
         except httpx.TimeoutException:
             logger.warning("Agent Router request timed out after %s seconds", self.config.timeout_seconds)
             raise LLMGenerationError(f"Agent Router request timed out after {self.config.timeout_seconds}s")
