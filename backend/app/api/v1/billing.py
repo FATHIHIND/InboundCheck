@@ -26,7 +26,7 @@ router = APIRouter(prefix="/billing", tags=["Stripe Billing & Subscriptions"])
 class CreateCheckoutRequest(BaseModel):
     email: Optional[str] = "merchant@store.com"
     plan_tier: Optional[str] = Field(default=None, description="starter | growth | agency")
-    price_id: Optional[str] = Field(default=None, description="Stripe Price ID or plan tier")
+    price_id: Optional[str] = Field(default=None, description="Deprecated client price_id (strictly validated against server plan_tier)")
     shop_domain: Optional[str] = Field(default=None, description="Connected Shopify shop domain")
     billing_provider: Optional[str] = Field(default=None, description="shopify | stripe")
     billing_cycle: Optional[str] = Field(default="monthly", description="monthly | annual")
@@ -112,10 +112,34 @@ async def create_checkout_session(
     - Agency: $79/mo (20 Domains cap, Multi-Store Management, Priority Audits)
     """
     try:
-        resolved_price_or_tier = payload.price_id or payload.plan_tier or "growth"
-        plan_tier = (payload.plan_tier or payload.price_id or "growth").lower()
+        # 1. Server-authoritative resolution of plan_tier
+        raw_tier = (payload.plan_tier or (payload.price_id if payload.price_id and not payload.price_id.startswith("price_") else None) or "growth").strip().lower()
+        plan_tier = stripe_service.resolve_tier(raw_tier)
 
-        # 1. Detect Shopify App Store Origin (Hybrid Checkout Engine)
+        # 2. Strict validation: client can never select or alter Stripe Price ID
+        if payload.price_id is not None and str(payload.price_id).strip() != "":
+            raw_p = str(payload.price_id).strip()
+            configured_price_id = stripe_service.prices.get(plan_tier)
+            allowed_identifiers = {plan_tier, raw_tier}
+            if configured_price_id:
+                allowed_identifiers.add(configured_price_id)
+            if plan_tier == "agency":
+                ent_p = getattr(settings, "STRIPE_PRICE_ENTERPRISE", None)
+                if ent_p:
+                    allowed_identifiers.add(ent_p)
+                allowed_identifiers.add("enterprise")
+
+            if raw_p not in allowed_identifiers:
+                logger.warning(
+                    f"Price mismatch rejected: user={user_id}, plan_tier={plan_tier}, "
+                    f"supplied_price_id={raw_p}, expected={configured_price_id}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Price mismatch: client-provided price_id does not match server-resolved plan tier '{plan_tier}'",
+                )
+
+        # 3. Detect Shopify App Store Origin (Hybrid Checkout Engine)
         shopify_stores = supabase_service.get_user_stores(user_id)
         target_store = None
         if payload.shop_domain:
@@ -164,7 +188,7 @@ async def create_checkout_session(
                     )
                 # If shopify wasn't explicitly forced, gracefully fall through to standard Stripe
 
-        # 2. Direct Web Signups: Route through standard Stripe Checkout
+        # 4. Direct Web Signups: Route through standard Stripe Checkout
         user_email = payload.email
         if not user_email or user_email == "merchant@store.com":
             profile = supabase_service.get_user_profile(user_id)
@@ -173,12 +197,12 @@ async def create_checkout_session(
 
         session_data = await stripe_service.create_checkout_session(
             user_id=user_id,
-            price_id=resolved_price_or_tier,
+            plan_tier=plan_tier,
             email=user_email,
             return_url=payload.return_url,
             success_url=payload.success_url,
             cancel_url=payload.cancel_url,
-            plan_tier=payload.plan_tier,
+            price_id=payload.price_id,
         )
         target_url = session_data.get("url") or session_data.get("checkout_url")
         return {
@@ -190,6 +214,8 @@ async def create_checkout_session(
         }
     except HTTPException:
         raise
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
         logger.error(f"Error creating checkout session: {e}")
         raise HTTPException(status_code=500, detail="Failed to create checkout session")

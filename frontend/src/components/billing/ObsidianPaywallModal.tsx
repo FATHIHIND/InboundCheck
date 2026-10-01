@@ -121,7 +121,6 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan_tier: planTier,
-          price_id: planTier,
           billing_cycle: billingCycle,
           domain: targetDomain || undefined,
           success_url: successUrl,

@@ -86,6 +86,19 @@ class StripeService:
         self.webhook_secret = settings.STRIPE_WEBHOOK_SECRET
         self._processed_events: Dict[str, float] = {}
 
+    @property
+    def prices(self) -> Dict[str, str]:
+        """
+        Server-authoritative mapping of tier -> configured Stripe Price ID.
+        """
+        agency_price = getattr(settings, "STRIPE_PRICE_AGENCY", "price_agency_monthly")
+        return {
+            "starter": settings.STRIPE_PRICE_STARTER,
+            "growth": settings.STRIPE_PRICE_GROWTH,
+            "agency": agency_price,
+            "enterprise": agency_price,
+        }
+
     def is_event_processed(self, event_id: str) -> bool:
         """Check if Stripe event has already been processed (DB table + memory cache)."""
         if not event_id:
@@ -200,21 +213,48 @@ class StripeService:
     async def create_checkout_session(
         self,
         user_id: str,
-        price_id: str,
+        plan_tier: Optional[str] = None,
         return_url: Optional[str] = None,
         email: Optional[str] = None,
         success_url: Optional[str] = None,
         cancel_url: Optional[str] = None,
-        plan_tier: Optional[str] = None,
+        price_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Create a Stripe Checkout Session for subscription upgrade supporting:
         - Starter: $9/mo (1 Domain cap)
         - Growth: $29/mo (3 Domains cap)
         - Agency: $79/mo (20 Domains cap)
+
+        The client NEVER determines the Stripe Price ID. The server derives pricing
+        strictly from server-authoritative configuration. Any mismatching client price_id
+        is rejected with a ValueError.
         """
-        tier = self.resolve_tier(plan_tier or price_id)
+        # Resolve tier strictly from server logic (normalizing enterprise -> agency)
+        tier = self.resolve_tier(plan_tier or (price_id if price_id and not price_id.startswith("price_") else None) or "growth")
         plan_meta = PLAN_PRICING.get(tier, PLAN_PRICING["growth"])
+
+        # Validate that client cannot supply a mismatching or arbitrary price_id
+        configured_price_id = self.prices.get(tier)
+        if price_id is not None and str(price_id).strip() != "":
+            raw_p = str(price_id).strip()
+            allowed_identifiers = {tier, (plan_tier or "").strip().lower()}
+            if configured_price_id:
+                allowed_identifiers.add(configured_price_id)
+            if tier == "agency":
+                ent_p = getattr(settings, "STRIPE_PRICE_ENTERPRISE", None)
+                if ent_p:
+                    allowed_identifiers.add(ent_p)
+                allowed_identifiers.add("enterprise")
+
+            if raw_p not in allowed_identifiers:
+                logger.warning(
+                    f"Price mismatch rejected in stripe_service: user={user_id}, plan_tier={tier}, "
+                    f"supplied_price_id={raw_p}, expected={configured_price_id}"
+                )
+                raise ValueError(
+                    f"Price mismatch: client-provided price_id '{raw_p}' does not match server-resolved plan tier '{tier}'"
+                )
 
         s_url = success_url or return_url or f"{settings.FRONTEND_URL}/dashboard/billing?checkout=success&plan={tier}"
         c_url = cancel_url or return_url or f"{settings.FRONTEND_URL}/dashboard/billing?checkout=cancelled"
@@ -223,16 +263,10 @@ class StripeService:
 
         if self.secret_key:
             try:
-                configured_price_id = None
-                agency_price = getattr(settings, "STRIPE_PRICE_AGENCY", "price_agency_monthly")
-                if price_id and price_id.startswith("price_") and not price_id.endswith("_monthly"):
-                    configured_price_id = price_id
-                elif tier == "starter" and settings.STRIPE_PRICE_STARTER and settings.STRIPE_PRICE_STARTER.startswith("price_") and not settings.STRIPE_PRICE_STARTER.endswith("_monthly"):
-                    configured_price_id = settings.STRIPE_PRICE_STARTER
-                elif tier == "growth" and settings.STRIPE_PRICE_GROWTH and settings.STRIPE_PRICE_GROWTH.startswith("price_") and not settings.STRIPE_PRICE_GROWTH.endswith("_monthly"):
-                    configured_price_id = settings.STRIPE_PRICE_GROWTH
-                elif tier == "agency" and agency_price and agency_price.startswith("price_") and not agency_price.endswith("_monthly"):
-                    configured_price_id = agency_price
+                # Derive Stripe Price ID strictly from server configuration
+                server_price_id = configured_price_id
+                if server_price_id and (not server_price_id.startswith("price_") or server_price_id.endswith("_monthly")):
+                    server_price_id = None
 
                 req_data: Dict[str, Any] = {
                     "mode": "subscription",
@@ -245,8 +279,8 @@ class StripeService:
                     "cancel_url": c_url,
                     "line_items[0][quantity]": 1,
                 }
-                if configured_price_id:
-                    req_data["line_items[0][price]"] = configured_price_id
+                if server_price_id:
+                    req_data["line_items[0][price]"] = server_price_id
                 else:
                     req_data["line_items[0][price_data][currency]"] = plan_meta["currency"]
                     req_data["line_items[0][price_data][product_data][name]"] = f"InboundCheck {plan_meta['name']}"

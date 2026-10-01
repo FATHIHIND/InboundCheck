@@ -219,7 +219,6 @@ export default function BillingPortalPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan_tier: planTier,
-          price_id: planTier,
           success_url: successUrl,
           cancel_url: cancelUrl,
         }),

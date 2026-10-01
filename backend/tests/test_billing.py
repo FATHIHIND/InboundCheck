@@ -229,6 +229,117 @@ async def test_checkout_session_creation():
 
 
 @pytest.mark.asyncio
+async def test_server_authoritative_price_id_and_tampering_defense():
+    """
+    STEP 17I Regression Tests:
+    A. Valid: plan_tier=starter -> uses configured Starter Price ID
+    B. Valid: plan_tier=growth -> uses configured Growth Price ID
+    C. Valid: plan_tier=agency -> uses configured Agency Price ID
+    D. Attack: plan_tier=agency, price_id=Starter Price ID -> HTTP 400 rejected
+    E. Attack: plan_tier=starter, price_id=Agency Price ID -> HTTP 400 rejected
+    F. Attack: plan_tier=growth, price_id=arbitrary price_... ID -> HTTP 400 rejected
+    G. No price_id supplied -> normal checkout path works using server configuration
+    H. Enterprise legacy -> still resolves according to existing Phase 17 normalization rules
+    """
+    transport = ASGITransport(app=app)
+    user_id = "security-checkout-user"
+
+    starter_price = stripe_service.prices["starter"]
+    growth_price = stripe_service.prices["growth"]
+    agency_price = stripe_service.prices["agency"]
+
+    # Verify server-authoritative mapping
+    assert stripe_service.prices["starter"] is not None
+    assert stripe_service.prices["growth"] is not None
+    assert stripe_service.prices["agency"] is not None
+    assert stripe_service.prices["enterprise"] == stripe_service.prices["agency"]
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        # A. Valid: plan_tier=starter
+        r_a = await ac.post("/api/v1/billing/checkout-session", json={"plan_tier": "starter"})
+        assert r_a.status_code == 200
+        d_a = r_a.json()
+        assert d_a["plan_tier"] == "starter"
+        assert d_a["amount"] == 9.0
+
+        # B. Valid: plan_tier=growth
+        r_b = await ac.post("/api/v1/billing/checkout-session", json={"plan_tier": "growth"})
+        assert r_b.status_code == 200
+        d_b = r_b.json()
+        assert d_b["plan_tier"] == "growth"
+        assert d_b["amount"] == 29.0
+
+        # C. Valid: plan_tier=agency
+        r_c = await ac.post("/api/v1/billing/checkout-session", json={"plan_tier": "agency"})
+        assert r_c.status_code == 200
+        d_c = r_c.json()
+        assert d_c["plan_tier"] == "agency"
+        assert d_c["amount"] == 79.0
+
+        # D. Attack: plan_tier=agency, price_id=Starter Price ID -> HTTP 400
+        r_d = await ac.post("/api/v1/billing/checkout-session", json={
+            "plan_tier": "agency",
+            "price_id": starter_price,
+        })
+        assert r_d.status_code == 400
+        assert "Price mismatch" in r_d.json()["detail"]
+
+        # E. Attack: plan_tier=starter, price_id=Agency Price ID -> HTTP 400
+        r_e = await ac.post("/api/v1/billing/checkout-session", json={
+            "plan_tier": "starter",
+            "price_id": agency_price,
+        })
+        assert r_e.status_code == 400
+        assert "Price mismatch" in r_e.json()["detail"]
+
+        # F. Attack: plan_tier=growth, price_id=arbitrary price_... ID -> HTTP 400
+        r_f = await ac.post("/api/v1/billing/checkout-session", json={
+            "plan_tier": "growth",
+            "price_id": "price_attacker_hijack_999",
+        })
+        assert r_f.status_code == 400
+        assert "Price mismatch" in r_f.json()["detail"]
+
+        # Attack: plan_tier=agency, price_id="starter" string -> HTTP 400
+        r_f2 = await ac.post("/api/v1/billing/checkout-session", json={
+            "plan_tier": "agency",
+            "price_id": "starter",
+        })
+        assert r_f2.status_code == 400
+        assert "Price mismatch" in r_f2.json()["detail"]
+
+        # G. No price_id supplied -> normal checkout path works
+        r_g = await ac.post("/api/v1/billing/checkout-session", json={"plan_tier": "growth"})
+        assert r_g.status_code == 200
+        d_g = r_g.json()
+        assert d_g["plan_tier"] == "growth"
+        assert d_g["amount"] == 29.0
+
+        # H. Enterprise legacy -> resolves according to Phase 17 normalization rules (Agency, $79)
+        r_h = await ac.post("/api/v1/billing/checkout-session", json={"plan_tier": "enterprise"})
+        assert r_h.status_code == 200
+        d_h = r_h.json()
+        assert d_h["plan_tier"] == "agency"
+        assert d_h["amount"] == 79.0
+
+        # Enterprise legacy with matching legacy enterprise identifier or agency price
+        r_h2 = await ac.post("/api/v1/billing/checkout-session", json={
+            "plan_tier": "enterprise",
+            "price_id": "enterprise",
+        })
+        assert r_h2.status_code == 200
+        assert r_h2.json()["plan_tier"] == "agency"
+
+        # Direct unit verification of stripe_service rejection
+        with pytest.raises(ValueError, match="Price mismatch"):
+            await stripe_service.create_checkout_session(
+                user_id="direct-unit-test",
+                plan_tier="agency",
+                price_id="price_unauthorized_token",
+            )
+
+
+@pytest.mark.asyncio
 async def test_subscription_plans_contains_only_three_tiers():
     """Verify /billing/plans returns strictly Starter, Growth, Agency — no Enterprise."""
     transport = ASGITransport(app=app)
