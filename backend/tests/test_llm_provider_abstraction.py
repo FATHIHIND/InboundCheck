@@ -28,6 +28,7 @@ from app.services.ai.provider import (
     get_llm_provider,
 )
 from app.services.ai.content_optimizer import AIContentOptimizer, ai_content_service
+from app.services.supabase_client import supabase_service
 from app.core.config import settings
 from tests.conftest import auth_headers
 
@@ -272,15 +273,17 @@ async def test_liquid_preservation_gate_filters_provider_output():
 
 def test_api_endpoint_backward_compatibility():
     """Verify that both polymorphic endpoints maintain their existing response format."""
-    for endpoint in ("/api/v1/ai/generate-polymorphic-variants", "/api/v1/ai/generate-variants"):
-        res = client.post(
-            endpoint,
-            json={
-                "subject": "Order #1234 confirmed",
-                "body": "<p>Hello {{ customer.first_name }}, your order #{{ order.name }} is confirmed.</p>"
-            }
-        )
-        assert res.status_code == 200
+    growth_profile = {"id": "test-llm-user-1", "subscription_tier": "growth", "subscription_status": "active"}
+    with patch.object(supabase_service, "get_user_profile", return_value=growth_profile):
+        for endpoint in ("/api/v1/ai/generate-polymorphic-variants", "/api/v1/ai/generate-variants"):
+            res = client.post(
+                endpoint,
+                json={
+                    "subject": "Order #1234 confirmed",
+                    "body": "<p>Hello {{ customer.first_name }}, your order #{{ order.name }} is confirmed.</p>"
+                }
+            )
+            assert res.status_code == 200
         data = res.json()
         assert data["success"] is True
         assert "variants" in data

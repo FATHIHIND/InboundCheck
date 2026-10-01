@@ -35,10 +35,21 @@ from app.services.ai.provider import (
     get_shared_async_client,
     close_shared_async_client,
 )
+import uuid
 from app.services.ai.content_optimizer import AIContentOptimizer, ai_content_service
+from app.services.supabase_client import supabase_service
 from tests.conftest import auth_headers
 
-client = TestClient(app, headers=auth_headers("test-agent-router-user"))
+
+def get_client() -> TestClient:
+    return TestClient(app, headers=auth_headers(f"test-agent-router-{uuid.uuid4().hex[:8]}"))
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    supabase_service._in_memory_rate_limits.clear()
+    yield
+    supabase_service._in_memory_rate_limits.clear()
 
 
 # =============================================================================
@@ -119,7 +130,8 @@ def test_api_key_never_included_in_repr_log_or_error():
 
 def test_client_cannot_select_provider():
     """Client attempting to select provider receives HTTP 422."""
-    res = client.post(
+    c = get_client()
+    res = c.post(
         "/api/v1/ai/generate-polymorphic-variants",
         json={
             "subject": "Order update",
@@ -133,7 +145,8 @@ def test_client_cannot_select_provider():
 
 def test_client_cannot_provide_api_key():
     """Client attempting to provide api_key receives HTTP 422."""
-    res = client.post(
+    c = get_client()
+    res = c.post(
         "/api/v1/ai/generate-variants",
         json={
             "subject": "Order update",
@@ -415,15 +428,16 @@ async def test_liquid_preservation_gate_rejects_corrupted_liquid_from_agent_rout
 
 def test_existing_step1_input_bounds_enforced():
     """Verify input length bounds remain enforced."""
+    c = get_client()
     # 1. Oversized subject (> 255 chars) -> 422
-    res_subj = client.post(
+    res_subj = c.post(
         "/api/v1/ai/generate-polymorphic-variants",
         json={"subject": "X" * 256, "body": "Valid body"}
     )
     assert res_subj.status_code == 422
 
     # 2. Oversized body (> 15000 chars) -> 422
-    res_body = client.post(
+    res_body = c.post(
         "/api/v1/ai/generate-variants",
         json={"subject": "Valid subject", "body": "Y" * 15001}
     )
@@ -432,7 +446,8 @@ def test_existing_step1_input_bounds_enforced():
 
 def test_existing_api_response_schema_remains_unchanged():
     """Verify response format remains {"success": True, "variants": [...]}."""
-    res = client.post(
+    c = get_client()
+    res = c.post(
         "/api/v1/ai/generate-polymorphic-variants",
         json={
             "subject": "Order #{{ order.name }}",

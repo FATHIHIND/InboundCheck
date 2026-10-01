@@ -10,6 +10,7 @@ from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services.failover.omnichannel_service import omnichannel_service
+from app.services.supabase_client import supabase_service
 from tests.conftest import auth_headers
 
 client = TestClient(app, headers=auth_headers("test-user-1"))
@@ -53,48 +54,50 @@ def test_bloc_a_ai_content_lab():
 
 def test_polymorphic_generate_input_bounds_enforced():
     """Verify PolymorphicGenerateRequest strictly rejects oversized inputs (422) and accepts valid boundary."""
-    bounds_client = TestClient(app, headers=auth_headers("test-bounds-user"))
+    growth_profile = {"id": "test-bounds-user", "subscription_tier": "growth", "subscription_status": "active"}
+    with patch.object(supabase_service, "get_user_profile", return_value=growth_profile):
+        bounds_client = TestClient(app, headers=auth_headers("test-bounds-user"))
 
-    # 1. Oversized subject (> 255 chars) -> 422 Unprocessable Entity
-    res_oversized_subject = bounds_client.post(
-        "/api/v1/ai/generate-polymorphic-variants",
-        json={
-            "subject": "A" * 256,
-            "body_content": "Valid body text"
-        }
-    )
-    assert res_oversized_subject.status_code == 422
+        # 1. Oversized subject (> 255 chars) -> 422 Unprocessable Entity
+        res_oversized_subject = bounds_client.post(
+            "/api/v1/ai/generate-polymorphic-variants",
+            json={
+                "subject": "A" * 256,
+                "body_content": "Valid body text"
+            }
+        )
+        assert res_oversized_subject.status_code == 422
 
-    # 2. Oversized body_content (> 15000 chars) -> 422 Unprocessable Entity
-    res_oversized_body = bounds_client.post(
-        "/api/v1/ai/generate-polymorphic-variants",
-        json={
-            "subject": "Valid subject",
-            "body_content": "B" * 15001
-        }
-    )
-    assert res_oversized_body.status_code == 422
+        # 2. Oversized body_content (> 15000 chars) -> 422 Unprocessable Entity
+        res_oversized_body = bounds_client.post(
+            "/api/v1/ai/generate-polymorphic-variants",
+            json={
+                "subject": "Valid subject",
+                "body_content": "B" * 15001
+            }
+        )
+        assert res_oversized_body.status_code == 422
 
-    # 3. Oversized alternative 'body' key (> 15000 chars) -> 422 Unprocessable Entity
-    res_oversized_alt_body = bounds_client.post(
-        "/api/v1/ai/generate-variants",
-        json={
-            "subject": "Valid subject",
-            "body": "C" * 15001
-        }
-    )
-    assert res_oversized_alt_body.status_code == 422
+        # 3. Oversized alternative 'body' key (> 15000 chars) -> 422 Unprocessable Entity
+        res_oversized_alt_body = bounds_client.post(
+            "/api/v1/ai/generate-variants",
+            json={
+                "subject": "Valid subject",
+                "body": "C" * 15001
+            }
+        )
+        assert res_oversized_alt_body.status_code == 422
 
-    # 4. Valid maximum boundary (subject=255 chars, body_content=15000 chars) -> 200 OK
-    res_valid_boundary = bounds_client.post(
-        "/api/v1/ai/generate-polymorphic-variants",
-        json={
-            "subject": "A" * 255,
-            "body_content": "B" * 15000
-        }
-    )
-    assert res_valid_boundary.status_code == 200
-    assert len(res_valid_boundary.json().get("variants", [])) == 3
+        # 4. Valid maximum boundary (subject=255 chars, body_content=15000 chars) -> 200 OK
+        res_valid_boundary = bounds_client.post(
+            "/api/v1/ai/generate-polymorphic-variants",
+            json={
+                "subject": "A" * 255,
+                "body_content": "B" * 15000
+            }
+        )
+        assert res_valid_boundary.status_code == 200
+        assert len(res_valid_boundary.json().get("variants", [])) == 3
 
 
 def test_bloc_b_telegram_alert_engine():

@@ -10,6 +10,7 @@ Implements:
    - High-cost endpoints (AI/DNS/RBL): conservative local fallback with fail-closed enforcement.
 """
 
+import asyncio
 import ipaddress
 import logging
 import os
@@ -20,6 +21,7 @@ from fastapi import Request, HTTPException, status, Depends
 from app.core.config import settings
 from app.core.security import get_current_user_id
 from app.services.supabase_client import supabase_service
+from app.services.ai.plan_policy import AIPlanPolicy, get_current_ai_policy
 
 logger = logging.getLogger("RateLimiter")
 
@@ -134,11 +136,12 @@ class EndpointRateLimiter:
         self.window_seconds = window_seconds
         self.conservative_fallback_max = conservative_fallback_max
 
-    def _check_fallback(self, key: str) -> bool:
+    def _check_fallback(self, key: str, max_allowed: Optional[int] = None) -> bool:
         """
         Conservative local fallback when distributed storage is unreachable.
         Enforces conservative_fallback_max requests per minute before failing closed.
         """
+        effective_limit = max_allowed if max_allowed is not None else self.conservative_fallback_max
         now_ts = int(time.time())
         window_start = (now_ts // self.window_seconds) * self.window_seconds
         store = _FALLBACK_STORES.setdefault(self.name, {})
@@ -156,16 +159,27 @@ class EndpointRateLimiter:
             except Exception:
                 pass
 
-        return current <= self.conservative_fallback_max
+        return current <= effective_limit
 
-    def check(self, identity_key: str) -> None:
+    def check(
+        self,
+        identity_key: str,
+        max_requests: Optional[int] = None,
+        conservative_fallback_max: Optional[int] = None,
+    ) -> None:
         """Check rate limit token consumption. Raises HTTP 429 if quota exceeded."""
+        effective_max = max_requests if max_requests is not None else self.max_requests
+        effective_fallback_max = (
+            conservative_fallback_max
+            if conservative_fallback_max is not None
+            else self.conservative_fallback_max
+        )
         bucket_key = f"rl:{self.name}:{identity_key}"
 
         try:
             result = supabase_service.consume_rate_limit(
                 bucket_key=bucket_key,
-                max_requests=self.max_requests,
+                max_requests=effective_max,
                 window_seconds=self.window_seconds,
             )
             if not result.get("allowed", True):
@@ -180,10 +194,10 @@ class EndpointRateLimiter:
         except Exception as err:
             logger.warning(
                 f"[RATE_LIMIT_STORAGE_DEGRADED] Storage error in {self.name} limiter: {err}. "
-                f"Engaging conservative local fallback (limit: {self.conservative_fallback_max}/min)."
+                f"Engaging conservative local fallback (limit: {effective_fallback_max}/min)."
             )
             # Differentiated failure policy: Bounded conservative fallback, never unlimited
-            if not self._check_fallback(identity_key):
+            if not self._check_fallback(identity_key, max_allowed=effective_fallback_max):
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=(
@@ -192,6 +206,24 @@ class EndpointRateLimiter:
                     ),
                     headers={"Retry-After": str(self.window_seconds)},
                 )
+
+    async def check_async(
+        self,
+        identity_key: str,
+        max_requests: Optional[int] = None,
+        conservative_fallback_max: Optional[int] = None,
+    ) -> None:
+        """
+        Non-blocking rate limit token consumption.
+        Executes synchronous rate limit check and Supabase RPC in a worker thread
+        via asyncio.to_thread, offloading I/O from the async FastAPI event loop.
+        """
+        await asyncio.to_thread(
+            self.check,
+            identity_key=identity_key,
+            max_requests=max_requests,
+            conservative_fallback_max=conservative_fallback_max,
+        )
 
 
 # =============================================================================
@@ -243,19 +275,26 @@ user_manual_audit_limiter = EndpointRateLimiter(
 # FastAPI Route Dependencies
 # =============================================================================
 
-async def rate_limit_ai_tier(user_id: str = Depends(get_current_user_id)) -> str:
-    """Dependency: Enforce 10 req/min per user on AI content optimization endpoints."""
-    ai_rate_limiter.check(user_id)
+async def rate_limit_ai_tier(
+    user_id: str = Depends(get_current_user_id),
+    ai_policy: AIPlanPolicy = Depends(get_current_ai_policy),
+) -> str:
+    """Dependency: Enforce plan-aware rate limits per user on AI content optimization endpoints."""
+    await ai_rate_limiter.check_async(
+        identity_key=user_id,
+        max_requests=ai_policy.rate_limit_per_minute,
+        conservative_fallback_max=min(ai_policy.rate_limit_per_minute, 3),
+    )
     return user_id
 
 
 async def rate_limit_dns_tier(user_id: str = Depends(get_current_user_id)) -> str:
     """Dependency: Enforce 15 req/min per user on on-demand DNS diagnostic audits."""
-    dns_rate_limiter.check(user_id)
+    await dns_rate_limiter.check_async(user_id)
     return user_id
 
 
 async def rate_limit_rbl_tier(user_id: str = Depends(get_current_user_id)) -> str:
     """Dependency: Enforce 15 req/min per user on on-demand Blacklist Radar scans."""
-    rbl_rate_limiter.check(user_id)
+    await rbl_rate_limiter.check_async(user_id)
     return user_id

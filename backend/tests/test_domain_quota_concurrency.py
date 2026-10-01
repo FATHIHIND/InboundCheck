@@ -163,10 +163,34 @@ async def test_growth_tier_boundary_enforcement():
 
 
 @pytest.mark.asyncio
-async def test_enterprise_tier_capacity():
+async def test_agency_tier_capacity():
     """
-    SEC-QUOTA-01: Enterprise tier allows up to 999 domains.
-    Multiple distinct domains provision without rejection.
+    SEC-QUOTA-01: Agency tier allows up to 20 domains (highest commercial tier).
+    Multiple distinct domains provision without rejection up to limit.
+    """
+    user_id = str(uuid.uuid4())
+    supabase_service.update_user_profile(user_id, {
+        "subscription_tier": "agency",
+        "tier": "agency",
+        "subscription_status": "active",
+    })
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        for i in range(5):
+            res = await ac.post("/api/v1/domains", json={"domain": f"agency-brand-{i}.com"})
+            assert res.status_code == 200
+
+        user_domains = supabase_service.get_user_domains(user_id=user_id)
+        assert len(user_domains) == 5
+
+
+@pytest.mark.asyncio
+async def test_legacy_enterprise_profile_resolves_to_agency_domain_capacity():
+    """
+    SEC-QUOTA-01: Legacy server-side profiles with 'enterprise' tier safely resolve
+    to Agency limits (20 domains), preventing fallback to Starter (1 domain)
+    while eliminating the deprecated 999-domain ceiling.
     """
     user_id = str(uuid.uuid4())
     supabase_service.update_user_profile(user_id, {
@@ -177,12 +201,13 @@ async def test_enterprise_tier_capacity():
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
-        for i in range(5):
-            res = await ac.post("/api/v1/domains", json={"domain": f"enterprise-brand-{i}.com"})
+        # User can add multiple domains beyond Starter limit (1)
+        for i in range(3):
+            res = await ac.post("/api/v1/domains", json={"domain": f"legacy-ent-brand-{i}.com"})
             assert res.status_code == 200
 
         user_domains = supabase_service.get_user_domains(user_id=user_id)
-        assert len(user_domains) == 5
+        assert len(user_domains) == 3
 
 
 @pytest.mark.asyncio

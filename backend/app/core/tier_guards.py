@@ -21,7 +21,6 @@ TIER_DOMAIN_LIMITS = {
     "starter": 1,
     "growth": 3,
     "agency": 20,
-    "enterprise": 999,
 }
 
 
@@ -133,10 +132,13 @@ def enforce_domain_quota(user_id: str, profile: Optional[Dict[str, Any]] = None)
     Enforce domain quota caps:
     - Starter: 1 domain
     - Growth: 3 domains
-    - Enterprise: 999 (unlimited)
+    - Agency: 20 domains
+    Legacy Enterprise transitions safely to Agency (20 domains).
     """
     prof = profile or supabase_service.get_user_profile(user_id) or {}
     tier = (prof.get("subscription_tier") or prof.get("tier") or "starter").lower()
+    if tier == "enterprise":
+        tier = "agency"  # Safe legacy mapping
     quota_limit = TIER_DOMAIN_LIMITS.get(tier, 1)
 
     existing_count = supabase_service.get_user_domain_count(user_id)
@@ -147,12 +149,12 @@ def enforce_domain_quota(user_id: str, profile: Optional[Dict[str, Any]] = None)
         )
 
 
-async def require_growth_or_enterprise_tier(
+async def require_growth_or_agency_tier(
     profile: Dict[str, Any] = Depends(verify_active_subscription_or_trial),
 ) -> Dict[str, Any]:
     """
     Gates advanced features (SPF Merge Engine, 1-Click DNS Auto-Fix)
-    to Growth and Enterprise tiers.
+    to Growth and Agency tiers.
     Throws HTTP 403 UPGRADE_REQUIRED for Starter users when trial is over.
     """
     tier = (profile.get("subscription_tier") or profile.get("tier") or "starter").lower()
@@ -164,7 +166,11 @@ async def require_growth_or_enterprise_tier(
         if sub_status != "trialing" or is_trial_expired(profile):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="UPGRADE_REQUIRED: 1-Click DNS Auto-Fix and SPF Merge Engine require a Growth or Enterprise subscription.",
+                detail="UPGRADE_REQUIRED: 1-Click DNS Auto-Fix and SPF Merge Engine require a Growth or Agency subscription.",
             )
 
     return profile
+
+
+# Backwards compatibility alias for imports
+require_growth_or_enterprise_tier = require_growth_or_agency_tier

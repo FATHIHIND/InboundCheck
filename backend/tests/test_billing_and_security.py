@@ -54,10 +54,10 @@ async def test_jwt_security_enforcement():
 async def test_billing_endpoints():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers("test-user-1")) as ac:
-        # 1. Get plans (authenticated)
+        # 1. Get plans (authenticated) — 3 active commercial tiers: starter, growth, agency
         plans_res = await ac.get("/api/v1/billing/plans")
         assert plans_res.status_code == 200
-        assert len(plans_res.json()["plans"]) == 4
+        assert len(plans_res.json()["plans"]) == 3
 
         # 2. Create checkout session (user_id strictly derived from JWT, not body)
         checkout_res = await ac.post("/api/v1/billing/checkout-session", json={

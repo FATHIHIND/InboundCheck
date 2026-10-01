@@ -342,16 +342,24 @@ async def shopify_billing_callback(
     # Gate 5: Plan Tier Binding (derive verified tier from subscription node name)
     sub_name = sub_node.get("name", "")
     verified_tier = None
-    for candidate in ["enterprise", "agency", "growth", "starter"]:
+    for candidate in ["agency", "growth", "starter"]:
         if candidate in sub_name.lower():
             verified_tier = candidate
             break
 
+    # Legacy transition: if subscription node name embeds "enterprise", map safely to "agency"
+    if not verified_tier and "enterprise" in sub_name.lower():
+        logger.info(f"Legacy Shopify Enterprise subscription '{sub_name}' mapped safely to 'agency'.")
+        verified_tier = "agency"
+
     if not verified_tier:
         # Fallback to sanitized requested tier if node name does not embed tier
         clean_requested = (plan_tier or "growth").lower().strip()
-        if clean_requested in ["starter", "growth", "agency", "enterprise"]:
+        if clean_requested in ["starter", "growth", "agency"]:
             verified_tier = clean_requested
+        elif clean_requested == "enterprise":
+            logger.info("Legacy requested plan_tier 'enterprise' in callback mapped safely to 'agency'.")
+            verified_tier = "agency"
         else:
             verified_tier = "growth"
 
@@ -737,6 +745,8 @@ async def update_store_settings(
             # Enforce active subscription or valid trial entitlement
             user_profile = await verify_active_subscription_or_trial(user_id=user_id)
             tier = (user_profile.get("subscription_tier") or user_profile.get("tier") or "starter").lower()
+            if tier == "enterprise":
+                tier = "agency"  # Safe legacy enterprise migration mapping
             quota_limit = TIER_DOMAIN_LIMITS.get(tier, 1)
 
             # Check existing domain count and allow updating already-monitored domain without quota penalty

@@ -13,7 +13,7 @@ import logging
 from app.core.config import settings
 from app.core.security import get_current_user_id
 from app.core.rate_limiter import rate_limit_dns_tier, rate_limit_rbl_tier
-from app.core.tier_guards import require_growth_or_enterprise_tier
+from app.core.tier_guards import require_growth_or_agency_tier
 from app.schemas.dns import (
     DNSAuditRequest,
     DNSAuditResponse,
@@ -246,7 +246,7 @@ async def get_latest_rbl_status(
 @router.post("/spf-merge-plan", response_model=SpfMergePlanResponse)
 async def create_spf_merge_plan(
     request: SpfMergePlanRequest,
-    user_profile: dict = Depends(require_growth_or_enterprise_tier),
+    user_profile: dict = Depends(require_growth_or_agency_tier),
 ):
     user_id = user_profile.get("id") or user_profile.get("user_id")
     """

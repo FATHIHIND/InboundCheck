@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""  # Service role key for admin DB operations bypassing RLS
     SUPABASE_JWT_SECRET: str = ""  # Symmetric HMAC (HS256) secret for cryptographically verifying Supabase user JWTs
     SUPABASE_JWT_AUDIENCE: str = "authenticated"  # Expected audience claim for Supabase user JWTs
+    OPS_INTERNAL_API_KEY: str = ""  # Dedicated secret for internal operational and administrative endpoints
 
     # Shopify App Integration Configuration
     SHOPIFY_API_KEY: str = ""
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     AGENT_ROUTER_API_KEY: str = ""
     AGENT_ROUTER_MODEL_NAME: str = ""
     AGENT_ROUTER_TIMEOUT_SECONDS: float = 10.0
-    AGENT_ROUTER_MAX_TOKENS: int = 1500
+    AGENT_ROUTER_MAX_TOKENS: int = 4000
     AGENT_ROUTER_TEMPERATURE: float = 0.7
     AGENT_ROUTER_ENABLED: bool = False
 

@@ -24,7 +24,7 @@ import { OperationalErrorCard } from "@/components/operational/OperationalErrorC
 import { ApiError, formatApiErrorMessage } from "@/lib/apiResource";
 
 interface SubscriptionInfo {
-  tier: "starter" | "growth" | "enterprise" | string;
+  tier: "starter" | "growth" | "agency" | string;
   subscription_status: string;
   has_stripe_customer: boolean;
   domain_count: number;
@@ -33,7 +33,7 @@ interface SubscriptionInfo {
 }
 
 interface PlanTier {
-  id: "starter" | "growth" | "agency" | "enterprise";
+  id: "starter" | "growth" | "agency";
   name: string;
   price: string;
   period: string;
@@ -407,9 +407,7 @@ export default function BillingPortalPage() {
         badgeText={subInfo.subscription_status.toUpperCase()}
         badgeVariant="emerald"
         metricValue={
-          currentTierNormalized === "enterprise"
-            ? "$199.00 / mo"
-            : currentTierNormalized === "agency"
+          currentTierNormalized === "agency"
             ? "$79.00 / mo"
             : currentTierNormalized === "growth"
             ? "$29.00 / mo"
@@ -453,9 +451,7 @@ export default function BillingPortalPage() {
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
             <span className="text-[10px] text-slate-500 uppercase font-semibold block">Audit Frequency</span>
             <span className="text-slate-900 font-bold block">
-              {currentTierNormalized === "enterprise"
-                ? "15-Minute Critical Sweeps"
-                : currentTierNormalized === "agency"
+              {currentTierNormalized === "agency"
                 ? "30-Minute Priority Sweeps"
                 : currentTierNormalized === "growth"
                 ? "Hourly Automated Audits"
@@ -490,7 +486,7 @@ export default function BillingPortalPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {PLAN_TIERS.map((tier) => {
             const isCurrent = currentTierNormalized === tier.id;
-            const tierOrder: Record<string, number> = { starter: 1, growth: 2, agency: 3, enterprise: 4 };
+            const tierOrder: Record<string, number> = { starter: 1, growth: 2, agency: 3 };
             const currentRank = tierOrder[currentTierNormalized] || 1;
             const targetRank = tierOrder[tier.id] || 1;
             const isUpgrade = targetRank > currentRank;
@@ -610,7 +606,7 @@ export default function BillingPortalPage() {
             <span className="text-slate-900 font-semibold">Stripe Subscriptions & Customer Portal (Direct API Integration)</span>
           </div>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <span className="text-slate-500 font-semibold">Need Custom Invoice or Enterprise Wire?</span>
+            <span className="text-slate-500 font-semibold">Need Custom Volume or Invoicing (&gt;20 Stores)?</span>
             <button
               type="button"
               onClick={handleOpenStripePortal}

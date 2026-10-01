@@ -17,10 +17,59 @@ from typing import Dict, Any, List, Optional, Set
 import asyncio
 import json
 import logging
+import time
 import httpx
 from pydantic import BaseModel, Field, SecretStr
 
 logger = logging.getLogger("LLMProvider")
+
+
+class GenerationResult(BaseModel):
+    """
+    Validated, immutable internal contract for AI generation output and provider telemetry metadata.
+    Strictly isolated from raw network responses, prompts, and PII.
+    """
+    model_config = {"extra": "forbid"}
+
+    variants: List[Dict[str, Any]] = Field(default_factory=list, description="Validated candidate variants")
+    provider: str = Field(..., description="Provider identifier (e.g. 'agent_router', 'heuristic_fallback')")
+    model: str = Field(..., description="Configured model identifier")
+    prompt_tokens: Optional[int] = Field(None, ge=0, description="Prompt tokens consumed")
+    completion_tokens: Optional[int] = Field(None, ge=0, description="Completion tokens generated")
+    total_tokens: Optional[int] = Field(None, ge=0, description="Total tokens consumed")
+    provider_latency_ms: Optional[int] = Field(None, ge=0, description="Provider execution latency in ms")
+
+    def __iter__(self):
+        return iter(self.variants)
+
+    def __len__(self) -> int:
+        return len(self.variants)
+
+    def __getitem__(self, index):
+        return self.variants[index]
+
+    def __bool__(self) -> bool:
+        return bool(self.variants)
+
+    def __contains__(self, item) -> bool:
+        return item in self.variants
+
+    def __eq__(self, other):
+        if isinstance(other, list):
+            return self.variants == other
+        return super().__eq__(other)
+
+    def __repr__(self) -> str:
+        # Guarantee no sensitive variant or prompt exposure in repr
+        return (
+            f"GenerationResult(provider='{self.provider}', "
+            f"model='{self.model}', "
+            f"variants_count={len(self.variants)}, "
+            f"prompt_tokens={self.prompt_tokens}, "
+            f"completion_tokens={self.completion_tokens}, "
+            f"total_tokens={self.total_tokens}, "
+            f"provider_latency_ms={self.provider_latency_ms})"
+        )
 
 
 class LLMProviderError(Exception):
@@ -48,7 +97,12 @@ class LLMProviderConfig(BaseModel):
     model_name: str = Field(default="default-model", description="Target model name")
     api_base: Optional[str] = Field(default=None, description="Base URL endpoint for API provider")
     api_key: Optional[SecretStr] = Field(default=None, description="Shielded API credential")
-    timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0, description="HTTP timeout limit")
+    timeout_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=20.0,
+        description="HTTP timeout limit (strictly <= 20.0s to guarantee safety under 25.0s outer wall-clock timeout)"
+    )
     max_tokens: int = Field(default=1000, ge=50, le=4000, description="Token generation budget")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     enabled: bool = Field(default=False, description="Whether this provider is active for synthesis")
@@ -84,8 +138,12 @@ class LLMProviderConfig(BaseModel):
         api_base = getattr(s, "AGENT_ROUTER_API_BASE", None) or getattr(s, "LLM_API_BASE", None) or ""
         api_key = getattr(s, "AGENT_ROUTER_API_KEY", None) or getattr(s, "LLM_API_KEY", None) or ""
         model_name = getattr(s, "AGENT_ROUTER_MODEL_NAME", None) or getattr(s, "LLM_MODEL_NAME", None) or "moonshot-v1-8k"
-        timeout = getattr(s, "AGENT_ROUTER_TIMEOUT_SECONDS", 10.0)
-        max_tokens = getattr(s, "AGENT_ROUTER_MAX_TOKENS", 1500)
+        raw_timeout = getattr(s, "AGENT_ROUTER_TIMEOUT_SECONDS", 10.0)
+        try:
+            timeout = min(max(float(raw_timeout), 1.0), 20.0)
+        except (ValueError, TypeError):
+            timeout = 10.0
+        max_tokens = int(getattr(s, "AGENT_ROUTER_MAX_TOKENS", 4000) or 4000)
         temp = getattr(s, "AGENT_ROUTER_TEMPERATURE", 0.7)
         enabled = bool(getattr(s, "AGENT_ROUTER_ENABLED", False))
 
@@ -126,16 +184,10 @@ class BaseLLMProvider(ABC):
         body_content: str,
         count: int = 3,
         **kwargs: Any,
-    ) -> List[Dict[str, Any]]:
+    ) -> GenerationResult:
         """
         Synthesize candidate polymorphic email variants.
-        Must return a list of dictionaries with standard keys:
-        - variant_id: str
-        - variant_name: str
-        - subject: str
-        - body_html: str
-        - estimated_spam_risk: int
-        - rationale: str
+        Returns a validated GenerationResult containing candidate variants and provider metadata.
         """
         pass
 
@@ -397,7 +449,7 @@ class AgentRouterLLMProvider(BaseLLMProvider):
         body_content: str,
         count: int = 3,
         **kwargs: Any,
-    ) -> List[Dict[str, Any]]:
+    ) -> GenerationResult:
         """
         Synthesize candidate polymorphic email variants via Agent Router API.
         Fails safely on network errors, timeouts, or malformed responses.
@@ -409,6 +461,15 @@ class AgentRouterLLMProvider(BaseLLMProvider):
             )
 
         liquid_tags = kwargs.get("liquid_tags")
+        max_tokens_override = kwargs.get("max_tokens")
+        if max_tokens_override is not None:
+            try:
+                resolved_max_tokens = min(int(max_tokens_override), self.config.max_tokens)
+            except (ValueError, TypeError):
+                resolved_max_tokens = self.config.max_tokens
+        else:
+            resolved_max_tokens = self.config.max_tokens
+
         messages = build_polymorphic_variant_prompt(
             subject=subject,
             body_content=body_content,
@@ -424,14 +485,16 @@ class AgentRouterLLMProvider(BaseLLMProvider):
         payload = {
             "model": self.config.model_name,
             "messages": messages,
-            "max_tokens": self.config.max_tokens,
+            "max_tokens": resolved_max_tokens,
             "temperature": self.config.temperature,
             "response_format": {"type": "json_object"},
         }
 
         client = self._http_client or get_shared_async_client(self.config.timeout_seconds)
+        t_start = time.perf_counter()
         try:
             res = await client.post(api_url, headers=headers, json=payload)
+            provider_latency_ms = max(0, int((time.perf_counter() - t_start) * 1000))
         except httpx.TimeoutException:
             logger.warning("Agent Router request timed out after %s seconds", self.config.timeout_seconds)
             raise LLMGenerationError(f"Agent Router request timed out after {self.config.timeout_seconds}s")
@@ -457,8 +520,37 @@ class AgentRouterLLMProvider(BaseLLMProvider):
                 raise
             raise LLMGenerationError(f"Failed to read Agent Router response JSON: {e}")
 
+        # Safely extract token usage metadata without crashing if missing or malformed
+        usage_data = res_data.get("usage")
+        prompt_tokens: Optional[int] = None
+        completion_tokens: Optional[int] = None
+        total_tokens: Optional[int] = None
+
+        if isinstance(usage_data, dict):
+            pt = usage_data.get("prompt_tokens")
+            if isinstance(pt, int) and not isinstance(pt, bool) and pt >= 0:
+                prompt_tokens = pt
+
+            ct = usage_data.get("completion_tokens")
+            if isinstance(ct, int) and not isinstance(ct, bool) and ct >= 0:
+                completion_tokens = ct
+
+            tt = usage_data.get("total_tokens")
+            if isinstance(tt, int) and not isinstance(tt, bool) and tt >= 0:
+                total_tokens = tt
+            elif prompt_tokens is not None and completion_tokens is not None:
+                total_tokens = prompt_tokens + completion_tokens
+
         candidates = parse_and_validate_agent_router_response(raw_text, count=count)
-        return candidates
+        return GenerationResult(
+            variants=candidates,
+            provider="agent_router",
+            model=self.config.model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            provider_latency_ms=provider_latency_ms,
+        )
 
 
 class HeuristicFallbackProvider(BaseLLMProvider):
@@ -489,11 +581,12 @@ class HeuristicFallbackProvider(BaseLLMProvider):
         body_content: str,
         count: int = 3,
         **kwargs: Any,
-    ) -> List[Dict[str, Any]]:
+    ) -> GenerationResult:
         """
         Produce deterministic candidates preserving Liquid template tags.
         Makes zero network requests.
         """
+        t_start = time.perf_counter()
         v1_subject = f"Order Confirmation: #{{{{ order.name }}}} - Receipt & Details"
         v1_body = f"<p>Hello {{{{ customer.first_name }}}},</p><p>We have successfully received your order <strong>#{{{{ order.name }}}}</strong>. Your order is being processed and will ship shortly.</p><p>View your complete order receipt here: {{{{ checkout.order_status_url }}}}</p>"
 
@@ -529,7 +622,16 @@ class HeuristicFallbackProvider(BaseLLMProvider):
                 "rationale": "Optimized for Gmail Priority Inbox sorting and Apple Mail privacy protection."
             }
         ]
-        return candidates[:count]
+        provider_latency_ms = max(0, int((time.perf_counter() - t_start) * 1000))
+        return GenerationResult(
+            variants=candidates[:count],
+            provider="heuristic_fallback",
+            model="rule-based-v1",
+            prompt_tokens=None,
+            completion_tokens=None,
+            total_tokens=None,
+            provider_latency_ms=provider_latency_ms,
+        )
 
 
 class DisabledLLMProvider(BaseLLMProvider):
@@ -556,7 +658,7 @@ class DisabledLLMProvider(BaseLLMProvider):
         body_content: str,
         count: int = 3,
         **kwargs: Any,
-    ) -> List[Dict[str, Any]]:
+    ) -> GenerationResult:
         """Always fails closed when generation is attempted on a disabled/missing provider."""
         raise LLMProviderNotConfiguredError(
             f"LLM provider '{self._provider_name}' is not configured or disabled: {self._reason}"

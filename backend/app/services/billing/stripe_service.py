@@ -22,7 +22,6 @@ TIER_LIMITS = {
     "starter": 1,
     "growth": 3,
     "agency": 20,
-    "enterprise": 999,
 }
 
 PLAN_PRICING: Dict[str, Dict[str, Any]] = {
@@ -71,22 +70,6 @@ PLAN_PRICING: Dict[str, Dict[str, Any]] = {
             "Multi-Store Management",
             "Priority Audit Queue & White-Label Reporting Exports",
             "3-Day Free Trial",
-        ],
-    },
-    "enterprise": {
-        "id": "enterprise",
-        "name": "Enterprise Plan",
-        "price": 199,
-        "amount": 19900,
-        "currency": "usd",
-        "interval": "month",
-        "domain_limit": 999,
-        "features": [
-            "Unlimited Monitored Apex Domains",
-            "Developer API Keys & Custom Webhooks",
-            "Real-Time Worker Priority & 15m Sweeps",
-            "AI Content Lab & Cryptographic Optimizer",
-            "Dedicated Deliverability Architect SLA",
         ],
     },
 }
@@ -144,16 +127,23 @@ class StripeService:
                 logger.warning(f"Failed to record event {event_id} in processed_webhook_events: {e}")
 
     def resolve_tier(self, price_or_tier: str) -> str:
-        """Normalize tier identifier from price_id or tier name string."""
+        """
+        Normalize tier identifier from price_id or tier name string.
+        3-Tier Model: starter | growth | agency.
+        Legacy transition: existing Enterprise price or tier string resolves to agency.
+        """
         raw = (price_or_tier or "growth").strip().lower()
-        if raw == (settings.STRIPE_PRICE_ENTERPRISE or "").lower() or "enterprise" in raw:
-            return "enterprise"
         if raw == (getattr(settings, "STRIPE_PRICE_AGENCY", "price_agency_monthly") or "").lower() or "agency" in raw:
             return "agency"
         if raw == (settings.STRIPE_PRICE_STARTER or "").lower() or "starter" in raw:
             return "starter"
         if raw == (settings.STRIPE_PRICE_GROWTH or "").lower() or "growth" in raw:
             return "growth"
+        # Legacy Enterprise transition: Map legacy Stripe price or 'enterprise' string safely to 'agency'
+        ent_price = (getattr(settings, "STRIPE_PRICE_ENTERPRISE", None) or "").lower()
+        if (ent_price and raw == ent_price) or "enterprise" in raw:
+            logger.info(f"Legacy enterprise Stripe price/tier '{raw}' resolved safely to 'agency'.")
+            return "agency"
         return "growth"
 
     async def get_or_create_customer(self, user_id: str, email: Optional[str] = None) -> Optional[str]:
@@ -222,7 +212,6 @@ class StripeService:
         - Starter: $9/mo (1 Domain cap)
         - Growth: $29/mo (3 Domains cap)
         - Agency: $79/mo (20 Domains cap)
-        - Enterprise: $199/mo (Unlimited domains)
         """
         tier = self.resolve_tier(plan_tier or price_id)
         plan_meta = PLAN_PRICING.get(tier, PLAN_PRICING["growth"])
@@ -244,8 +233,6 @@ class StripeService:
                     configured_price_id = settings.STRIPE_PRICE_GROWTH
                 elif tier == "agency" and agency_price and agency_price.startswith("price_") and not agency_price.endswith("_monthly"):
                     configured_price_id = agency_price
-                elif tier == "enterprise" and settings.STRIPE_PRICE_ENTERPRISE and settings.STRIPE_PRICE_ENTERPRISE.startswith("price_") and not settings.STRIPE_PRICE_ENTERPRISE.endswith("_monthly"):
-                    configured_price_id = settings.STRIPE_PRICE_ENTERPRISE
 
                 req_data: Dict[str, Any] = {
                     "mode": "subscription",

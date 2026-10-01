@@ -72,6 +72,11 @@ class SupabaseService:
         self._in_memory_rate_limits: Dict[str, int] = {}
         self._in_memory_dns_provider_creds: Dict[str, Dict[str, Any]] = {}
         self._in_memory_dns_auto_fix_logs: Dict[str, List[Dict[str, Any]]] = {}
+        self._in_memory_ai_monthly_usage: Dict[str, int] = {}
+        self._has_monthly_quota_rpc: Optional[bool] = None
+        self._in_memory_ai_concurrency_leases: Dict[str, List[Dict[str, Any]]] = {}
+        self._has_concurrency_rpc: Optional[bool] = None
+        self._in_memory_ai_telemetry: Dict[str, Dict[str, Any]] = {}
         self._in_memory_lock = threading.Lock()
 
         if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
@@ -2036,5 +2041,424 @@ class SupabaseService:
                 return True
         return False
 
+    # =====================================================================
+    # AI MONTHLY GENERATION QUOTA METHODS (STEP 17B)
+    # =====================================================================
+
+    def consume_ai_monthly_generation(
+        self,
+        user_id: str,
+        billing_period: str,
+        monthly_limit: int,
+    ) -> Dict[str, Any]:
+        """
+        Atomically consume one monthly AI generation credit using PostgreSQL RPC.
+        Enforces tenant plan limits and eliminates TOCTOU race conditions under row locks.
+        Falls back to thread-safe in-memory accounting strictly in development/test environments.
+        """
+        clean_period = billing_period.strip()
+        if self._client and getattr(self, "_has_monthly_quota_rpc", True) is not False:
+            try:
+                res = self._client.rpc(
+                    "consume_ai_monthly_generation",
+                    {
+                        "p_user_id": user_id,
+                        "p_billing_period": clean_period,
+                        "p_monthly_limit": monthly_limit,
+                    },
+                ).execute()
+                if res.data and isinstance(res.data, dict):
+                    self._has_monthly_quota_rpc = True
+                    return res.data
+            except Exception as e:
+                err_str = str(e)
+                if any(x in err_str for x in ["PGRST202", "22P02", "not found", "does not exist"]):
+                    self._has_monthly_quota_rpc = False
+                logger.warning(f"Could not execute consume_ai_monthly_generation RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error consuming AI monthly quota: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        # Thread-safe in-memory ledger for local development and test environments
+        with self._in_memory_lock:
+            key = f"{user_id}:{clean_period}"
+            current = self._in_memory_ai_monthly_usage.get(key, 0)
+            if current >= monthly_limit:
+                return {
+                    "allowed": False,
+                    "current_usage": current,
+                    "limit": monthly_limit,
+                    "remaining": 0,
+                }
+            new_count = current + 1
+            self._in_memory_ai_monthly_usage[key] = new_count
+            return {
+                "allowed": True,
+                "current_usage": new_count,
+                "limit": monthly_limit,
+                "remaining": max(0, monthly_limit - new_count),
+            }
+
+    def rollback_ai_monthly_generation(
+        self,
+        user_id: str,
+        billing_period: str,
+    ) -> None:
+        """
+        Compensate/refund a consumed monthly AI generation credit if generation
+        fails downstream or if Liquid syntax preservation safety checks fail.
+        """
+        clean_period = billing_period.strip()
+        if self._client and getattr(self, "_has_monthly_quota_rpc", True) is not False:
+            try:
+                self._client.rpc(
+                    "rollback_ai_monthly_generation",
+                    {
+                        "p_user_id": user_id,
+                        "p_billing_period": clean_period,
+                    },
+                ).execute()
+                self._has_monthly_quota_rpc = True
+                return
+            except Exception as e:
+                err_str = str(e)
+                if any(x in err_str for x in ["PGRST202", "22P02", "not found", "does not exist"]):
+                    self._has_monthly_quota_rpc = False
+                logger.warning(f"Could not execute rollback_ai_monthly_generation RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error rolling back AI monthly quota: {e}") from e
+
+        with self._in_memory_lock:
+            key = f"{user_id}:{clean_period}"
+            current = self._in_memory_ai_monthly_usage.get(key, 0)
+            self._in_memory_ai_monthly_usage[key] = max(0, current - 1)
+
+    def get_ai_monthly_usage(
+        self,
+        user_id: str,
+        billing_period: str,
+    ) -> int:
+        """
+        Retrieve current month generation count for telemetry, health checks, and test assertions.
+        """
+        clean_period = billing_period.strip()
+        if self._client and getattr(self, "_has_monthly_quota_rpc", True) is not False:
+            try:
+                res = self._client.rpc(
+                    "get_ai_monthly_usage",
+                    {
+                        "p_user_id": user_id,
+                        "p_billing_period": clean_period,
+                    },
+                ).execute()
+                if res.data is not None:
+                    self._has_monthly_quota_rpc = True
+                    return int(res.data)
+            except Exception as e:
+                err_str = str(e)
+                if any(x in err_str for x in ["PGRST202", "22P02", "not found", "does not exist"]):
+                    self._has_monthly_quota_rpc = False
+                logger.warning(f"Could not execute get_ai_monthly_usage RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error querying AI monthly quota: {e}") from e
+
+        with self._in_memory_lock:
+            return self._in_memory_ai_monthly_usage.get(f"{user_id}:{clean_period}", 0)
+
+    def reset_in_memory_ai_monthly_usage(self) -> None:
+        """Helper for test harness isolation."""
+        with self._in_memory_lock:
+            self._in_memory_ai_monthly_usage.clear()
+
+    # =====================================================================
+    # AI DISTRIBUTED CONCURRENCY LEASE METHODS (STEP 17C)
+    # =====================================================================
+
+    def acquire_ai_concurrency_slot(
+        self,
+        user_id: str,
+        concurrency_limit: int,
+        lease_id: str,
+        ttl_seconds: int = 60,
+    ) -> Dict[str, Any]:
+        """
+        Atomically acquire a distributed AI generation concurrency slot using PostgreSQL RPC.
+        Serializes concurrent requests per tenant with transaction-scoped advisory locks,
+        eliminating race conditions across multiple horizontally scaled Railway instances.
+        Falls back to thread-safe in-memory accounting strictly in development/test environments.
+        """
+        if self._client and getattr(self, "_has_concurrency_rpc", True) is not False:
+            try:
+                res = self._client.rpc(
+                    "acquire_ai_concurrency_slot",
+                    {
+                        "p_user_id": user_id,
+                        "p_concurrency_limit": concurrency_limit,
+                        "p_lease_id": lease_id,
+                        "p_ttl_seconds": ttl_seconds,
+                    },
+                ).execute()
+                if res.data and isinstance(res.data, dict):
+                    self._has_concurrency_rpc = True
+                    return res.data
+            except Exception as e:
+                err_str = str(e)
+                if any(x in err_str for x in ["PGRST202", "22P02", "not found", "does not exist"]):
+                    self._has_concurrency_rpc = False
+                logger.warning(f"Could not execute acquire_ai_concurrency_slot RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error acquiring AI concurrency slot: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        # Thread-safe in-memory concurrency lease manager for test & dev environments
+        with self._in_memory_lock:
+            now = time.time()
+            leases = self._in_memory_ai_concurrency_leases.get(user_id, [])
+            valid_leases = [l for l in leases if l["expires_at"] > now]
+            self._in_memory_ai_concurrency_leases[user_id] = valid_leases
+
+            active_count = len(valid_leases)
+            if active_count >= concurrency_limit:
+                return {
+                    "allowed": False,
+                    "current_active": active_count,
+                    "concurrency_limit": concurrency_limit,
+                    "lease_id": None,
+                }
+
+            valid_leases.append({
+                "lease_id": lease_id,
+                "acquired_at": now,
+                "expires_at": now + ttl_seconds,
+            })
+            return {
+                "allowed": True,
+                "current_active": active_count + 1,
+                "concurrency_limit": concurrency_limit,
+                "lease_id": lease_id,
+            }
+
+    def release_ai_concurrency_slot(
+        self,
+        user_id: str,
+        lease_id: str,
+    ) -> bool:
+        """
+        Gracefully release a held AI concurrency slot upon completion or error.
+        Scoped strictly to the tenant and lease identifier.
+        """
+        if self._client and getattr(self, "_has_concurrency_rpc", True) is not False:
+            try:
+                res = self._client.rpc(
+                    "release_ai_concurrency_slot",
+                    {
+                        "p_user_id": user_id,
+                        "p_lease_id": lease_id,
+                    },
+                ).execute()
+                self._has_concurrency_rpc = True
+                return bool(res.data)
+            except Exception as e:
+                err_str = str(e)
+                if any(x in err_str for x in ["PGRST202", "22P02", "not found", "does not exist"]):
+                    self._has_concurrency_rpc = False
+                logger.warning(f"Could not execute release_ai_concurrency_slot RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error releasing AI concurrency slot: {e}") from e
+
+        with self._in_memory_lock:
+            leases = self._in_memory_ai_concurrency_leases.get(user_id, [])
+            filtered = [l for l in leases if str(l.get("lease_id")) != str(lease_id)]
+            self._in_memory_ai_concurrency_leases[user_id] = filtered
+            return len(filtered) < len(leases)
+
+    def get_ai_active_concurrency(
+        self,
+        user_id: str,
+    ) -> int:
+        """
+        Retrieve count of currently active concurrency leases for user.
+        """
+        if self._client and getattr(self, "_has_concurrency_rpc", True) is not False:
+            try:
+                res = self._client.rpc(
+                    "get_ai_active_concurrency",
+                    {
+                        "p_user_id": user_id,
+                    },
+                ).execute()
+                if res.data is not None:
+                    self._has_concurrency_rpc = True
+                    return int(res.data)
+            except Exception as e:
+                err_str = str(e)
+                if any(x in err_str for x in ["PGRST202", "22P02", "not found", "does not exist"]):
+                    self._has_concurrency_rpc = False
+                logger.warning(f"Could not execute get_ai_active_concurrency RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error querying AI concurrency: {e}") from e
+
+        with self._in_memory_lock:
+            now = time.time()
+            leases = self._in_memory_ai_concurrency_leases.get(user_id, [])
+            valid_leases = [l for l in leases if l["expires_at"] > now]
+            self._in_memory_ai_concurrency_leases[user_id] = valid_leases
+            return len(valid_leases)
+
+    def reset_in_memory_ai_concurrency_leases(self) -> None:
+        """Helper for test harness isolation."""
+        with self._in_memory_lock:
+            self._in_memory_ai_concurrency_leases.clear()
+
+    # =====================================================================
+    # AI GENERATION TELEMETRY (STEP 17D.3)
+    # =====================================================================
+
+    def record_ai_telemetry(self, telemetry_data: Dict[str, Any]) -> bool:
+        """
+        Persist operational AI generation telemetry to public.ai_generation_telemetry.
+        Best-effort operational record; uses service_role key to bypass client DML restrictions.
+        Does NOT raise on failure; returns True if persisted, False otherwise.
+        """
+        if self._client:
+            try:
+                res = self._client.table("ai_generation_telemetry").insert(telemetry_data).execute()
+                return True
+            except Exception as e:
+                logger.warning(f"Could not persist AI generation telemetry to database: {e}")
+                if not self._allow_in_memory_fallback():
+                    return False
+
+        if not self._allow_in_memory_fallback():
+            return False
+
+        with self._in_memory_lock:
+            gen_id = str(telemetry_data.get("generation_id"))
+            self._in_memory_ai_telemetry[gen_id] = dict(telemetry_data)
+            return True
+
+    def get_in_memory_ai_telemetry(self, generation_id: str) -> Optional[Dict[str, Any]]:
+        """Helper for test harness verification."""
+        with self._in_memory_lock:
+            return self._in_memory_ai_telemetry.get(str(generation_id))
+
+    def reset_in_memory_ai_telemetry(self) -> None:
+        """Helper for test harness isolation."""
+        with self._in_memory_lock:
+            self._in_memory_ai_telemetry.clear()
+
+    def get_ai_telemetry_records(
+        self,
+        user_id: Optional[str] = None,
+        billing_period: Optional[str] = None,
+        plan_tier: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        limit: int = 5000,
+    ) -> List[Dict[str, Any]]:
+        """
+        Query AI generation telemetry records with optional filters.
+        Used for operational telemetry aggregation, reporting, and quota reconciliation.
+        Falls back to in-memory store in local development/test environments.
+        """
+        clean_uid = str(user_id).strip() if user_id else None
+        clean_period = str(billing_period).strip() if billing_period else None
+        clean_tier = str(plan_tier).strip() if plan_tier else None
+
+        if self._client:
+            try:
+                query = self._client.table("ai_generation_telemetry").select("*")
+                if clean_uid:
+                    query = query.eq("user_id", clean_uid)
+                if clean_period:
+                    query = query.eq("billing_period", clean_period)
+                if clean_tier:
+                    query = query.eq("plan_tier", clean_tier)
+                if start_time:
+                    query = query.gte("created_at", start_time.isoformat())
+                if end_time:
+                    query = query.lte("created_at", end_time.isoformat())
+                res = query.order("created_at", desc=True).limit(limit).execute()
+                if res.data is not None:
+                    return list(res.data)
+            except Exception as e:
+                logger.warning(f"Could not query AI generation telemetry from database: {e}")
+                if not self._allow_in_memory_fallback():
+                    return []
+
+        if not self._allow_in_memory_fallback():
+            return []
+
+        with self._in_memory_lock:
+            records = list(self._in_memory_ai_telemetry.values())
+            if clean_uid:
+                records = [r for r in records if str(r.get("user_id")) == clean_uid]
+            if clean_period:
+                records = [r for r in records if str(r.get("billing_period")) == clean_period]
+            if clean_tier:
+                records = [r for r in records if str(r.get("plan_tier")) == clean_tier]
+            if start_time:
+                records = [
+                    r for r in records
+                    if self._parse_iso_to_utc(r.get("created_at")) >= (
+                        start_time if start_time.tzinfo else start_time.replace(tzinfo=timezone.utc)
+                    )
+                ]
+            if end_time:
+                records = [
+                    r for r in records
+                    if self._parse_iso_to_utc(r.get("created_at")) <= (
+                        end_time if end_time.tzinfo else end_time.replace(tzinfo=timezone.utc)
+                    )
+                ]
+            records.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+            return records[:limit]
+
+    def prune_expired_ai_telemetry(self, retention_days: int = 90) -> int:
+        """
+        Prune telemetry records older than retention_days.
+        Default: 90 days approved retention for raw operational telemetry.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        if self._client:
+            try:
+                res = self._client.table("ai_generation_telemetry").delete().lt("created_at", cutoff.isoformat()).execute()
+                return len(res.data) if res.data else 0
+            except Exception as e:
+                logger.warning(f"Could not prune expired AI telemetry from database: {e}")
+                if not self._allow_in_memory_fallback():
+                    return 0
+
+        if not self._allow_in_memory_fallback():
+            return 0
+
+        with self._in_memory_lock:
+            keys_to_delete = [
+                k for k, v in self._in_memory_ai_telemetry.items()
+                if self._parse_iso_to_utc(v.get("created_at")) < cutoff
+            ]
+            for k in keys_to_delete:
+                del self._in_memory_ai_telemetry[k]
+            return len(keys_to_delete)
+
+    @staticmethod
+    def _parse_iso_to_utc(iso_str: Optional[str]) -> datetime:
+        """Parse ISO timestamp string to UTC-aware datetime."""
+        if not iso_str:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        try:
+            cleaned = str(iso_str).replace("Z", "+00:00")
+            dt = datetime.fromisoformat(cleaned)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            return datetime.min.replace(tzinfo=timezone.utc)
+
 
 supabase_service = SupabaseService()
+

@@ -227,7 +227,7 @@ function SetupWizardContent() {
       });
 
       if (res.status === 403) {
-        setFixErrorMessage("1-Click Automated DNS Fixer requires a Growth or Enterprise subscription plan. Upgrade in Billing or copy snippet manually below.");
+        setFixErrorMessage("1-Click Automated DNS Fixer requires a Growth or Agency subscription plan. Upgrade in Billing or copy snippet manually below.");
         return;
       }
 

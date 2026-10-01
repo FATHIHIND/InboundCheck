@@ -307,16 +307,16 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
           })}
         </div>
 
-        {/* Enterprise Anchor Link */}
+        {/* Custom High-Volume Volume Anchor Link */}
         <div className="text-center pt-2 relative z-10">
           <p className="text-xs text-slate-500">
             Need 20+ stores, dedicated IP probing, or custom SLA?{" "}
             <a
-              href="mailto:enterprise@inboundcheck.com?subject=Enterprise%20InboundCheck%20Inquiry"
+              href="mailto:sales@inboundcheck.com?subject=Custom%20Volume%20Plan%20Inquiry"
               className="text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-4 decoration-emerald-500/50 hover:decoration-emerald-700 transition-colors inline-flex items-center gap-1"
             >
               <Building2 className="w-3.5 h-3.5" />
-              <span>Contact Enterprise Team</span>
+              <span>Contact Sales / High-Volume Team</span>
             </a>
           </p>
         </div>

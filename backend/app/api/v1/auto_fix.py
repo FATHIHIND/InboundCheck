@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, List
 import logging
 
 from app.core.security import get_current_user_id
-from app.core.tier_guards import require_growth_or_enterprise_tier
+from app.core.tier_guards import require_growth_or_agency_tier
 from app.services.dns.auto_fixer import dns_auto_fixer_service
 from app.services.supabase_client import supabase_service
 
@@ -150,7 +150,7 @@ async def verify_provider_credentials(
 @router.post("/apply")
 async def apply_auto_fix(
     payload: ApplyAutoFixRequest,
-    user_profile: dict = Depends(require_growth_or_enterprise_tier)
+    user_profile: dict = Depends(require_growth_or_agency_tier)
 ):
     """
     Execute 1-click automatic insertion of SPF, DKIM CNAME, or DMARC records via Cloudflare API.
@@ -187,7 +187,7 @@ async def apply_auto_fix(
 @router.post("/rollback")
 async def rollback_auto_fix(
     payload: RollbackFixRequest,
-    user_profile: dict = Depends(require_growth_or_enterprise_tier)
+    user_profile: dict = Depends(require_growth_or_agency_tier)
 ):
     """
     Roll back an applied DNS record change to its prior snapshot via real Cloudflare API call.

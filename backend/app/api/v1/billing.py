@@ -25,7 +25,7 @@ router = APIRouter(prefix="/billing", tags=["Stripe Billing & Subscriptions"])
 
 class CreateCheckoutRequest(BaseModel):
     email: Optional[str] = "merchant@store.com"
-    plan_tier: Optional[str] = Field(default=None, description="starter | growth | agency | enterprise")
+    plan_tier: Optional[str] = Field(default=None, description="starter | growth | agency")
     price_id: Optional[str] = Field(default=None, description="Stripe Price ID or plan tier")
     shop_domain: Optional[str] = Field(default=None, description="Connected Shopify shop domain")
     billing_provider: Optional[str] = Field(default=None, description="shopify | stripe")
@@ -88,7 +88,6 @@ async def get_subscription_plans(user_id: str = Depends(get_current_user_id)):
         "starter": settings.STRIPE_PRICE_STARTER,
         "growth": settings.STRIPE_PRICE_GROWTH,
         "agency": getattr(settings, "STRIPE_PRICE_AGENCY", "price_agency_monthly"),
-        "enterprise": settings.STRIPE_PRICE_ENTERPRISE,
     }
     enriched = []
     for plan in PLAN_PRICING.values():
@@ -108,9 +107,9 @@ async def create_checkout_session(
 ):
     """
     Create a Stripe Checkout Session for subscription upgrade supporting:
-    - Starter: $29/mo (1 Domain cap, manual DNS snippets, basic Telegram alerts)
-    - Growth: $79/mo (3 Domains cap, SPF Merge Engine, 1-Click DNS Auto-Fix, 48-72h Risk Forecast)
-    - Enterprise: $199/mo (Unlimited domains, Developer API keys, real-time worker priority)
+    - Starter: $9/mo (1 Domain cap, manual DNS snippets, basic Telegram alerts)
+    - Growth: $29/mo (3 Domains cap, SPF Merge Engine, 1-Click DNS Auto-Fix, 48-72h Risk Forecast)
+    - Agency: $79/mo (20 Domains cap, Multi-Store Management, Priority Audits)
     """
     try:
         resolved_price_or_tier = payload.price_id or payload.plan_tier or "growth"

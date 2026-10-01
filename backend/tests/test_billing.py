@@ -3,9 +3,9 @@ InboundCheck - Stripe Billing, 3-Day Trial, and Tier Enforcement Tests
 ======================================================================
 Verifies:
 - 3-day free trial expiration boundary and automatic marking as expired
-- Quota limits: Starter (1 domain), Growth (3 domains), Enterprise (unlimited)
-- Tier gating: SPF merge plan and 1-click auto-fix restricted to Growth/Enterprise
-- Stripe checkout session generation for Starter ($29), Growth ($79), Enterprise ($199)
+- Quota limits: Starter (1 domain), Growth (3 domains), Agency (20 domains)
+- Tier gating: SPF merge plan and 1-click auto-fix restricted to Growth/Agency
+- Stripe checkout session generation for Starter ($9), Growth ($29), Agency ($79)
 - Customer portal session generation
 - Stripe webhook ingestion: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted
 - Webhook signature verification and idempotency protection
@@ -25,7 +25,7 @@ from app.services.supabase_client import supabase_service
 from app.services.billing.stripe_service import stripe_service, PLAN_PRICING, TIER_LIMITS
 from app.core.tier_guards import (
     verify_active_subscription_or_trial,
-    require_growth_or_enterprise_tier,
+    require_growth_or_agency_tier,
     is_trial_expired,
 )
 from tests.conftest import auth_headers
@@ -194,7 +194,7 @@ async def test_tier_gates_spf_merge_and_auto_fix():
 
 @pytest.mark.asyncio
 async def test_checkout_session_creation():
-    """Verify Stripe checkout session creation for Starter ($9), Growth ($29), Agency ($79), Enterprise ($199)."""
+    """Verify Stripe checkout session creation for Starter ($9), Growth ($29), Agency ($79), and legacy Enterprise resolution."""
     transport = ASGITransport(app=app)
     user_id = "checkout-test-user"
 
@@ -220,11 +220,28 @@ async def test_checkout_session_creation():
         d_agency = r_agency.json()
         assert d_agency["amount"] == 79.0
 
-        # 4. Enterprise Checkout ($199)
+        # 4. Legacy Enterprise input safely maps to Agency ($79), NOT $199 or 999 domains
         r_ent = await ac.post("/api/v1/billing/create-checkout-session", json={"plan_tier": "enterprise"})
         assert r_ent.status_code == 200
         d_ent = r_ent.json()
-        assert d_ent["amount"] == 199.0
+        assert d_ent["plan_tier"] == "agency"
+        assert d_ent["amount"] == 79.0
+
+
+@pytest.mark.asyncio
+async def test_subscription_plans_contains_only_three_tiers():
+    """Verify /billing/plans returns strictly Starter, Growth, Agency — no Enterprise."""
+    transport = ASGITransport(app=app)
+    user_id = "plans-test-user"
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        res = await ac.get("/api/v1/billing/plans")
+        assert res.status_code == 200
+        data = res.json()
+        plans = data["plans"]
+        plan_ids = [p["id"] for p in plans]
+        assert plan_ids == ["starter", "growth", "agency"]
+        assert "enterprise" not in plan_ids
 
 
 @pytest.mark.asyncio

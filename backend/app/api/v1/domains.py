@@ -60,15 +60,17 @@ async def add_monitored_domain(
     """
     Add a new sending domain to continuous monitoring.
     Immediately executes initial DNS diagnostic audit and stores record in Supabase.
-    Enforces subscription tier domain quotas (Starter=1, Growth=3, Enterprise=Unlimited).
+    Enforces subscription tier domain quotas (Starter=1, Growth=3, Agency=20).
     """
     user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
         raw_domain = request.domain or request.domain_name or ""
         clean_domain = DNSDiagnosticEngine.normalize_domain(raw_domain)
 
-        # Enforce tier-based domain quota limits
+        # Enforce tier-based domain quota limits (3-tier model)
         tier = (user_profile.get("subscription_tier") or user_profile.get("tier") or "starter").lower()
+        if tier == "enterprise":
+            tier = "agency"  # Safe legacy mapping
         quota_limit = TIER_DOMAIN_LIMITS.get(tier, 1)
 
         # Allow updating existing domain without consuming additional quota

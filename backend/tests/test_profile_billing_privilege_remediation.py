@@ -525,7 +525,7 @@ def test_stripe_billing_webhook_update_path_remains_functional():
                 "client_reference_id": user_id,
                 "customer": "cus_test_999",
                 "subscription": "sub_test_999",
-                "metadata": {"subscription_tier": "enterprise", "user_id": user_id}
+                "metadata": {"subscription_tier": "agency", "user_id": user_id}
             }
         }
     }
@@ -535,10 +535,37 @@ def test_stripe_billing_webhook_update_path_remains_functional():
     assert res["status"] == "success"
 
     profile = supabase_service.get_user_profile(user_id)
-    assert profile["subscription_tier"] == "enterprise"
+    assert profile["subscription_tier"] == "agency"
     assert profile["subscription_status"] == "active"
     assert profile["stripe_customer_id"] == "cus_test_999"
     assert profile["stripe_subscription_id"] == "sub_test_999"
+
+
+def test_legacy_stripe_enterprise_webhook_maps_safely_to_agency():
+    """Prove that incoming webhook with legacy enterprise metadata maps safely to agency."""
+    user_id = str(uuid.uuid4())
+    supabase_service.update_user_profile(user_id, {"subscription_tier": "starter", "tier": "starter"})
+
+    event_payload = {
+        "id": f"evt_{uuid.uuid4().hex[:12]}",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "id": "cs_test_leg_ent",
+                "client_reference_id": user_id,
+                "customer": "cus_test_leg_ent",
+                "subscription": "sub_test_leg_ent",
+                "metadata": {"subscription_tier": "enterprise", "user_id": user_id}
+            }
+        }
+    }
+
+    res = stripe_service.process_webhook_event(event_payload)
+    assert res["status"] == "success"
+
+    profile = supabase_service.get_user_profile(user_id)
+    assert profile["subscription_tier"] == "agency"
+    assert profile["subscription_status"] == "active"
 
 
 def test_stripe_billing_cancellation_webhook_path_remains_functional():

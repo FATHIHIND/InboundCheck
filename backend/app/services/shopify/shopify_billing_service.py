@@ -18,7 +18,6 @@ SHOPIFY_PLAN_PRICING = {
     "starter": 9.0,
     "growth": 29.0,
     "agency": 79.0,
-    "enterprise": 199.0,
 }
 
 

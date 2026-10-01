@@ -75,7 +75,7 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
         for tier_name, price_val in [
             ("STRIPE_PRICE_STARTER", settings.STRIPE_PRICE_STARTER),
             ("STRIPE_PRICE_GROWTH", settings.STRIPE_PRICE_GROWTH),
-            ("STRIPE_PRICE_ENTERPRISE", settings.STRIPE_PRICE_ENTERPRISE),
+            ("STRIPE_PRICE_AGENCY", getattr(settings, "STRIPE_PRICE_AGENCY", None)),
         ]:
             if not price_val or not price_val.startswith("price_") or price_val.endswith("_monthly"):
                 issues.append(f"{tier_name} is not set to a valid production Stripe price ID (e.g. price_1UFZ...). Found: '{price_val}'")

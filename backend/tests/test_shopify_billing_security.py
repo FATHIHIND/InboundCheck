@@ -288,22 +288,52 @@ async def test_successful_verified_billing_activates_correct_plan(seeded_merchan
         return_value={
             "id": "gid://shopify/AppSubscription/778899",
             "status": "ACTIVE",
+            "name": "InboundCheck Agency Plan",
+        }
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as ac:
+            res = await ac.get(
+                f"/api/v1/shopify/billing/callback?charge_id=778899&plan_tier=agency&shop={shop}&user_id={user_id}"
+            )
+            assert res.status_code == 302
+            assert "billing=success" in res.headers.get("location", "")
+            assert "plan=agency" in res.headers.get("location", "")
+
+            profile = supabase_service.get_user_profile(user_id)
+            assert profile.get("subscription_tier") == "agency"
+            assert profile.get("subscription_status") == "active"
+            assert profile.get("shopify_charge_id") == "778899"
+
+
+@pytest.mark.asyncio
+async def test_legacy_shopify_enterprise_subscription_resolves_to_agency(seeded_merchant):
+    """Legacy Shopify Enterprise subscription charges safely map to Agency tier."""
+    user_id = seeded_merchant["user_id"]
+    shop = seeded_merchant["shop_domain"]
+
+    with patch.object(
+        shopify_billing_service,
+        "verify_and_activate_subscription",
+        new_callable=AsyncMock,
+        return_value={
+            "id": "gid://shopify/AppSubscription/778890",
+            "status": "ACTIVE",
             "name": "InboundCheck Enterprise Plan",
         }
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as ac:
             res = await ac.get(
-                f"/api/v1/shopify/billing/callback?charge_id=778899&plan_tier=enterprise&shop={shop}&user_id={user_id}"
+                f"/api/v1/shopify/billing/callback?charge_id=778890&plan_tier=enterprise&shop={shop}&user_id={user_id}"
             )
             assert res.status_code == 302
             assert "billing=success" in res.headers.get("location", "")
-            assert "plan=enterprise" in res.headers.get("location", "")
+            assert "plan=agency" in res.headers.get("location", "")
 
             profile = supabase_service.get_user_profile(user_id)
-            assert profile.get("subscription_tier") == "enterprise"
+            assert profile.get("subscription_tier") == "agency"
             assert profile.get("subscription_status") == "active"
-            assert profile.get("shopify_charge_id") == "778899"
 
 
 @pytest.mark.asyncio
