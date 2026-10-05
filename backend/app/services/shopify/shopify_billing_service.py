@@ -141,14 +141,16 @@ class ShopifyBillingService:
             logger.error(f"Network error connecting to Shopify GraphQL Billing: {req_err}")
             raise RuntimeError(f"Network error contacting Shopify Billing API: {req_err}")
 
-    async def verify_and_activate_subscription(
+    async def get_app_subscription(
         self,
         shop_domain: str,
         access_token: str,
         charge_id: str
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         """
-        Query AppSubscription node status via GraphQL node(id: $id).
+        Query AppSubscription node details via GraphQL node(id: $id).
+        Returns the node dictionary {id, status, name, currentPeriodEnd} or None on error / not found.
+        Does not enforce ACTIVE status, allowing full lifecycle status inspection (CANCELLED, EXPIRED, etc.).
         """
         gid = charge_id if str(charge_id).startswith("gid://") else f"gid://shopify/AppSubscription/{charge_id}"
         query = """
@@ -180,26 +182,42 @@ class ShopifyBillingService:
 
             if res.status_code != 200:
                 logger.error(f"Shopify subscription query failed: HTTP {res.status_code}")
-                raise RuntimeError(f"Failed to query Shopify subscription: HTTP {res.status_code}")
+                return None
 
             data = res.json()
             if "errors" in data and data["errors"]:
                 logger.error(f"Shopify subscription query GraphQL error: {data['errors']}")
-                raise RuntimeError("GraphQL error returned from Shopify subscription query")
+                return None
 
             node = data.get("data", {}).get("node")
-            if not node:
-                raise RuntimeError(f"Subscription {gid} not found in Shopify")
-
-            # Validate that status is in approved active states
-            status_val = (node.get("status") or "").upper()
-            if status_val not in ["ACTIVE", "ACCEPTED"]:
-                raise RuntimeError(f"Shopify subscription {gid} is not active (status: {status_val})")
+            if not node or not isinstance(node, dict):
+                return None
 
             return node
         except httpx.RequestError as req_err:
             logger.error(f"Network error querying subscription {gid}: {req_err}")
-            raise RuntimeError(f"Network error querying subscription: {req_err}")
+            return None
+
+    async def verify_and_activate_subscription(
+        self,
+        shop_domain: str,
+        access_token: str,
+        charge_id: str
+    ) -> Dict[str, Any]:
+        """
+        Query AppSubscription node status via GraphQL node(id: $id) and enforce active status.
+        """
+        gid = charge_id if str(charge_id).startswith("gid://") else f"gid://shopify/AppSubscription/{charge_id}"
+        node = await self.get_app_subscription(shop_domain, access_token, gid)
+        if not node:
+            raise RuntimeError(f"Subscription {gid} not found in Shopify")
+
+        # Validate that status is in approved active states
+        status_val = (node.get("status") or "").upper()
+        if status_val not in ["ACTIVE", "ACCEPTED"]:
+            raise RuntimeError(f"Shopify subscription {gid} is not active (status: {status_val})")
+
+        return node
 
 
 shopify_billing_service = ShopifyBillingService()

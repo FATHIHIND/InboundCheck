@@ -65,7 +65,7 @@ export function DomainMatrixTable({
         <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-fit">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <Inbox className="w-3 h-3" />
-          INBOX
+          OPTIMAL
         </span>
       );
     }
@@ -137,7 +137,7 @@ export function DomainMatrixTable({
             Monitored Stores &amp; Verified Sending Domains
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Live DNS records, customer inbox placement status, and on-demand diagnostic inspector.
+            Live DNS records, deliverability health status, and on-demand diagnostic inspector.
           </p>
         </div>
         <span className="text-[11px] font-mono font-medium text-slate-600 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200">
@@ -152,7 +152,7 @@ export function DomainMatrixTable({
             <tr>
               <th scope="col" className="py-3 px-4 text-left">Domain Name</th>
               <th scope="col" className="py-3 px-4 text-left">Shopify Store</th>
-              <th scope="col" className="py-3 px-4 text-left">Placement</th>
+              <th scope="col" className="py-3 px-4 text-left">Status</th>
               <th scope="col" className="py-3 px-4 text-left">SPF</th>
               <th scope="col" className="py-3 px-4 text-left">DKIM</th>
               <th scope="col" className="py-3 px-4 text-left">DMARC</th>

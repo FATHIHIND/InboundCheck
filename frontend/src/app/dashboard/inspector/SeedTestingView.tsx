@@ -199,15 +199,15 @@ export const SeedTestingView: React.FC<SeedTestingViewProps> = ({ domain }) => {
     <div className="space-y-6 animate-fadeIn font-mono text-xs">
       {/* 1. Header Overview Card */}
       <GlassEmeraldCard
-        title="Automated Seed Inbox Testing Pipeline"
-        subtitle="Simulates live customer receipt delivery across Gmail, Yahoo, and Outlook to confirm primary inbox placement"
-        badgeText="2024 RADAR"
+        title="Diagnostic Seed Address Generator"
+        subtitle="Test harness for generating cryptographically tracked test recipient addresses"
+        badgeText="INTERNAL HARNESS"
         badgeVariant="emerald"
         icon={<Radio className="w-5 h-5 text-emerald-600" />}
       >
         <div className="space-y-4 font-sans text-xs">
           <p className="text-slate-600 leading-relaxed">
-            Verify whether transactional receipts from <strong className="text-slate-900 font-mono">{cleanDomain || "your store"}</strong> reach the customer&apos;s primary inbox or get silently routed into spam. Generate a cryptographically tracked seed address, dispatch a test order confirmation, and analyze real-time placement.
+            Generate a cryptographically tracked test address to verify order receipt routing and header authentication for <strong className="text-slate-900 font-mono">{cleanDomain || "your store"}</strong>.
           </p>
 
           {!seedData && (
@@ -281,7 +281,7 @@ export const SeedTestingView: React.FC<SeedTestingViewProps> = ({ domain }) => {
               </div>
               <h4 className="text-slate-900 font-bold text-xs">Copy Seed Address</h4>
               <p className="text-[11px] text-slate-600 font-sans leading-relaxed">
-                Copy the unique test recipient address above. It routes into multi-provider IMAP witness mailboxes.
+                Copy the unique test recipient address above to route a test message.
               </p>
             </div>
 
@@ -305,9 +305,9 @@ export const SeedTestingView: React.FC<SeedTestingViewProps> = ({ domain }) => {
                 </span>
                 <Zap className="w-3.5 h-3.5 text-emerald-600 fill-current" />
               </div>
-              <h4 className="text-slate-900 font-bold text-xs">Verify Live Placement</h4>
+              <h4 className="text-slate-900 font-bold text-xs">Verify Header Diagnostics</h4>
               <p className="text-[11px] text-slate-600 font-sans leading-relaxed">
-                Wait ~10 seconds for email delivery, then trigger the multi-provider verification pipeline below.
+                Wait ~10 seconds for email delivery, then trigger header evaluation below.
               </p>
             </div>
           </div>
@@ -315,9 +315,9 @@ export const SeedTestingView: React.FC<SeedTestingViewProps> = ({ domain }) => {
           {/* Trigger Verification Bar */}
           <div className="p-4 rounded-lg bg-white border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <span className="font-bold text-slate-900 block text-xs">Ready to check live inbox placement?</span>
+              <span className="font-bold text-slate-900 block text-xs">Ready to evaluate test headers?</span>
               <span className="text-[11px] text-slate-500 font-sans">
-                Queries Gmail, Yahoo, and Outlook IMAP nodes concurrently.
+                Evaluates authentication headers and diagnostic placement status.
               </span>
             </div>
             <EmeraldHoverButton

@@ -1,8 +1,8 @@
 """
 InboundCheck - Automated Seed Inbox Testing REST Router (v1)
 ============================================================
-Endpoints for generating unique tracking tokens and verifying real-world
-folder placement across Gmail, Yahoo, and Outlook.
+Endpoints for generating unique tracking tokens and evaluating simulated
+seed placement for test verification.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,7 +19,7 @@ from app.services.seed_testing.seed_verifier import seed_verifier
 
 logger = logging.getLogger("SeedTestingRouter")
 
-router = APIRouter(prefix="/seed-testing", tags=["Automated Seed Inbox Testing"])
+router = APIRouter(prefix="/seed-testing", tags=["Seed Testing Simulation"])
 
 
 @router.post("/generate", response_model=GenerateSeedResponse)
@@ -58,7 +58,7 @@ async def verify_seed_placement(
     user_id: str = Depends(get_current_user_id)
 ):
     """
-    Evaluate seed inbox placement across Gmail, Yahoo, and Outlook with strict 10s per-provider timeout.
+    Evaluate simulated seed placement with strict 10s per-provider timeout.
     """
     try:
         clean_token = request.tracking_token.strip()

@@ -39,7 +39,6 @@ import { ApiError, formatApiErrorMessage } from "@/lib/apiResource";
 import { normalizeDomainInput } from "@/lib/domain";
 import { SpfMergePreview } from "./spf-merge-preview";
 import { AssetVerificationResult } from "./asset-verification-result";
-import { SeedTestingView } from "./SeedTestingView";
 
 interface DiagnosticIssueItem {
   id: string;
@@ -194,8 +193,8 @@ function DNSInspectorContent() {
   );
   const lastSyncedQueryDomainRef = useRef<string | null>(null);
   const [customSelectors, setCustomSelectors] = useState("shopify, google, k1");
-  const [activeTab, setActiveTab] = useState<"generator" | "inspector" | "spf-merge" | "seed-testing">(
-    queryTab === "seed-testing" || queryTab === "seed" ? "seed-testing" : "generator"
+  const [activeTab, setActiveTab] = useState<"generator" | "inspector" | "spf-merge">(
+    queryTab === "spf-merge" ? "spf-merge" : queryTab === "inspector" || queryTab === "audit" ? "inspector" : "generator"
   );
   const [isLoading, setIsLoading] = useState(false);
   const [auditData, setAuditData] = useState<AuditResult | null>(null);
@@ -237,12 +236,12 @@ function DNSInspectorContent() {
 
   // Deep-link tab sync
   useEffect(() => {
-    if (queryTab === "seed-testing" || queryTab === "seed") {
-      setActiveTab("seed-testing");
-    } else if (queryTab === "spf-merge") {
+    if (queryTab === "spf-merge") {
       setActiveTab("spf-merge");
     } else if (queryTab === "inspector" || queryTab === "audit") {
       setActiveTab("inspector");
+    } else {
+      setActiveTab("generator");
     }
   }, [queryTab]);
 
@@ -594,18 +593,6 @@ function DNSInspectorContent() {
           >
             <Layers className="w-3.5 h-3.5 text-emerald-600" />
             SPF Merge Engine
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("seed-testing")}
-            className={`px-3 py-1.5 rounded-md font-semibold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === "seed-testing"
-                ? "bg-white text-emerald-800 border border-slate-300 shadow-2xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5 text-emerald-600" />
-            Seed Inbox Verifier
           </button>
         </div>
       </div>
@@ -1743,10 +1730,7 @@ function DNSInspectorContent() {
             />
           )}
 
-          {/* VIEW D: Seed Inbox Verifier */}
-          {activeTab === "seed-testing" && (
-            <SeedTestingView domain={domainInput} />
-          )}
+          {/* View D unmounted pending live mailbox infrastructure */}
         </div>
       </div>
 

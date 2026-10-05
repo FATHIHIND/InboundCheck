@@ -34,7 +34,7 @@ class ShopifyService:
         self,
         api_key: Optional[str] = None,
         api_secret: Optional[str] = None,
-        scopes: str = "read_orders,read_fulfillments,read_merchant_managed_fulfillment_orders"
+        scopes: str = "read_orders"
     ):
         self.api_key = api_key or settings.SHOPIFY_API_KEY
         self.api_secret = api_secret or settings.SHOPIFY_API_SECRET
@@ -52,7 +52,7 @@ class ShopifyService:
         }
         return webhook_id in self._processed_webhooks
 
-    def mark_webhook_processed(self, webhook_id: str):
+    def mark_webhook_processed(self, webhook_id: str, event_type: str = "shopify_webhook"):
         """Mark Shopify webhook as processed."""
         if webhook_id:
             self._processed_webhooks[webhook_id] = time.time()

@@ -71,7 +71,7 @@ export default function DpaPage() {
               InboundCheck implements industry-standard security measures to protect Customer Data against unauthorized access, loss, or alteration:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-zinc-400">
-              <li><strong>Zero-PII Hashing:</strong> Email identifiers are hashed via SHA-256 for inbox placement metrics with zero raw PII persisted in storage logs.</li>
+              <li><strong>Zero-PII Hashing:</strong> Email identifiers are hashed via SHA-256 for deliverability telemetry with zero raw PII persisted in storage logs.</li>
               <li><strong>Encryption in Transit &amp; At Rest:</strong> TLS 1.3 encryption across all public endpoints and AES-256 / Fernet encryption for DNS provider credentials.</li>
               <li><strong>Logical Tenant Isolation:</strong> Supabase PostgreSQL Row-Level Security ensuring strict multi-tenant cryptographic boundary enforcement.</li>
             </ul>

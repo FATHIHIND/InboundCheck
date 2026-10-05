@@ -988,7 +988,7 @@ export default function LandingPage() {
                 <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                   <Check size={12} strokeWidth={2.5} />
                 </div>
-                <span><strong>Predictive 48–72h Risk Forecasting:</strong> Identifies early listing velocity before primary inbox placement is destroyed.</span>
+                <span><strong>Predictive 48–72h Risk Forecasting:</strong> Identifies early listing velocity before domain sender reputation is compromised.</span>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
@@ -1349,7 +1349,7 @@ export default function LandingPage() {
                     <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                       <Check size={12} strokeWidth={2.5} />
                     </div>
-                    <span>Dedicated 15m Sweeps &amp; IMAP Probes</span>
+                    <span>Dedicated 15m Sweeps &amp; Real-Time Radar</span>
                   </div>
                   <div className="flex items-start gap-3">
                     <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">

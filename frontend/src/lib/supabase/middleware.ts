@@ -57,7 +57,8 @@ export async function updateSession(request: NextRequest) {
 
   // Fail-closed route protection for dashboard routes:
   // If environment variables or session tokens are missing or invalid, redirect to /auth/login immediately.
-  if (request.nextUrl.pathname.startsWith("/dashboard")) {
+  // Note: /dashboard/shopify/callback is exempted to allow OAuth authorization return.
+  if (request.nextUrl.pathname.startsWith("/dashboard") && !request.nextUrl.pathname.startsWith("/dashboard/shopify/callback")) {
     const isEnvMissingOrPlaceholder =
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||

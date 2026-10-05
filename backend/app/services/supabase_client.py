@@ -651,7 +651,7 @@ class SupabaseService:
         user_id: str,
         shop_domain: str,
         access_token_encrypted: str,
-        scope: str = "read_orders,read_fulfillments,read_merchant_managed_fulfillment_orders",
+        scope: str = "read_orders",
         sender_email: Optional[str] = None,
         store_metadata: Optional[Dict[str, Any]] = None,
         sender_alignment_status: str = "pending",
@@ -739,6 +739,76 @@ class SupabaseService:
             raise DatabaseUnavailableError("Database client is not connected in production")
 
         return self._in_memory_stores.get(user_id, [])
+
+    def get_store_by_domain(self, shop_domain: str) -> Optional[Dict[str, Any]]:
+        """
+        Lookup connected store by shop_domain across public.shopify_stores and public.monitored_stores.
+        Returns the store dictionary (including user_id) or None.
+        """
+        if not shop_domain:
+            return None
+        clean_shop = shop_domain.strip().lower()
+        if self._client:
+            for table_name in ["shopify_stores", "monitored_stores"]:
+                try:
+                    res = self._client.table(table_name).select("*").eq("shop_domain", clean_shop).execute()
+                    if res.data and len(res.data) > 0:
+                        return res.data[0]
+                except Exception as e:
+                    logger.warning(f"Could not query store by domain from '{table_name}': {e}")
+                    if not self._allow_in_memory_fallback():
+                        raise DatabaseUnavailableError(f"Database query failed for shop {clean_shop}: {e}") from e
+
+        # In-memory store lookup
+        for uid, stores in self._in_memory_stores.items():
+            for store in stores:
+                if store.get("shop_domain") == clean_shop:
+                    res_store = dict(store)
+                    if "user_id" not in res_store:
+                        res_store["user_id"] = uid
+                    return res_store
+        return None
+
+    def deactivate_store(self, shop_domain: str) -> Optional[Dict[str, Any]]:
+        """
+        Mark a Shopify store as inactive/uninstalled and revoke its access token.
+        Idempotent: safe to call repeatedly.
+        Returns the updated store record or None if not found.
+        """
+        if not shop_domain:
+            return None
+        clean_shop = shop_domain.strip().lower()
+        now_iso = datetime.now(datetime.UTC).isoformat() if hasattr(datetime, "UTC") else datetime.utcnow().isoformat()
+
+        updated_record = None
+        if self._client:
+            for table_name in ["shopify_stores", "monitored_stores"]:
+                try:
+                    res = self._client.table(table_name).update({
+                        "is_active": False,
+                        "access_token_encrypted": "revoked",
+                        "updated_at": now_iso,
+                    }).eq("shop_domain", clean_shop).execute()
+                    if res.data and len(res.data) > 0:
+                        updated_record = res.data[0]
+                except Exception as e:
+                    logger.warning(f"Error deactivating store in {table_name}: {e}")
+                    if not self._allow_in_memory_fallback():
+                        raise DatabaseUnavailableError(f"Failed to deactivate store in {table_name}: {e}") from e
+
+        # In-memory store deactivation
+        for uid, stores in self._in_memory_stores.items():
+            for store in stores:
+                if store.get("shop_domain") == clean_shop:
+                    store["is_active"] = False
+                    store["access_token_encrypted"] = "revoked"
+                    store["updated_at"] = now_iso
+                    if not updated_record:
+                        updated_record = dict(store)
+                        if "user_id" not in updated_record:
+                            updated_record["user_id"] = uid
+
+        return updated_record
 
 
     def handle_customer_data_request(

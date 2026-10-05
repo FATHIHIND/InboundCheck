@@ -435,7 +435,7 @@ function SetupWizardContent() {
                     Google &amp; Yahoo 2024 Bulk Sender Mandate Readiness
                   </h3>
                   <p className="text-xs text-slate-600">
-                    6 automated checks required to eliminate spam classification and guarantee primary inbox placement.
+                    6 automated checks required to eliminate spam classification and achieve strict DNS compliance.
                   </p>
                 </div>
                 <span className="self-start sm:self-auto text-[10px] font-mono font-semibold uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
