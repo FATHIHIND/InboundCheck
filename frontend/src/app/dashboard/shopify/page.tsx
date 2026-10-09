@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { formatApiErrorMessage } from "@/lib/apiResource";
@@ -112,18 +112,38 @@ export default function ShopifyHubPage() {
     isEmpty: (data) => !data || data.length === 0,
   });
 
-  // Update default inputs when stores load
-  useEffect(() => {
-    if (storesResource.state === "ready" && storesResource.data.length > 0) {
-      const first = storesResource.data[0];
-      setStoreDomain(first.shop_domain || "");
-      setCustomDomain(first.custom_domain || first.shop_domain.replace(".myshopify.com", ".com"));
-      setSenderEmail(first.sender_email || `orders@${first.shop_domain.replace(".myshopify.com", ".com")}`);
-      if (first.metadata?.name) {
-        setStoreName(first.metadata.name);
-      }
-    }
+  // Multi-Store Fleet & Selected Store State (Agency Tier)
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+
+  const activeStores = useMemo(() => {
+    return storesResource.state === "ready" ? storesResource.data : [];
   }, [storesResource]);
+  const selectedStore = activeStores.find((s) => s.id === selectedStoreId) || activeStores[0] || null;
+
+  // Re-sync selection state when stores load or change
+  useEffect(() => {
+    if (storesResource.state === "ready" && activeStores.length > 0) {
+      if (!selectedStoreId || !activeStores.some((s) => s.id === selectedStoreId)) {
+        setSelectedStoreId(activeStores[0].id);
+      }
+    } else if (storesResource.state === "empty" || activeStores.length === 0) {
+      setSelectedStoreId(null);
+      setStoreDomain("");
+      setCustomDomain("");
+      setSenderEmail("");
+      setStoreName("");
+    }
+  }, [storesResource, selectedStoreId, activeStores]);
+
+  // Synchronize form inputs whenever the selected store changes
+  useEffect(() => {
+    if (selectedStore) {
+      setStoreDomain(selectedStore.shop_domain || "");
+      setCustomDomain(selectedStore.custom_domain || selectedStore.shop_domain.replace(".myshopify.com", ".com"));
+      setSenderEmail(selectedStore.sender_email || `orders@${selectedStore.shop_domain.replace(".myshopify.com", ".com")}`);
+      setStoreName(selectedStore.metadata?.name || "");
+    }
+  }, [selectedStore]);
 
   // Enhanced Test Order Simulator calling backend API (development mode)
   const handleSimulateOrder = async () => {
@@ -131,7 +151,7 @@ export default function ShopifyHubPage() {
     setSimulationResult(null);
     setSimulationError(null);
 
-    const targetShop = storeDomain.trim() || (storesResource.data?.[0]?.shop_domain || "test-store.myshopify.com");
+    const targetShop = storeDomain.trim() || (selectedStore?.shop_domain || "test-store.myshopify.com");
     const targetCustomer = "test-customer@example.com";
     const targetSender = senderEmail.trim() || (customDomain ? `orders@${customDomain}` : "orders@mystore.com");
 
@@ -345,6 +365,50 @@ export default function ShopifyHubPage() {
           </div>
           <div className="text-xs text-slate-700">
             Recipient: <span className="text-slate-900 font-bold">{simulationResult.customer_email}</span> | Folder: <span className="text-emerald-700 uppercase font-bold">{simulationResult.status}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Store Fleet Selector for Agency Accounts */}
+      {storesResource.state === "ready" && activeStores.length > 1 && (
+        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Connected Store Fleet ({activeStores.length} Stores)
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-500 font-mono">Agency Multi-Store Support</span>
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Select active Shopify store">
+            {activeStores.map((s) => {
+              const isCurrent = s.id === selectedStore?.id;
+              const displayName = s.metadata?.name || s.shop_domain;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="tab"
+                  id={`store-tab-${s.id}`}
+                  aria-selected={isCurrent}
+                  onClick={() => setSelectedStoreId(s.id)}
+                  className={`px-3 py-2 text-xs rounded-lg font-mono flex items-center gap-2 transition cursor-pointer shrink-0 border ${
+                    isCurrent
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold shadow-2xs"
+                      : "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200"
+                  }`}
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      isCurrent ? "bg-emerald-600" : "bg-slate-300"
+                    }`}
+                  />
+                  <span>{displayName}</span>
+                  <span className="text-[10px] text-slate-400 font-normal">({s.shop_domain})</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -596,23 +660,28 @@ export default function ShopifyHubPage() {
       <StoreSettingsDrawer
         isOpen={showSettingsDrawer}
         onClose={() => setShowSettingsDrawer(false)}
-        initialStoreName={storeName}
-        initialShopDomain={storeDomain}
-        initialCustomDomain={customDomain}
-        initialSenderEmail={senderEmail}
+        storeId={selectedStore?.id}
+        initialStoreName={selectedStore?.metadata?.name || storeName}
+        initialShopDomain={selectedStore?.shop_domain || storeDomain}
+        initialCustomDomain={selectedStore?.custom_domain || customDomain}
+        initialSenderEmail={selectedStore?.sender_email || senderEmail}
         onSuccess={(updated) => {
           reloadStores();
-          if (updated?.store?.custom_domain) {
-            setCustomDomain(updated.store.custom_domain);
-          }
-          if (updated?.store?.sender_email) {
-            setSenderEmail(updated.store.sender_email);
-          }
-          if (updated?.store?.shop_domain) {
-            setStoreDomain(updated.store.shop_domain);
-          }
-          if (updated?.store?.metadata?.name) {
-            setStoreName(updated.store.metadata.name);
+          if (updated?.disconnected) {
+            setSelectedStoreId(null);
+          } else {
+            if (updated?.store?.custom_domain) {
+              setCustomDomain(updated.store.custom_domain);
+            }
+            if (updated?.store?.sender_email) {
+              setSenderEmail(updated.store.sender_email);
+            }
+            if (updated?.store?.shop_domain) {
+              setStoreDomain(updated.store.shop_domain);
+            }
+            if (updated?.store?.metadata?.name) {
+              setStoreName(updated.store.metadata.name);
+            }
           }
         }}
       />

@@ -722,12 +722,15 @@ class SupabaseService:
             self._in_memory_stores[user_id].insert(0, new_store)
             return new_store
 
-    def get_user_stores(self, user_id: str) -> List[Dict[str, Any]]:
-        """Fetch all connected stores for user."""
+    def get_user_stores(self, user_id: str, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Fetch connected stores for user. Defaults to active stores only."""
         if self._client:
             for table_name in ["shopify_stores", "monitored_stores"]:
                 try:
-                    res = self._client.table(table_name).select("*").eq("user_id", user_id).execute()
+                    query = self._client.table(table_name).select("*").eq("user_id", user_id)
+                    if active_only:
+                        query = query.eq("is_active", True)
+                    res = query.execute()
                     if res.data is not None:
                         return res.data
                 except Exception as e:
@@ -738,7 +741,10 @@ class SupabaseService:
         if not self._allow_in_memory_fallback():
             raise DatabaseUnavailableError("Database client is not connected in production")
 
-        return self._in_memory_stores.get(user_id, [])
+        user_stores = self._in_memory_stores.get(user_id, [])
+        if active_only:
+            return [s for s in user_stores if s.get("is_active", True) is not False]
+        return user_stores
 
     def get_store_by_domain(self, shop_domain: str) -> Optional[Dict[str, Any]]:
         """
@@ -767,6 +773,63 @@ class SupabaseService:
                     if "user_id" not in res_store:
                         res_store["user_id"] = uid
                     return res_store
+        return None
+
+    def disconnect_user_store(self, user_id: str, store_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Soft-deactivate and revoke credentials for a user's store by store_id.
+        Strictly enforces tenant ownership (matches both id and user_id).
+        Returns the updated store record or None if not found or unauthorized.
+        Idempotent: safe to call repeatedly.
+        """
+        if not user_id or not store_id:
+            return None
+
+        clean_uid = str(user_id).strip()
+        clean_sid = str(store_id).strip()
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        updated_record = None
+        if self._client:
+            for table_name in ["shopify_stores", "monitored_stores"]:
+                try:
+                    # Look up store by id and user_id to verify ownership
+                    existing_res = self._client.table(table_name).select("*").eq("id", clean_sid).eq("user_id", clean_uid).execute()
+                    if not (existing_res.data and len(existing_res.data) > 0):
+                        # Fallback: check by shop_domain if store_id passed was shop_domain
+                        existing_res = self._client.table(table_name).select("*").eq("shop_domain", clean_sid.lower()).eq("user_id", clean_uid).execute()
+
+                    if existing_res.data and len(existing_res.data) > 0:
+                        existing = existing_res.data[0]
+                        # Idempotent: already deactivated and revoked
+                        if not existing.get("is_active", True) and existing.get("access_token_encrypted") == "revoked":
+                            return existing
+
+                        matched_id = existing.get("id") or clean_sid
+                        res = self._client.table(table_name).update({
+                            "is_active": False,
+                            "access_token_encrypted": "revoked",
+                            "updated_at": now_iso,
+                        }).eq("id", matched_id).eq("user_id", clean_uid).execute()
+                        if res.data and len(res.data) > 0:
+                            return res.data[0]
+                except Exception as e:
+                    logger.warning(f"Error disconnecting store {clean_sid} in {table_name}: {e}")
+                    if not self._allow_in_memory_fallback():
+                        raise DatabaseUnavailableError(f"Failed to disconnect store in {table_name}: {e}") from e
+
+        # In-memory store fallback
+        if clean_uid in self._in_memory_stores:
+            for store in self._in_memory_stores[clean_uid]:
+                if str(store.get("id")) == clean_sid or store.get("shop_domain") == clean_sid.lower():
+                    store["is_active"] = False
+                    store["access_token_encrypted"] = "revoked"
+                    store["updated_at"] = now_iso
+                    res_store = dict(store)
+                    if "user_id" not in res_store:
+                        res_store["user_id"] = clean_uid
+                    return res_store
+
         return None
 
     def deactivate_store(self, shop_domain: str) -> Optional[Dict[str, Any]]:

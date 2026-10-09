@@ -908,18 +908,67 @@ async def shopify_app_subscriptions_update_webhook(request: Request):
 
 
 @router.get("/stores")
-async def get_shopify_stores(user_id: str = Depends(get_current_user_id)):
+async def get_shopify_stores(
+    active_only: bool = Query(True, description="Filter active stores only"),
+    user_id: str = Depends(get_current_user_id)
+):
     """
     Retrieve authenticated Shopify stores registered for the current merchant.
+    Defaults to returning active stores only.
     Returns HTTP 200 with an empty list [] if no stores have been connected yet.
     """
     try:
         from app.services.supabase_client import supabase_service
-        stores = supabase_service.get_user_stores(user_id)
+        stores = supabase_service.get_user_stores(user_id, active_only=active_only)
         return stores
     except Exception as e:
         logger.error(f"Failed to fetch Shopify stores for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve connected Shopify stores")
+
+
+@router.delete("/stores/{store_id}", status_code=status.HTTP_200_OK)
+async def disconnect_shopify_store(
+    store_id: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Securely disconnect a Shopify store for the current authenticated merchant.
+    Soft-deactivates the store record (is_active=False) and revokes encrypted credentials.
+    Historical audit logs and transactional registries remain intact.
+    Returns HTTP 404 if the store does not exist or belongs to another tenant.
+    Idempotent: repeating disconnect on an already-disconnected store returns HTTP 200.
+    """
+    try:
+        from app.services.supabase_client import supabase_service
+        result = supabase_service.disconnect_user_store(user_id=user_id, store_id=store_id)
+        if not result:
+            logger.warning(
+                f"Unauthorized or missing store disconnect attempt for store_id '{store_id}' by user '{user_id}'",
+                extra={"event_type": "security_store_disconnect_rejected", "store_id": store_id, "user_id": user_id}
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Store with ID '{store_id}' not found or unauthorized for current tenant."
+            )
+
+        shop_domain = result.get("shop_domain")
+        logger.info(
+            f"Successfully disconnected store '{shop_domain}' (ID: {store_id}) for tenant '{user_id}'",
+            extra={"event_type": "store_disconnected", "store_id": store_id, "user_id": user_id}
+        )
+        return {
+            "success": True,
+            "status": "disconnected",
+            "store_id": result.get("id") or store_id,
+            "shop_domain": shop_domain,
+            "message": "Shopify store disconnected successfully and sync credentials revoked."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to disconnect store '{store_id}' for user {user_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to disconnect Shopify store")
+
 
 
 @router.post("/store-settings")

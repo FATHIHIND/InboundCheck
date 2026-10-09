@@ -732,3 +732,200 @@ async def test_store_settings_malformed_shop_domain_rejected():
         })
         assert res.status_code == 400
         assert "Invalid Shopify store domain format" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_disconnect_store_success_soft_deactivates_and_revokes_token():
+    """Milestone 3.1: Merchant can disconnect their store; is_active becomes False, token becomes 'revoked', record preserved."""
+    from app.services.supabase_client import supabase_service
+
+    user_id = "test-dc-success-user"
+    store_id = "store-dc-active-01"
+    supabase_service._in_memory_stores[user_id] = [
+        {
+            "id": store_id,
+            "user_id": user_id,
+            "shop_domain": "merchant-live.myshopify.com",
+            "is_active": True,
+            "access_token_encrypted": "mock_encrypted_secret_token",
+            "metadata": {"name": "Merchant Live Store"},
+        }
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        res = await ac.delete(f"/api/v1/shopify/stores/{store_id}")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["success"] is True
+        assert data["status"] == "disconnected"
+        assert data["store_id"] == store_id
+        assert data["shop_domain"] == "merchant-live.myshopify.com"
+
+        # Verify underlying repository state
+        updated_store = supabase_service._in_memory_stores[user_id][0]
+        assert updated_store["is_active"] is False
+        assert updated_store["access_token_encrypted"] == "revoked"
+        assert "updated_at" in updated_store
+        # Record is preserved, not deleted
+        assert updated_store["id"] == store_id
+        assert updated_store["metadata"]["name"] == "Merchant Live Store"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_store_foreign_store_rejected_with_404_bola():
+    """Milestone 3.2: Cross-tenant disconnect returns 404 without modifying foreign store (BOLA defense)."""
+    from app.services.supabase_client import supabase_service
+
+    victim_uid = "tenant-victim-user"
+    attacker_uid = "tenant-attacker-user"
+    foreign_store_id = "store-victim-99"
+
+    supabase_service._in_memory_stores[victim_uid] = [
+        {
+            "id": foreign_store_id,
+            "user_id": victim_uid,
+            "shop_domain": "victim-brand.myshopify.com",
+            "is_active": True,
+            "access_token_encrypted": "victim_secure_token",
+            "metadata": {"name": "Victim Brand"},
+        }
+    ]
+    supabase_service._in_memory_stores[attacker_uid] = []
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(attacker_uid)) as ac:
+        res = await ac.delete(f"/api/v1/shopify/stores/{foreign_store_id}")
+        assert res.status_code == 404
+        assert "not found or unauthorized" in res.json()["detail"]
+
+        # Ensure victim's store was untouched
+        victim_store = supabase_service._in_memory_stores[victim_uid][0]
+        assert victim_store["is_active"] is True
+        assert victim_store["access_token_encrypted"] == "victim_secure_token"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_store_nonexistent_returns_404():
+    """Milestone 3.3: Attempting to disconnect a non-existent store ID returns 404."""
+    from app.services.supabase_client import supabase_service
+
+    user_id = "test-dc-nonexistent-user"
+    supabase_service._in_memory_stores[user_id] = []
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        res = await ac.delete("/api/v1/shopify/stores/non-existent-store-xyz")
+        assert res.status_code == 404
+        assert "not found or unauthorized" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_disconnect_store_repeated_disconnect_idempotent():
+    """Milestone 3.4: Repeating disconnect on already-inactive store is idempotent (returns 200)."""
+    from app.services.supabase_client import supabase_service
+
+    user_id = "test-dc-idempotent-user"
+    store_id = "store-idemp-01"
+    supabase_service._in_memory_stores[user_id] = [
+        {
+            "id": store_id,
+            "user_id": user_id,
+            "shop_domain": "idemp-brand.myshopify.com",
+            "is_active": True,
+            "access_token_encrypted": "token_initial",
+        }
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        # First disconnect
+        res1 = await ac.delete(f"/api/v1/shopify/stores/{store_id}")
+        assert res1.status_code == 200
+        assert res1.json()["success"] is True
+
+        # Second disconnect
+        res2 = await ac.delete(f"/api/v1/shopify/stores/{store_id}")
+        assert res2.status_code == 200
+        assert res2.json()["success"] is True
+        assert res2.json()["status"] == "disconnected"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_store_preserves_other_tenant_stores():
+    """Milestone 3.5: Multi-store merchant disconnecting one store does not affect other active stores."""
+    from app.services.supabase_client import supabase_service
+
+    user_id = "test-dc-multistore-user"
+    s1_id = "store-multi-01"
+    s2_id = "store-multi-02"
+    supabase_service._in_memory_stores[user_id] = [
+        {
+            "id": s1_id,
+            "user_id": user_id,
+            "shop_domain": "brand-one.myshopify.com",
+            "is_active": True,
+            "access_token_encrypted": "token_store_1",
+        },
+        {
+            "id": s2_id,
+            "user_id": user_id,
+            "shop_domain": "brand-two.myshopify.com",
+            "is_active": True,
+            "access_token_encrypted": "token_store_2",
+        }
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        res = await ac.delete(f"/api/v1/shopify/stores/{s1_id}")
+        assert res.status_code == 200
+
+        stores = supabase_service._in_memory_stores[user_id]
+        store1 = next(s for s in stores if s["id"] == s1_id)
+        store2 = next(s for s in stores if s["id"] == s2_id)
+
+        assert store1["is_active"] is False
+        assert store1["access_token_encrypted"] == "revoked"
+
+        # Store 2 remains completely active with valid credentials
+        assert store2["is_active"] is True
+        assert store2["access_token_encrypted"] == "token_store_2"
+
+
+@pytest.mark.asyncio
+async def test_get_user_stores_excludes_deactivated_stores():
+    """Milestone 3.6: GET /stores returns only active stores by default, can include inactive if active_only=False."""
+    from app.services.supabase_client import supabase_service
+
+    user_id = "test-dc-listing-filter-user"
+    supabase_service._in_memory_stores[user_id] = [
+        {
+            "id": "store-active-1",
+            "user_id": user_id,
+            "shop_domain": "active.myshopify.com",
+            "is_active": True,
+        },
+        {
+            "id": "store-inactive-1",
+            "user_id": user_id,
+            "shop_domain": "inactive.myshopify.com",
+            "is_active": False,
+            "access_token_encrypted": "revoked",
+        }
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers(user_id)) as ac:
+        # Default: active_only=True
+        res_default = await ac.get("/api/v1/shopify/stores")
+        assert res_default.status_code == 200
+        active_list = res_default.json()
+        assert len(active_list) == 1
+        assert active_list[0]["id"] == "store-active-1"
+
+        # Explicit: active_only=false
+        res_all = await ac.get("/api/v1/shopify/stores?active_only=false")
+        assert res_all.status_code == 200
+        all_list = res_all.json()
+        assert len(all_list) == 2

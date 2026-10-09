@@ -12,6 +12,7 @@ import {
   Sliders,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
   Lock
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -24,6 +25,7 @@ interface StoreSettingsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (updatedData?: any) => void;
+  storeId?: string;
   initialStoreName?: string;
   initialShopDomain?: string;
   initialCustomDomain?: string;
@@ -61,6 +63,7 @@ export function StoreSettingsDrawer({
   isOpen,
   onClose,
   onSuccess,
+  storeId,
   initialStoreName = "",
   initialShopDomain = "",
   initialCustomDomain = "",
@@ -77,6 +80,11 @@ export function StoreSettingsDrawer({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Disconnect State
+  const [isConfirmDisconnectOpen, setIsConfirmDisconnectOpen] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+
   // Sync state whenever drawer opens with new props
   useEffect(() => {
     if (isOpen) {
@@ -87,8 +95,11 @@ export function StoreSettingsDrawer({
       setEspProvider(initialEsp || "shopify");
       setErrorMessage(null);
       setSaveSuccess(false);
+      setIsConfirmDisconnectOpen(false);
+      setIsDisconnecting(false);
+      setDisconnectError(null);
     }
-  }, [isOpen, initialStoreName, initialShopDomain, initialCustomDomain, initialSenderEmail, initialEsp]);
+  }, [isOpen, initialStoreName, initialShopDomain, initialCustomDomain, initialSenderEmail, initialEsp, storeId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +112,7 @@ export function StoreSettingsDrawer({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          store_id: storeId,
           store_name: storeName.trim(),
           shop_domain: shopDomain.trim(),
           custom_domain: customDomain.trim().toLowerCase(),
@@ -127,8 +139,44 @@ export function StoreSettingsDrawer({
     }
   };
 
+  // Immutable store disconnect targeting
+  const targetSelector = storeId || initialShopDomain;
+  const targetDisplayName = initialShopDomain || initialStoreName || "Shopify Store";
+  const canDisconnect = Boolean(targetSelector);
+
+  const handleDisconnect = async () => {
+    if (!targetSelector) {
+      setDisconnectError("No valid store identifier found to disconnect.");
+      return;
+    }
+
+    setIsDisconnecting(true);
+    setDisconnectError(null);
+
+    try {
+      const res = await apiFetch(`/api/v1/shopify/stores/${encodeURIComponent(targetSelector)}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Failed to disconnect store.");
+      }
+
+      const data = await res.json();
+      setIsConfirmDisconnectOpen(false);
+      setIsDisconnecting(false);
+      onSuccess({ disconnected: true, ...data });
+      onClose();
+    } catch (err: any) {
+      setIsDisconnecting(false);
+      setDisconnectError(err?.message || "Failed to disconnect store.");
+    }
+  };
+
   return (
-    <AccessibleDialog
+    <>
+      <AccessibleDialog
       isOpen={isOpen}
       onClose={onClose}
       labelledBy="store-drawer-title"
@@ -335,6 +383,43 @@ export function StoreSettingsDrawer({
               Updating your sending profile ensures full Google &amp; Yahoo 2024 Sender Compliance, protecting Order Confirmation Receipts, Tracking Numbers, and Abandoned Cart Recovery emails from silent spam drops.
             </p>
           </div>
+
+          {/* Danger Zone: Disconnect Store */}
+          <div className="p-4 bg-rose-50/70 border border-rose-200 rounded-lg space-y-3">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-rose-950 uppercase tracking-wider">
+                  Danger Zone: Disconnect Store
+                </h4>
+                <p className="text-[11px] text-rose-800 mt-1 leading-relaxed">
+                  Revokes Shopify sync credentials and stops order receipt tracking. DNS monitoring history and your SaaS subscription remain active and unaffected.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-rose-200/80">
+              <div className="text-[11px] text-slate-700">
+                Target: <span className="font-mono font-medium text-slate-900">{canDisconnect ? targetDisplayName : "No active store"}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDisconnectError(null);
+                  setIsConfirmDisconnectOpen(true);
+                }}
+                disabled={!canDisconnect || isDisconnecting || isSaving}
+                className="px-3 py-1.5 text-xs font-semibold text-rose-700 hover:text-white bg-white hover:bg-rose-600 border border-rose-300 hover:border-rose-600 rounded-md transition shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Disconnect Store
+              </button>
+            </div>
+            {!canDisconnect && (
+              <p className="text-[11px] text-slate-500 italic">
+                No active store identifier is currently bound to this drawer to disconnect.
+              </p>
+            )}
+          </div>
         </form>
 
         {/* Drawer Footer Actions */}
@@ -342,7 +427,7 @@ export function StoreSettingsDrawer({
           <button
             type="button"
             onClick={onClose}
-            disabled={isSaving}
+            disabled={isSaving || isDisconnecting}
             className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium px-4 py-2 rounded-md transition cursor-pointer text-xs shadow-2xs"
           >
             Cancel
@@ -351,7 +436,7 @@ export function StoreSettingsDrawer({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSaving}
+            disabled={isSaving || isDisconnecting}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-md transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer text-xs"
           >
             {isSaving ? (
@@ -367,6 +452,74 @@ export function StoreSettingsDrawer({
             )}
           </button>
         </div>
-    </AccessibleDialog>
+      </AccessibleDialog>
+
+      {/* Accessible Confirmation Dialog for Merchant-Initiated Store Disconnection */}
+      <AccessibleDialog
+        isOpen={isConfirmDisconnectOpen}
+        onClose={() => !isDisconnecting && setIsConfirmDisconnectOpen(false)}
+        labelledBy="confirm-disconnect-title"
+        className="z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn"
+        panelClassName="w-full max-w-md bg-white rounded-xl shadow-2xl border border-slate-200 p-6 space-y-4"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0 mt-0.5">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 id="confirm-disconnect-title" className="text-base font-bold text-slate-900">
+              Disconnect {targetDisplayName}?
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Confirm merchant-initiated store disconnection
+            </p>
+          </div>
+        </div>
+
+        <div className="text-xs text-slate-600 space-y-2.5 bg-slate-50 border border-slate-200 rounded-lg p-3.5 leading-relaxed">
+          <p>
+            Disconnecting immediately revokes API synchronization credentials for <strong className="text-slate-900">{targetDisplayName}</strong>.
+          </p>
+          <ul className="list-disc pl-4 space-y-1 text-slate-600">
+            <li><strong>DNS Monitoring History:</strong> Your domain audits, SPF, DKIM, and DMARC history will <em>not</em> be deleted.</li>
+            <li><strong>Subscription Status:</strong> Disconnecting does <em>not</em> cancel your SaaS subscription plan.</li>
+            <li><strong>Reconnection:</strong> You can reconnect this or another store anytime via Shopify OAuth.</li>
+          </ul>
+        </div>
+
+        {disconnectError && (
+          <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{disconnectError}</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setIsConfirmDisconnectOpen(false)}
+            disabled={isDisconnecting}
+            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition cursor-pointer shadow-2xs disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDisconnect}
+            disabled={!canDisconnect || isDisconnecting}
+            className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+          >
+            {isDisconnecting ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Disconnecting...</span>
+              </>
+            ) : (
+              <span>Confirm Disconnect</span>
+            )}
+          </button>
+        </div>
+      </AccessibleDialog>
+    </>
   );
 }
