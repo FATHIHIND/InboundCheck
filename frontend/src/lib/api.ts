@@ -5,7 +5,7 @@
  * and resolves URLs against NEXT_PUBLIC_API_URL.
  */
 
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from "./supabase/client";
 
 // Production Railway backend URL fallback
 const PROD_RAILWAY_URL = "https://inboundcheck-production.up.railway.app";
@@ -110,9 +110,20 @@ export interface ApiFetchErrorDetails {
 }
 
 /**
- * Execute an authenticated HTTP request to the InboundCheck backend.
+ * Default request timeout ceiling (15,000ms / 15 seconds) to prevent unbounded hanging HTTP requests.
  */
-export async function apiFetch(endpoint: string, init: RequestInit = {}): Promise<Response> {
+export const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+
+export interface ApiRequestInit extends RequestInit {
+  timeoutMs?: number;
+}
+
+/**
+ * Execute an authenticated HTTP request to the InboundCheck backend.
+ * Enforces a bounded 15-second default request timeout while safely preserving
+ * and honoring caller-provided AbortSignal cancellation and avoiding resource leaks.
+ */
+export async function apiFetch(endpoint: string, init: ApiRequestInit = {}): Promise<Response> {
   const cleanBase = getApiBaseUrl().replace(/\/+$/, "");
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = endpoint.startsWith("http://") || endpoint.startsWith("https://")
@@ -125,9 +136,45 @@ export async function apiFetch(endpoint: string, init: RequestInit = {}): Promis
 
   const authHeaders = await getAuthHeaders(init.headers as Record<string, string>);
 
+  const { timeoutMs: customTimeout, ...fetchInit } = init;
+  const timeoutMs = typeof customTimeout === "number" && customTimeout > 0
+    ? customTimeout
+    : DEFAULT_REQUEST_TIMEOUT_MS;
+
+  const controller = new AbortController();
+  const callerSignal = init.signal;
+
+  let onCallerAbort: (() => void) | null = null;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      if (callerSignal.reason !== undefined) {
+        controller.abort(callerSignal.reason);
+      } else {
+        controller.abort();
+      }
+    } else {
+      onCallerAbort = () => {
+        if (callerSignal.reason !== undefined) {
+          controller.abort(callerSignal.reason);
+        } else {
+          controller.abort();
+        }
+      };
+      callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+    }
+  }
+
+  const timeoutId = setTimeout(() => {
+    const timeoutErr = typeof DOMException !== "undefined"
+      ? new DOMException(`Request timed out after ${timeoutMs}ms`, "TimeoutError")
+      : Object.assign(new Error(`Request timed out after ${timeoutMs}ms`), { name: "TimeoutError" });
+    controller.abort(timeoutErr);
+  }, timeoutMs);
+
   try {
     const res = await fetch(url, {
-      ...init,
+      ...fetchInit,
+      signal: controller.signal,
       headers: {
         "X-Request-ID": requestId,
         ...authHeaders,
@@ -142,6 +189,11 @@ export async function apiFetch(endpoint: string, init: RequestInit = {}): Promis
       error: networkErr,
     });
     throw networkErr;
+  } finally {
+    clearTimeout(timeoutId);
+    if (callerSignal && onCallerAbort) {
+      callerSignal.removeEventListener("abort", onCallerAbort);
+    }
   }
 }
 
