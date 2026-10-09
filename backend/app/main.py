@@ -277,6 +277,7 @@ app.include_router(failover_webhooks_router)
 
 
 @app.get("/health", tags=["Health Checks"])
+@app.head("/health", tags=["Health Checks"], include_in_schema=False)
 async def health_check():
     """Liveness probe verifying that the Python process and event loop are responsive."""
     return {
@@ -289,7 +290,9 @@ async def health_check():
 
 
 @app.get("/ready", tags=["Health Checks"])
+@app.head("/ready", tags=["Health Checks"], include_in_schema=False)
 @app.get(f"{settings.API_V1_STR}/health", tags=["Health Checks"])
+@app.head(f"{settings.API_V1_STR}/health", tags=["Health Checks"], include_in_schema=False)
 async def readiness_check():
     """Readiness probe verifying operational status and core dependencies."""
     from app.services.supabase_client import supabase_service

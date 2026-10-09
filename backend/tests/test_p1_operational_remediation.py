@@ -53,6 +53,41 @@ async def test_ops01_health_probes_immune_to_rate_limiting():
 
 
 @pytest.mark.asyncio
+async def test_ops01_health_and_ready_support_head_requests():
+    """
+    Verify /health, /ready, and /api/v1/health support HTTP HEAD requests (GAP-37).
+    Confirms 200 OK status, proper headers, and empty body per RFC 9110.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        for path in ["/health", "/ready", f"{settings.API_V1_STR}/health"]:
+            res = await ac.head(path)
+            assert res.status_code == 200
+            assert res.text == "", f"Expected empty body for HEAD {path}, got {res.text}"
+            assert "content-type" in res.headers
+
+
+@pytest.mark.asyncio
+async def test_ops01_ready_head_request_propagates_503_on_db_outage(monkeypatch):
+    """
+    Verify HTTP HEAD /ready accurately returns 503 Service Unavailable with empty body
+    during a simulated production database outage (GAP-37).
+    """
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    with patch.object(supabase_service, "check_db_health", return_value=False), \
+         patch.object(supabase_service, "_allow_in_memory_fallback", return_value=False):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res_ready = await ac.head("/ready")
+            assert res_ready.status_code == 503
+            assert res_ready.text == ""
+
+            res_v1 = await ac.head(f"{settings.API_V1_STR}/health")
+            assert res_v1.status_code == 503
+            assert res_v1.text == ""
+
+
+@pytest.mark.asyncio
 async def test_ops01_non_exempt_endpoints_enforce_rate_limit():
     """
     Verify that rate limiting is still strictly enforced on standard non-exempt endpoints.
