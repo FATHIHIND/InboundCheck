@@ -7,6 +7,7 @@ Entrypoint for launching dedicated, distributed background worker processes:
 - `python -m app.workers.runner all`
 """
 
+import os
 import sys
 import asyncio
 import logging
