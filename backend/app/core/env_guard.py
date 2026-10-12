@@ -8,7 +8,8 @@ are present and not containing raw developer placeholders.
 
 from typing import List, Dict, Any, Tuple
 import logging
-from app.core.config import settings
+import urllib.parse
+import re
 
 logger = logging.getLogger("EnvGuard")
 
@@ -30,18 +31,76 @@ def check_is_placeholder(val: str) -> bool:
     return any(p in lower for p in PLACEHOLDER_SUBSTRINGS)
 
 
+def sanitize_exception(exc: Any) -> str:
+    """Mask common sensitive patterns in exceptions without leaking secrets."""
+    msg = str(exc).strip()
+    msg = re.sub(r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+", r"\1=[REDACTED]", msg, flags=re.IGNORECASE)
+    return msg[:500] if len(msg) > 500 else (msg or "Unknown error")
+
+
+def validate_supabase_url(raw_url: str, is_prod: bool = False) -> Tuple[bool, List[str], str]:
+    """
+    Validate Supabase URL with strict control character and format enforcement.
+    Returns (is_valid: bool, issues: List[str], normalized_url: str).
+    """
+    issues: List[str] = []
+    if not raw_url:
+        return False, ["SUPABASE_URL is missing or empty."], ""
+
+    # 1. Reject ASCII control characters (0x00-0x1F, 0x7F) anywhere in raw string (CR, LF, NUL, tabs)
+    if any(ord(c) < 32 or ord(c) == 127 for c in raw_url):
+        return False, ["SUPABASE_URL contains invalid ASCII control characters (e.g. CR, LF, NUL)."], ""
+
+    # 2. Deliberate outer space normalization (strictly spaces, no embedded control chars)
+    normalized_url = raw_url.strip(" ").rstrip("/")
+
+    # 3. Placeholder checks
+    if check_is_placeholder(normalized_url):
+        issues.append("SUPABASE_URL contains placeholder values.")
+        return False, issues, ""
+
+    # 4. Strict URL structure parsing
+    try:
+        parsed = urllib.parse.urlparse(normalized_url)
+    except Exception:
+        issues.append("SUPABASE_URL is not a parseable URL.")
+        return False, issues, ""
+
+    # 5. Protocol / Scheme checks
+    scheme = (parsed.scheme or "").lower()
+    if is_prod and scheme != "https":
+        issues.append("SUPABASE_URL must use HTTPS in production.")
+    elif not is_prod and scheme not in ("http", "https"):
+        issues.append("SUPABASE_URL must use http or https protocol.")
+
+    # 6. Host / netloc checks
+    host = (parsed.netloc or "").lower()
+    if not host:
+        issues.append("SUPABASE_URL is missing a valid host.")
+    elif "." not in host and host != "localhost":
+        issues.append("SUPABASE_URL host is invalid or missing domain suffix.")
+
+    # 7. Disallow query parameters or URL fragments
+    if parsed.query or parsed.fragment:
+        issues.append("SUPABASE_URL must not contain query parameters or fragments.")
+
+    return len(issues) == 0, issues, normalized_url if len(issues) == 0 else ""
+
+
 def validate_runtime_environment() -> Tuple[bool, List[str]]:
     """
     Validate backend environment variables.
     Returns (is_valid: bool, issues: List[str]).
     Raises RuntimeError in production if critical security/billing credentials are missing.
     """
+    from app.core.config import settings
+
     issues: List[str] = []
     is_prod = settings.ENVIRONMENT.lower() in ["production", "prod"]
 
     # 1. Supabase Backend Persistence Checks
-    if not settings.SUPABASE_URL or check_is_placeholder(settings.SUPABASE_URL):
-        issues.append("SUPABASE_URL is missing or contains placeholder values.")
+    url_valid, url_issues, _ = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
+    issues.extend(url_issues)
 
     service_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY
     if not service_key or check_is_placeholder(service_key):
@@ -91,5 +150,42 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
             logger.warning(f"Development Environment Notice:\n{msg}")
     else:
         logger.info(f"Environment integrity verified for mode: {settings.ENVIRONMENT}")
+
+    return is_valid, issues
+
+
+def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
+    """
+    Validate environment variables required for dedicated background workers.
+    Enforces fail-fast persistence and security integrity without requiring
+    unrelated API HTTP/JWT or Stripe monetization keys.
+
+    Returns (is_valid: bool, issues: List[str]).
+    Raises RuntimeError in production if critical database credentials are missing.
+    """
+    from app.core.config import settings
+
+    issues: List[str] = []
+    is_prod = settings.ENVIRONMENT.lower() in ["production", "prod"]
+
+    # 1. Supabase Backend Persistence Checks
+    url_valid, url_issues, _ = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
+    issues.extend(url_issues)
+
+    # Explicitly require service-role key for background worker cross-tenant RPC operations
+    if not settings.SUPABASE_SERVICE_ROLE_KEY or check_is_placeholder(settings.SUPABASE_SERVICE_ROLE_KEY):
+        issues.append("SUPABASE_SERVICE_ROLE_KEY is unconfigured or placeholder.")
+
+    is_valid = len(issues) == 0
+
+    if not is_valid:
+        msg = "Worker Environment Integrity Issues Detected:\n" + "\n".join([f"  • {i}" for i in issues])
+        if is_prod:
+            logger.critical(f"FAIL-FAST ABORT: {msg}")
+            raise RuntimeError(f"Production Worker Environment Integrity Failure:\n{msg}")
+        else:
+            logger.warning(f"Development Worker Environment Notice:\n{msg}")
+    else:
+        logger.info(f"Worker environment integrity verified for mode: {settings.ENVIRONMENT}")
 
     return is_valid, issues

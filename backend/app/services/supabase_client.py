@@ -16,6 +16,7 @@ from datetime import datetime, date, timezone, timedelta
 from supabase import create_client, Client
 
 from app.core.config import settings
+from app.core.env_guard import validate_supabase_url, sanitize_exception
 
 logger = logging.getLogger("SupabaseService")
 
@@ -79,15 +80,23 @@ class SupabaseService:
         self._in_memory_ai_telemetry: Dict[str, Dict[str, Any]] = {}
         self._in_memory_lock = threading.Lock()
 
-        if settings.SUPABASE_URL and (settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY):
+        is_prod = (getattr(settings, "ENVIRONMENT", "") or "").lower() in ["production", "prod"]
+        url_valid, url_issues, clean_url = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
+
+        raw_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY
+        clean_key = raw_key.strip(" ") if raw_key else ""
+
+        if url_valid and clean_url and clean_key:
             try:
-                key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY
-                self._client = create_client(settings.SUPABASE_URL, key)
+                self._client = create_client(clean_url, clean_key)
                 logger.info("Supabase client successfully initialized.")
             except Exception as e:
-                logger.warning(f"Could not connect to Supabase: {e}. Falling back to memory storage.")
+                logger.warning(f"Could not connect to Supabase: {sanitize_exception(e)}. Falling back to memory storage.")
         else:
-            logger.info("Supabase credentials not configured in env. Running with in-memory persistence.")
+            if not self._allow_in_memory_fallback():
+                logger.error(f"Supabase credentials invalid or missing in production: {'; '.join(url_issues) if url_issues else 'Missing key'}. Client initialization rejected.")
+            else:
+                logger.info("Supabase credentials not configured in env. Running with in-memory persistence.")
 
     def _allow_in_memory_fallback(self) -> bool:
         """Allow in-memory fallback strictly in local development or automated test environments."""
@@ -1127,10 +1136,16 @@ class SupabaseService:
                         "p_lease_duration": lease_str,
                     },
                 ).execute()
-                if res.data:
+                if res.data is not None:
                     return res.data
             except Exception as e:
-                logger.warning(f"Could not execute claim_due_domain_audits RPC: {e}. Checking in-memory fallback.")
+                sanitized_e = sanitize_exception(e)
+                logger.error(f"Could not execute claim_due_domain_audits RPC: {sanitized_e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database RPC claim_due_domain_audits failed in production: {sanitized_e}") from e
+                logger.warning("Falling back to in-memory lease claiming for test/development.")
+        elif not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
 
         # In-memory lease claiming fallback
         claimed: List[Dict[str, Any]] = []
@@ -1452,8 +1467,14 @@ class SupabaseService:
                     ).execute()
                     if response.data is not None:
                         return response.data
-                except Exception:
-                    logger.warning(f"Could not claim delivery failure events RPC: {exc}. Checking in-memory fallback.")
+                except Exception as fallback_exc:
+                    sanitized_exc = sanitize_exception(fallback_exc or exc)
+                    logger.error(f"Could not claim delivery failure events RPC: {sanitized_exc}")
+                    if not self._allow_in_memory_fallback():
+                        raise DatabaseUnavailableError(f"Database RPC claim_pending_delivery_failure_events failed in production: {sanitized_exc}") from fallback_exc
+                    logger.warning("Falling back to in-memory delivery failure events for test/development.")
+        elif not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
 
         # In-memory lease claiming & stale recovery fallback
         claimed: List[Dict[str, Any]] = []

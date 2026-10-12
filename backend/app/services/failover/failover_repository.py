@@ -75,6 +75,10 @@ class FailoverRepository:
                         return res.data
                 except Exception as fallback_err:
                     logger.warning(f"Could not execute claim RPC fallback: {fallback_err}")
+                    if not self.supabase._allow_in_memory_fallback():
+                        from app.services.supabase_client import DatabaseUnavailableError
+                        from app.core.env_guard import sanitize_exception
+                        raise DatabaseUnavailableError(f"Database RPC claim_pending_delivery_failure_events failed in production: {sanitize_exception(fallback_err or e)}") from fallback_err
 
         # In-memory fallback for local development and testing
         return self.supabase.claim_pending_delivery_failure_events(

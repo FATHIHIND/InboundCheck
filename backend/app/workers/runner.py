@@ -13,9 +13,7 @@ import logging
 import signal
 from typing import Optional
 
-from app.core.env_guard import validate_runtime_environment
-from app.workers.audit_worker import run_audit_worker
-from app.workers.failover_worker import run_failover_worker
+from app.core.env_guard import validate_worker_runtime_environment
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,9 +23,41 @@ logging.basicConfig(
 logger = logging.getLogger("WorkerRunner")
 
 
-async def main(worker_type: str = "audit"):
+async def run_audit_worker(*args, **kwargs):
+    """Lazy delegation to audit worker preventing module-level client instantiation."""
+    from app.workers.audit_worker import run_audit_worker as _impl
+    return await _impl(*args, **kwargs)
+
+
+async def run_failover_worker(*args, **kwargs):
+    """Lazy delegation to failover worker preventing module-level client instantiation."""
+    from app.workers.failover_worker import run_failover_worker as _impl
+    return await _impl(*args, **kwargs)
+
+
+async def main(
+    worker_type: str = "audit",
+    is_staging_authorized: bool = False,
+    once: bool = False,
+    limit: int = 25,
+):
+    import os
+
+    # Fail closed if staging is requested directly through runner.py
+    is_staging_requested = (
+        os.environ.get("ENVIRONMENT", "").strip().lower() == "staging"
+        or any(arg.startswith("--staging") for arg in sys.argv)
+    )
+
+    if is_staging_requested and not is_staging_authorized:
+        from app.core.staging_guard import StagingIsolationError
+        raise StagingIsolationError(
+            "Direct staging worker execution via runner.py is forbidden to guarantee isolated environment bootstrap. "
+            "Use dedicated staging runner instead: python -m app.workers.staging_runner [worker_type]"
+        )
+
     # Fail-Fast Runtime Environment Integrity Validation
-    validate_runtime_environment()
+    validate_worker_runtime_environment()
 
     stop_event = asyncio.Event()
 
@@ -46,16 +76,16 @@ async def main(worker_type: str = "audit"):
             # Windows signal handler fallback
             signal.signal(sig, lambda s, f: stop_event.set())
 
-    logger.info(f"Launching InboundCheck worker process [Type: {worker_type}]...")
+    logger.info(f"Launching InboundCheck worker process [Type: {worker_type}, Once: {once}, Limit: {limit}]...")
 
     try:
         if worker_type == "audit":
-            await run_audit_worker(stop_event=stop_event)
+            await run_audit_worker(stop_event=stop_event, limit=limit, once=once)
         elif worker_type == "failover":
             await run_failover_worker(stop_event=stop_event)
         elif worker_type == "all":
             await asyncio.gather(
-                run_audit_worker(stop_event=stop_event),
+                run_audit_worker(stop_event=stop_event, limit=limit, once=once),
                 run_failover_worker(stop_event=stop_event),
             )
         else:
@@ -68,7 +98,20 @@ async def main(worker_type: str = "audit"):
 
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "audit"
+    target = "audit"
+    for arg in sys.argv[1:]:
+        if not arg.startswith("--"):
+            target = arg
+            break
+
+    # Fail closed immediately if staging is requested via CLI arguments or environment
+    if any(arg.startswith("--staging") for arg in sys.argv) or os.environ.get("ENVIRONMENT", "").strip().lower() == "staging":
+        logger.critical(
+            "Direct staging worker execution via runner.py is forbidden. "
+            "Use dedicated staging runner instead: python -m app.workers.staging_runner [worker_type]"
+        )
+        sys.exit(2)
+
     try:
         asyncio.run(main(target))
     except (KeyboardInterrupt, SystemExit):

@@ -188,14 +188,16 @@ async def run_audit_worker(
     limit: int = 25,
     interval_seconds: int = 3600,
     lease_seconds: int = 900,
-    idle_sleep_seconds: int = 30
+    idle_sleep_seconds: int = 30,
+    once: bool = False
 ) -> None:
     """
-    Continuous audit worker loop claiming due domains atomically.
+    Audit worker loop claiming due domains atomically.
+    Supports continuous daemon operation and single-cycle bounded execution via once=True.
     Supports graceful termination via stop_event.
     """
     worker_id = str(uuid.uuid4())
-    logger.info(f"Audit worker started [Worker ID: {worker_id}] (interval: {interval_seconds}s, lease: {lease_seconds}s)")
+    logger.info(f"Audit worker started [Worker ID: {worker_id}] (interval: {interval_seconds}s, lease: {lease_seconds}s, once: {once})")
 
     while stop_event is None or not stop_event.is_set():
         try:
@@ -209,6 +211,9 @@ async def run_audit_worker(
 
             if not domains:
                 logger.debug("No domains due for audit. Sleeping...")
+                if once:
+                    logger.info("Single-cycle audit mode: zero domains claimed. Exiting.")
+                    break
                 # Interruptible sleep
                 for _ in range(idle_sleep_seconds):
                     if stop_event and stop_event.is_set():
@@ -222,6 +227,10 @@ async def run_audit_worker(
             async with asyncio.TaskGroup() as group:
                 for domain in domains:
                     group.create_task(audit_claimed_domain(domain, worker_id))
+
+            if once:
+                logger.info(f"Single-cycle audit mode: batch of {len(domains)} domain(s) processed. Exiting cleanly.")
+                break
 
         except Exception as e:
             logger.error(f"Unexpected error in audit worker loop: {e}", exc_info=True)
@@ -238,6 +247,9 @@ async def run_audit_worker(
                 )
             except Exception as alert_err:
                 logger.warning(f"Failed to dispatch audit worker ops alert: {alert_err}")
+            if once:
+                logger.info("Single-cycle audit mode: loop exception encountered. Exiting cleanly.")
+                break
             await asyncio.sleep(5)
 
     logger.info(f"Audit worker {worker_id} stopped cleanly.")
