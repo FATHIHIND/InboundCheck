@@ -49,7 +49,9 @@ def test_concurrent_workers_claim_disjoint_domains():
         {"id": f"dom_2_{uuid.uuid4()}", "user_id": user_id, "domain_name": "beta.com", "is_active": True, "last_audited_at": now_past},
         {"id": f"dom_3_{uuid.uuid4()}", "user_id": user_id, "domain_name": "gamma.com", "is_active": True, "last_audited_at": now_past},
     ]
+    orig_client = supabase_service._client
     orig_domains = dict(supabase_service._in_memory_domains)
+    supabase_service._client = None
     try:
         supabase_service._in_memory_domains = {user_id: domains}
 
@@ -66,6 +68,7 @@ def test_concurrent_workers_claim_disjoint_domains():
         # Disjoint assertion: No overlap between workers
         assert ids_1.isdisjoint(ids_2), "Concurrent workers must never receive overlapping jobs"
     finally:
+        supabase_service._client = orig_client
         supabase_service._in_memory_domains = orig_domains
 
 
@@ -87,7 +90,9 @@ def test_worker_crash_and_lease_expiration_recovery():
         "audit_lease_owner": worker_crashed,
         "audit_lease_until": past_lease,
     }
+    orig_client = supabase_service._client
     orig_domains = dict(supabase_service._in_memory_domains)
+    supabase_service._client = None
     try:
         supabase_service._in_memory_domains = {user_id: [domain]}
 
@@ -97,6 +102,7 @@ def test_worker_crash_and_lease_expiration_recovery():
         assert claimed[0]["id"] == dom_id
         assert domain["audit_lease_owner"] == worker_rescuer
     finally:
+        supabase_service._client = orig_client
         supabase_service._in_memory_domains = orig_domains
 
 
@@ -209,25 +215,39 @@ async def test_ai_content_optimizer_resilience_to_external_llm_timeout():
 @pytest.mark.asyncio
 async def test_telegram_alert_service_resilience_to_telegram_500():
     """Verify that a 500 error from Telegram Bot API is captured as a clean error without crashing."""
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = Response(500, text="Internal Telegram API Error")
+    telegram_alert_service.update_config(
+        "test-resilience-user",
+        {
+            "is_enabled": True,
+            "telegram_bot_token": "9876543210:AAH8Fj90qWz1x9_liveTestTokenSafe123",
+            "telegram_chat_id": "-100987654321",
+        }
+    )
+    try:
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = Response(500, text="Internal Telegram API Error")
 
-        context = TelegramIncidentContext(
-            delivery_failure_event_id=str(uuid.uuid4()),
-            user_id="test-resilience-user",
-            order_id="#9999",
-            domain_name="resilience.com",
-            store_name="Test Store",
-            esp_provider="postmark",
-            failure_type="bounce",
-            failure_reason="550 Mailbox not found",
-            recommended_dns_action="Check SPF",
-            occurred_at=datetime.now(timezone.utc),
-        )
+            context = TelegramIncidentContext(
+                delivery_failure_event_id=str(uuid.uuid4()),
+                user_id="test-resilience-user",
+                order_id="#9999",
+                domain_name="resilience.com",
+                store_name="Test Store",
+                esp_provider="postmark",
+                failure_type="bounce",
+                failure_reason="550 Mailbox not found",
+                recommended_dns_action="Check SPF",
+                occurred_at=datetime.now(timezone.utc),
+            )
 
-        res = await telegram_alert_service.dispatch_alert(context)
-        assert res.success is False
-        assert "500" in res.error_message or "Error" in res.error_message
+            res = await telegram_alert_service.dispatch_alert(context)
+            assert mock_post.called
+            assert res.success is False
+            assert "500" in res.error_message or "Error" in res.error_message
+    finally:
+        from app.services.failover.omnichannel_service import _mock_failover_configs
+        _mock_failover_configs.pop("test-resilience-user", None)
+
 
 
 @pytest.mark.asyncio

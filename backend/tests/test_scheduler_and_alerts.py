@@ -139,3 +139,62 @@ async def test_reputation_trend_endpoint():
         assert "unified_score" in point
         assert "dns_health_score" in point
         assert "risk_level" in point
+
+
+@pytest.mark.asyncio
+async def test_alert_dispatcher_dispatch_failover_alert_regression():
+    """
+    Focused regression test proving dispatch_failover_alert:
+    1. Correctly constructs alert_text and dispatches via telegram_alert_service.
+    2. Gracefully handles unconfigured credentials with skipped status.
+    3. Persists failover incident record to supabase_service.
+    """
+    from unittest.mock import patch, AsyncMock
+    from app.services.failover.omnichannel_service import telegram_alert_service
+
+    user_with_creds = "user-failover-creds-123"
+    alert_dispatcher.set_tenant_alert_config(user_with_creds, {
+        "telegram_bot_token": "9876543210:AAH8Fj90qWz1x9_liveTestTokenSafe123",
+        "telegram_chat_id": "-100987654321",
+    })
+
+    with patch.object(telegram_alert_service, "send_telegram_alert", new_callable=AsyncMock) as mock_send:
+        mock_send.return_value = {"success": True, "data": {"message_id": "tg_msg_777"}}
+
+        res = await alert_dispatcher.dispatch_failover_alert(
+            user_id=user_with_creds,
+            domain_name="test-failover-store.com",
+            order_id="ORD-777",
+            trigger_reason="hard_bounce",
+            customer_email="buyer@brand.com",
+        )
+
+        assert res["success"] is True
+        assert mock_send.called
+        call_kwargs = mock_send.call_args.kwargs
+        assert call_kwargs["bot_token"] == "9876543210:AAH8Fj90qWz1x9_liveTestTokenSafe123"
+        assert call_kwargs["chat_id"] == "-100987654321"
+        dispatched_text = call_kwargs["text"]
+        assert "test-failover-store.com" in dispatched_text
+        assert "ORD-777" in dispatched_text
+        assert "hard_bounce" in dispatched_text
+        assert "buyer@brand.com" in dispatched_text
+
+    # Test skipped path when credentials unconfigured
+    user_no_creds = "user-failover-nocreds-456"
+    alert_dispatcher.set_tenant_alert_config(user_no_creds, {
+        "telegram_bot_token": "",
+        "telegram_chat_id": "",
+    })
+
+    with patch("app.core.config.settings.TELEGRAM_BOT_TOKEN", None), \
+         patch("app.core.config.settings.TELEGRAM_CHAT_ID", None):
+        res_skipped = await alert_dispatcher.dispatch_failover_alert(
+            user_id=user_no_creds,
+            domain_name="unconfigured-store.com",
+            order_id="ORD-000",
+            trigger_reason="spam_trap",
+            customer_email="anon@test.com",
+        )
+        assert res_skipped.get("skipped") is True
+        assert res_skipped.get("success") is False

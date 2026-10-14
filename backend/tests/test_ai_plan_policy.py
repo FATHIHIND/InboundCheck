@@ -28,6 +28,31 @@ from app.services.ai.plan_policy import (
 )
 from app.services.supabase_client import supabase_service
 from tests.conftest import auth_headers, create_test_jwt
+from app.core.rate_limiter import _FALLBACK_STORES
+
+
+@pytest.fixture(autouse=True)
+def isolate_ai_policy_environment():
+    """Ensure AI plan policy and rate limiter tests are isolated from live database and shared state."""
+    orig_client = supabase_service._client
+    orig_rate_limits = dict(supabase_service._in_memory_rate_limits)
+    orig_monthly = dict(supabase_service._in_memory_ai_monthly_usage)
+    orig_concurrency = dict(supabase_service._in_memory_ai_concurrency_leases)
+    orig_telemetry = dict(supabase_service._in_memory_ai_telemetry)
+    orig_fallback_ai = dict(_FALLBACK_STORES.get("ai", {}))
+
+    supabase_service._client = None
+    supabase_service._in_memory_rate_limits.clear()
+    _FALLBACK_STORES.setdefault("ai", {}).clear()
+
+    yield
+
+    supabase_service._client = orig_client
+    supabase_service._in_memory_rate_limits = orig_rate_limits
+    supabase_service._in_memory_ai_monthly_usage = orig_monthly
+    supabase_service._in_memory_ai_concurrency_leases = orig_concurrency
+    supabase_service._in_memory_ai_telemetry = orig_telemetry
+    _FALLBACK_STORES["ai"] = orig_fallback_ai
 
 
 # =============================================================================

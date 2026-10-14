@@ -182,14 +182,18 @@ class AlertDispatcherService:
         )
 
         # Dispatch Telegram alert using tenant's token or global fallback
-        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN or "7198234891:AAH8Fj90qWz1x9_example"
-        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID or "@inboundcheck_alerts"
+        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN
+        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID
 
-        telegram_res = await telegram_alert_service.send_telegram_alert(
-            bot_token=bot_token,
-            chat_id=chat_id,
-            text=alert_text
-        )
+        if not bot_token or not chat_id:
+            logger.info(f"Telegram alert skipped for {domain_name}: credentials not configured.")
+            telegram_res = {"success": False, "skipped": True, "error": "Telegram Bot Token and Chat ID not configured."}
+        else:
+            telegram_res = await telegram_alert_service.send_telegram_alert(
+                bot_token=bot_token,
+                chat_id=chat_id,
+                text=alert_text
+            )
 
         # Optional Email Notification Dispatch logging
         email_dispatched = False
@@ -222,8 +226,8 @@ class AlertDispatcherService:
         Dispatch critical administrative alert when an omnichannel fallback receipt is activated.
         """
         config = self.get_tenant_alert_config(user_id)
-        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN or "7198234891:AAH8Fj90qWz1x9_example"
-        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID or "@inboundcheck_alerts"
+        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN
+        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID
 
         alert_text = (
             f"⚡ *INBOUNDCHECK OMNICHANNEL FAILOVER TRIGGERED*\n\n"
@@ -235,11 +239,15 @@ class AlertDispatcherService:
             f"👉 [Review Failover Logs]({settings.FRONTEND_URL}/dashboard/shopify)"
         )
 
-        res = await telegram_alert_service.send_telegram_alert(
-            bot_token=bot_token,
-            chat_id=chat_id,
-            text=alert_text
-        )
+        if not bot_token or not chat_id:
+            logger.info("Failover alert skipped: Telegram credentials not configured.")
+            res = {"success": False, "skipped": True, "error": "Telegram Bot Token and Chat ID not configured."}
+        else:
+            res = await telegram_alert_service.send_telegram_alert(
+                bot_token=bot_token,
+                chat_id=chat_id,
+                text=alert_text
+            )
 
         # Persist incident record in failover_logs
         dispatch_status = "delivered" if res.get("success") else "failed"

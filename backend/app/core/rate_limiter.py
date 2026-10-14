@@ -14,6 +14,7 @@ import asyncio
 import ipaddress
 import logging
 import os
+import threading
 import time
 from typing import Optional, Set, Tuple, Dict, Any
 from fastapi import Request, HTTPException, status, Depends
@@ -30,8 +31,19 @@ _FALLBACK_STORES: Dict[str, Dict[str, int]] = {
     "ai": {},
     "dns": {},
     "rbl": {},
+    "manual_domain_audit": {},
+    "manual_user_audit": {},
     "manual_audit": {},
 }
+_FALLBACK_LOCK = threading.Lock()
+
+
+def reset_rate_limiter_stores() -> None:
+    """Helper for test isolation: safely clears all in-memory fallback stores."""
+    with _FALLBACK_LOCK:
+        for store in _FALLBACK_STORES.values():
+            store.clear()
+
 
 
 def get_trusted_proxy_sources() -> Tuple[Set[str], list]:
@@ -136,30 +148,36 @@ class EndpointRateLimiter:
         self.window_seconds = window_seconds
         self.conservative_fallback_max = conservative_fallback_max
 
-    def _check_fallback(self, key: str, max_allowed: Optional[int] = None) -> bool:
+    def _check_fallback(self, key: str, max_allowed: Optional[int] = None) -> Tuple[bool, int]:
         """
         Conservative local fallback when distributed storage is unreachable.
         Enforces conservative_fallback_max requests per minute before failing closed.
+        Returns (allowed: bool, reset_seconds: int).
         """
         effective_limit = max_allowed if max_allowed is not None else self.conservative_fallback_max
         now_ts = int(time.time())
         window_start = (now_ts // self.window_seconds) * self.window_seconds
-        store = _FALLBACK_STORES.setdefault(self.name, {})
+        reset_seconds = max(1, (window_start + self.window_seconds) - now_ts)
 
-        bucket_key = f"{key}:{window_start}"
-        current = store.get(bucket_key, 0) + 1
-        store[bucket_key] = current
+        with _FALLBACK_LOCK:
+            store = _FALLBACK_STORES.setdefault(self.name, {})
+            bucket_key = f"{key}:{window_start}"
+            current = store.get(bucket_key, 0) + 1
+            store[bucket_key] = current
 
-        # Prune old window entries
-        cutoff = now_ts - (self.window_seconds * 2)
-        for k in list(store.keys()):
-            try:
-                if int(k.split(":")[-1]) < cutoff:
-                    store.pop(k, None)
-            except Exception:
-                pass
+            # Prune old window entries safely
+            cutoff = now_ts - (self.window_seconds * 2)
+            stale_keys = []
+            for k in list(store.keys()):
+                try:
+                    if int(k.split(":")[-1]) < cutoff:
+                        stale_keys.append(k)
+                except (ValueError, TypeError, IndexError):
+                    pass
+            for k in stale_keys:
+                store.pop(k, None)
 
-        return current <= effective_limit
+        return (current <= effective_limit), reset_seconds
 
     def check(
         self,
@@ -182,8 +200,9 @@ class EndpointRateLimiter:
                 max_requests=effective_max,
                 window_seconds=self.window_seconds,
             )
-            if not result.get("allowed", True):
-                reset_sec = result.get("reset_seconds", self.window_seconds)
+            if not isinstance(result, dict) or result.get("allowed") is not True:
+                raw_reset = result.get("reset_seconds") if isinstance(result, dict) else None
+                reset_sec = max(1, int(raw_reset or self.window_seconds))
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"Rate limit exceeded for {self.name}. Please retry in {reset_sec} seconds.",
@@ -197,14 +216,15 @@ class EndpointRateLimiter:
                 f"Engaging conservative local fallback (limit: {effective_fallback_max}/min)."
             )
             # Differentiated failure policy: Bounded conservative fallback, never unlimited
-            if not self._check_fallback(identity_key, max_allowed=effective_fallback_max):
+            allowed, fallback_reset_sec = self._check_fallback(identity_key, max_allowed=effective_fallback_max)
+            if not allowed:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=(
                         f"Rate limit service temporarily degraded for {self.name}. "
                         "Request rejected under conservative safety budget."
                     ),
-                    headers={"Retry-After": str(self.window_seconds)},
+                    headers={"Retry-After": str(fallback_reset_sec)},
                 )
 
     async def check_async(

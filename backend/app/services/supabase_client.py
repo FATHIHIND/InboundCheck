@@ -1817,20 +1817,34 @@ class SupabaseService:
                     },
                 ).execute()
                 if res.data and isinstance(res.data, dict):
-                    return res.data
+                    data = dict(res.data)
+                    data["reset_seconds"] = max(1, int(data.get("reset_seconds") or reset_seconds))
+                    return data
             except Exception as e:
-                logger.warning(f"Could not execute consume_rate_limit RPC: {e}. Falling back to in-memory.")
+                sanitized_e = sanitize_exception(e)
+                logger.warning(f"Could not execute consume_rate_limit RPC: {sanitized_e}. Falling back to in-memory.")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database RPC consume_rate_limit failed in production: {sanitized_e}") from e
+        elif not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
 
-        # In-memory token counter fallback
-        cache_key = f"{bucket_key}:{window_start}"
-        current = self._in_memory_rate_limits.get(cache_key, 0) + 1
-        self._in_memory_rate_limits[cache_key] = current
+        # In-memory token counter fallback with multithread lock
+        with self._in_memory_lock:
+            cache_key = f"{bucket_key}:{window_start}"
+            current = self._in_memory_rate_limits.get(cache_key, 0) + 1
+            self._in_memory_rate_limits[cache_key] = current
 
-        # Prune expired in-memory buckets
-        cutoff = now_ts - (window_seconds * 2)
-        stale_keys = [k for k in list(self._in_memory_rate_limits.keys()) if int(k.split(":")[-1]) < cutoff]
-        for k in stale_keys:
-            self._in_memory_rate_limits.pop(k, None)
+            # Prune expired in-memory buckets safely
+            cutoff = now_ts - (window_seconds * 2)
+            stale_keys = []
+            for k in list(self._in_memory_rate_limits.keys()):
+                try:
+                    if int(k.split(":")[-1]) < cutoff:
+                        stale_keys.append(k)
+                except (ValueError, TypeError, IndexError):
+                    pass
+            for k in stale_keys:
+                self._in_memory_rate_limits.pop(k, None)
 
         allowed = current <= max_requests
         return {

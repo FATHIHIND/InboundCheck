@@ -168,8 +168,8 @@ async def re_audit_domain(
         raise HTTPException(status_code=404, detail="Monitored domain not found")
 
     # Enforce manual audit quotas: 10 per user / min, 2 per domain / min
-    user_manual_audit_limiter.check(user_id)
-    domain_re_audit_limiter.check(f"{user_id}:{domain_id}")
+    await user_manual_audit_limiter.check_async(user_id)
+    await domain_re_audit_limiter.check_async(f"{user_id}:{domain_id}")
 
     try:
         summary, raw_responses, exec_ms = await diagnostic_engine.audit_domain(domain=clean_domain)
