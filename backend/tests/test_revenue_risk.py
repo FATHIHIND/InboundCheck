@@ -126,3 +126,44 @@ async def test_shopify_readiness_and_revenue_risk_endpoints():
         post_data = risk_post_res.json()
         assert post_data["monthly_gmv_cents"] == 1500 * 12000
         assert post_data["customer_impact_factor"] == 1.1
+
+
+def test_zero_state_revenue_risk_for_user_without_domains():
+    """
+    REGRESSION TEST: Prevent NameError: name 'timezone' is not defined
+    When a user has no connected/monitored domains, calculate_and_record_risk
+    must return a valid zero-state RevenueRiskResponse with a non-null calculated_at timestamp.
+    """
+    res = revenue_risk_service.calculate_and_record_risk(user_id="user-with-zero-domains")
+    assert res.domain == ""
+    assert res.expected_risk_cents == 0
+    assert res.expected_risk_formatted == "$0.00"
+    assert res.monthly_gmv_cents == 0
+    assert res.monthly_gmv_formatted == "$0.00"
+    assert res.impairment_probability == 0.0
+    assert res.confidence_band == "low"
+    assert res.calculated_at is not None
+    assert len(res.calculated_at) > 0
+    assert res.recommendation == "Connect your store to calculate revenue at risk."
+    assert res.band_details.explanation == "No store domain connected. Connect your Shopify sending domain to calculate revenue risk."
+
+
+@pytest.mark.asyncio
+async def test_get_revenue_at_risk_endpoint_zero_domains_returns_200():
+    """
+    REGRESSION TEST: GET /api/v1/analytics/revenue-at-risk for zero-domain user
+    must respond HTTP 200 with zero-state payload and not crash with HTTP 500.
+    """
+    transport = ASGITransport(app=app)
+    headers = auth_headers("test-zero-domain-user")
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
+        res = await ac.get("/api/v1/analytics/revenue-at-risk")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["domain"] == ""
+        assert data["expected_risk_cents"] == 0
+        assert data["monthly_gmv_cents"] == 0
+        assert data["confidence_band"] == "low"
+        assert data["calculated_at"] is not None
+

@@ -8,7 +8,7 @@ Provides versioned confidence bands (high, medium, low) and persists historical 
 
 from typing import Dict, Any, Optional, List
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.schemas.revenue_risk import (
     RevenueRiskResponse,
