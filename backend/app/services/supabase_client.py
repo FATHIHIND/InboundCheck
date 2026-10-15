@@ -1359,6 +1359,31 @@ class SupabaseService:
         now_iso = now.isoformat()
         log_id = str(uuid.uuid4())
 
+        is_simulated_dispatch = (
+            kwargs.get("is_simulated", False)
+            or (dispatch_payload and dispatch_payload.get("simulated") is True)
+            or provider_status == "simulated"
+            or (provider_sid and str(provider_sid).startswith("mock_tg_"))
+        )
+
+        effective_status = status
+        effective_provider_status = provider_status or status
+        effective_delivered_at = delivered_at
+
+        if is_simulated_dispatch:
+            if effective_status == "delivered":
+                effective_status = "dispatched"
+            if effective_provider_status == "delivered":
+                effective_provider_status = "simulated"
+            effective_delivered_at = None
+            if not dispatch_payload:
+                dispatch_payload = {}
+            if "simulated" not in dispatch_payload:
+                dispatch_payload["simulated"] = True
+        else:
+            if effective_delivered_at is None and effective_status == "delivered":
+                effective_delivered_at = now_iso
+
         record = {
             "id": log_id,
             "user_id": user_id,
@@ -1366,10 +1391,10 @@ class SupabaseService:
             "channel": channel or "telegram",
             "fallback_channel": fallback_channel or channel or "telegram",
             "provider": provider or "telegram",
-            "status": status,
-            "provider_status": provider_status or status,
+            "status": effective_status,
+            "provider_status": effective_provider_status,
             "attempted_at": attempted_at or now_iso,
-            "delivered_at": delivered_at or (now_iso if status == "delivered" else None),
+            "delivered_at": effective_delivered_at,
             "delivery_failure_event_id": delivery_failure_event_id,
             "triggered_reason": triggered_reason or "unknown",
             "domain_name": domain_name or "unknown",

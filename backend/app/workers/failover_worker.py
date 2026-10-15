@@ -177,6 +177,10 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
         target_chat_id = getattr(result, "target_chat_id", None) or (result.get("target_chat_id") if isinstance(result, dict) else None)
         provider_msg_id = getattr(result, "telegram_message_id", None) or (result.get("telegram_message_id") or result.get("log_id") if isinstance(result, dict) else None)
         err_msg = getattr(result, "error_message", None) or (result.get("error_message") or result.get("error") if isinstance(result, dict) else None)
+        is_simulated = getattr(result, "simulated", False) or (result.get("simulated") if isinstance(result, dict) else False)
+        provider_status = getattr(result, "provider_status", None) or (result.get("provider_status") if isinstance(result, dict) else None)
+        if not provider_status:
+            provider_status = "simulated" if is_simulated else "delivered"
 
         if is_success:
             repository.create_telegram_incident_log(
@@ -187,15 +191,19 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 store_name=incident.store_name or "unknown",
                 triggered_reason=incident.failure_reason or incident.failure_type or "unknown",
                 target_chat_id=target_chat_id,
-                provider_status="delivered",
+                provider_status=provider_status,
                 provider_message_id=provider_msg_id,
+                is_simulated=is_simulated,
             )
             repository.mark_event_processed(
                 event_id=event_id,
                 outcome="processed",
                 worker_id=worker_id,
             )
-            logger.info(f"Successfully processed delivery failure incident {event_id} for order {incident.order_id}")
+            if is_simulated:
+                logger.info(f"[SIMULATED] Successfully processed delivery failure incident {event_id} for order {incident.order_id}")
+            else:
+                logger.info(f"Successfully processed delivery failure incident {event_id} for order {incident.order_id}")
             return True
         else:
             logger.warning(f"Telegram dispatch failed for event {event_id}: {err_msg}")
@@ -222,10 +230,13 @@ async def run_failover_worker(
     stop_event: Optional[asyncio.Event] = None,
     poll_idle_seconds: int = 15,
     lease_seconds: int = 900,
+    limit: int = 20,
+    once: bool = False,
 ) -> None:
     """
-    Continuous worker loop polling and claiming delivery failure events atomically.
+    Worker loop polling and claiming delivery failure events atomically.
     Transitions events: received -> queued -> processed / failed / ignored.
+    Supports continuous daemon operation and single-cycle bounded execution via once=True.
     Recovers stale leases if prior workers crashed, and gracefully releases in-flight events on SIGTERM/SIGINT.
     """
     if stop_event is None:
@@ -234,7 +245,10 @@ async def run_failover_worker(
     _register_shutdown_signals(stop_event)
 
     worker_id = str(uuid.uuid4())
-    logger.info(f"Failover worker started [Worker ID: {worker_id}] (poll interval: {poll_idle_seconds}s, lease: {lease_seconds}s)")
+    logger.info(
+        f"Failover worker started [Worker ID: {worker_id}] "
+        f"(poll interval: {poll_idle_seconds}s, lease: {lease_seconds}s, limit: {limit}, once: {once})"
+    )
 
     # Track claimed events that are currently in-flight
     in_flight_events: Dict[str, Dict[str, Any]] = {}
@@ -245,11 +259,14 @@ async def run_failover_worker(
                 # Atomically claim received delivery failure events (FOR UPDATE SKIP LOCKED with lease expiry)
                 events = repository.claim_pending_delivery_failure_events(
                     worker_id=worker_id,
-                    limit=20,
+                    limit=limit,
                     lease_seconds=lease_seconds,
                 )
 
                 if not events:
+                    if once:
+                        logger.info("Single-cycle failover mode: zero events claimed. Exiting.")
+                        break
                     # Interruptible sleep
                     for _ in range(poll_idle_seconds):
                         if stop_event.is_set():
@@ -273,6 +290,10 @@ async def run_failover_worker(
                         await process_delivery_failure_event(event, worker_id)
                     finally:
                         in_flight_events.pop(evt_id, None)
+
+                if once:
+                    logger.info(f"Single-cycle failover mode: batch of {len(events)} event(s) processed. Exiting cleanly.")
+                    break
 
             except Exception as exc:
                 logger.error(f"Error in failover worker loop: {exc}", exc_info=True)
@@ -299,6 +320,10 @@ async def run_failover_worker(
                         except Exception as rel_err:
                             logger.warning(f"Failed to release event {rem_id}: {rel_err}")
                         in_flight_events.pop(rem_id, None)
+
+                if once:
+                    logger.info("Single-cycle failover mode: loop exception encountered. Exiting cleanly.")
+                    break
 
                 await asyncio.sleep(5)
 

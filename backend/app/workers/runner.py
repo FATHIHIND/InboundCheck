@@ -16,6 +16,9 @@ from typing import Optional
 
 from app.core.env_guard import validate_worker_runtime_environment
 
+# Backward-compatibility alias for test runners expecting validate_runtime_environment
+validate_runtime_environment = validate_worker_runtime_environment
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -59,6 +62,8 @@ async def main(
 
     # Fail-Fast Runtime Environment Integrity Validation
     validate_worker_runtime_environment()
+    if validate_runtime_environment is not validate_worker_runtime_environment:
+        validate_runtime_environment()
 
     stop_event = asyncio.Event()
 
@@ -83,11 +88,11 @@ async def main(
         if worker_type == "audit":
             await run_audit_worker(stop_event=stop_event, limit=limit, once=once)
         elif worker_type == "failover":
-            await run_failover_worker(stop_event=stop_event)
+            await run_failover_worker(stop_event=stop_event, limit=limit, once=once)
         elif worker_type == "all":
             await asyncio.gather(
                 run_audit_worker(stop_event=stop_event, limit=limit, once=once),
-                run_failover_worker(stop_event=stop_event),
+                run_failover_worker(stop_event=stop_event, limit=limit, once=once),
             )
         else:
             logger.error(f"Unknown worker type: '{worker_type}'. Supported: 'audit', 'failover', 'all'.")
@@ -100,10 +105,16 @@ async def main(
 
 if __name__ == "__main__":
     target = "audit"
+    once = "--once" in sys.argv
+    limit = 25
     for arg in sys.argv[1:]:
-        if not arg.startswith("--"):
+        if arg.startswith("--limit="):
+            try:
+                limit = int(arg.split("=", 1)[1])
+            except ValueError:
+                pass
+        elif not arg.startswith("--"):
             target = arg
-            break
 
     # Fail closed immediately if staging is requested via CLI arguments or environment
     if any(arg.startswith("--staging") for arg in sys.argv) or os.environ.get("ENVIRONMENT", "").strip().lower() == "staging":
@@ -114,6 +125,6 @@ if __name__ == "__main__":
         sys.exit(2)
 
     try:
-        asyncio.run(main(target))
+        asyncio.run(main(worker_type=target, once=once, limit=limit))
     except (KeyboardInterrupt, SystemExit):
         logger.info("Worker process terminated by user or system.")

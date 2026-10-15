@@ -159,6 +159,15 @@ async def test_telegram_incident_dispatch_lifecycle_and_zero_pii():
         processing_status="queued"
     )
 
+    telegram_alert_service.update_config(
+        user_id,
+        {
+            "is_enabled": True,
+            "telegram_bot_token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz_valid",
+            "telegram_chat_id": "@merchant_alerts",
+        }
+    )
+
     # Mock Telegram Bot API send_telegram_alert directly to inspect rendered text
     with patch.object(telegram_alert_service, "send_telegram_alert", new_callable=AsyncMock) as mock_send:
         mock_send.return_value = {

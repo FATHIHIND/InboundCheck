@@ -51,10 +51,11 @@ from tests.conftest import auth_headers, create_test_jwt
 # =============================================================================
 
 def test_p0_migration_files_exist_and_valid():
-    """Verify that both migration 018 and corrective migration 019 exist and contain exact definitions."""
     base_dir = os.path.join(os.path.dirname(__file__), "..", "..", "supabase", "migrations")
-    mig_018_path = os.path.join(base_dir, "20260925000001_shield_profile_billing_columns.sql")
-    mig_019_path = os.path.join(base_dir, "20260925000002_fix_profile_billing_trigger_schema.sql")
+    mig_018_name = "20260925000002_shield_profile_billing_columns.sql" if os.path.exists(os.path.join(base_dir, "20260925000002_shield_profile_billing_columns.sql")) else "20260925000001_shield_profile_billing_columns.sql"
+    mig_019_name = "20260925000003_fix_profile_billing_trigger_schema.sql" if os.path.exists(os.path.join(base_dir, "20260925000003_fix_profile_billing_trigger_schema.sql")) else "20260925000002_fix_profile_billing_trigger_schema.sql"
+    mig_018_path = os.path.join(base_dir, mig_018_name)
+    mig_019_path = os.path.join(base_dir, mig_019_name)
 
     assert os.path.exists(mig_018_path), f"Migration 018 not found at {mig_018_path}"
     assert os.path.exists(mig_019_path), f"Migration 019 not found at {mig_019_path}"

@@ -192,20 +192,27 @@ class FailoverRepository:
         target_chat_id: Optional[str],
         provider_status: str = "delivered",
         provider_message_id: Optional[str] = None,
+        is_simulated: bool = False,
     ) -> Dict[str, Any]:
         """
         Record a Telegram incident alert in public.failover_logs.
         Enforces idempotency index idx_failover_logs_one_telegram_incident_per_event.
         """
         now_iso = datetime.now(timezone.utc).isoformat()
+        sim = is_simulated or provider_status == "simulated"
+        db_status = "dispatched" if sim else provider_status
+        p_status = "simulated" if sim else provider_status
+        delivered_ts = None if sim else (now_iso if provider_status == "delivered" else None)
+        payload = {"simulated": True, "provider_status": "simulated", "mock_message_id": provider_message_id} if sim else {}
+
         return self.supabase.persist_failover_log(
             user_id=user_id,
             order_id=order_id or "unknown",
             channel="telegram",
             fallback_channel="telegram",
             provider="telegram",
-            status=provider_status,
-            provider_status=provider_status,
+            status=db_status,
+            provider_status=p_status,
             domain_name=domain_name or "unknown",
             store_name=store_name or "unknown",
             triggered_reason=triggered_reason or "unknown",
@@ -213,7 +220,9 @@ class FailoverRepository:
             delivery_failure_event_id=delivery_failure_event_id,
             provider_sid=provider_message_id,
             attempted_at=now_iso,
-            delivered_at=now_iso if provider_status == "delivered" else None,
+            delivered_at=delivered_ts,
+            dispatch_payload=payload,
+            is_simulated=sim,
         )
 
     def get_transactional_message(

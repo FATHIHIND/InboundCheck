@@ -35,10 +35,11 @@ class TelegramIncidentContext(BaseModel):
 class TelegramDispatchResult(BaseModel):
     success: bool
     provider: Literal["telegram"] = "telegram"
-    provider_status: Literal["delivered", "failed"]
+    provider_status: Literal["delivered", "failed", "simulated"]
     telegram_message_id: Optional[str] = None
     target_chat_id: Optional[str] = None
     error_message: Optional[str] = None
+    simulated: bool = False
 
     # Dict-like compatibility for callers expecting dict or .get("status")
     def __getitem__(self, item: str) -> Any:
@@ -88,6 +89,29 @@ class TelegramAlertService:
     Dedicated Service for instant Telegram Bot Alert Dispatches.
     """
 
+    def __init__(self):
+        self._mock_mode: bool = False
+        self._mock_dispatcher: Optional[Any] = None
+
+    def enable_mock_mode(self, custom_dispatcher: Optional[Any] = None) -> None:
+        """Enable deterministic mock dispatch for offline testing / staging. Strictly rejected in Production."""
+        import os
+        from app.core.config import settings
+        env = os.environ.get("ENVIRONMENT", settings.ENVIRONMENT or "").strip().lower()
+        if env in ("production", "prod"):
+            raise RuntimeError("Mock Telegram dispatch is forbidden in Production environment.")
+        self._mock_mode = True
+        self._mock_dispatcher = custom_dispatcher
+
+    def disable_mock_mode(self) -> None:
+        """Disable mock dispatch and restore real delivery semantics."""
+        self._mock_mode = False
+        self._mock_dispatcher = None
+
+    @property
+    def is_mock_mode(self) -> bool:
+        return self._mock_mode
+
     def get_config(self, user_id: str) -> Dict[str, Any]:
         """Fetch user Telegram alert configuration without multi-tenant bleed."""
         if user_id in _mock_failover_configs:
@@ -122,12 +146,48 @@ class TelegramAlertService:
         Fails closed: returns {"success": False, "error": ...} on HTTP errors or network exceptions.
         Sanitizes all sensitive bot tokens from logs and error messages.
         """
-        clean_token = bot_token or settings.TELEGRAM_BOT_TOKEN
-        clean_chat_id = chat_id or settings.TELEGRAM_CHAT_ID
+        import os
+        import asyncio
+        from app.core.env_guard import check_is_placeholder
 
-        if not clean_token or not clean_chat_id:
-            logger.warning("Telegram credentials empty; dispatch rejected.")
-            return {"success": False, "simulated": False, "error": "Telegram Bot Token and Chat ID must be configured."}
+        # Mock / Simulation mode handling (strictly rejected in Production)
+        if self._mock_mode:
+            env = os.environ.get("ENVIRONMENT", settings.ENVIRONMENT or "").strip().lower()
+            if env in ("production", "prod"):
+                raise RuntimeError("Mock Telegram dispatch is forbidden in Production environment.")
+
+            if self._mock_dispatcher is not None:
+                if asyncio.iscoroutinefunction(self._mock_dispatcher):
+                    return await self._mock_dispatcher(bot_token=bot_token, chat_id=chat_id, text=text)
+                return self._mock_dispatcher(bot_token=bot_token, chat_id=chat_id, text=text)
+
+            logger.info(f"[SIMULATED] Mock Telegram dispatch to chat {chat_id or 'mock_chat'} (zero external network)")
+            return {
+                "success": True,
+                "simulated": True,
+                "data": {
+                    "result": {
+                        "message_id": f"mock_tg_{uuid.uuid4().hex[:8]}",
+                        "simulated": True,
+                    }
+                }
+            }
+
+        clean_token = (bot_token or settings.TELEGRAM_BOT_TOKEN or "").strip()
+        clean_chat_id = (chat_id or settings.TELEGRAM_CHAT_ID or "").strip()
+
+        if (
+            not clean_token
+            or check_is_placeholder(clean_token)
+            or not clean_chat_id
+            or check_is_placeholder(clean_chat_id)
+        ):
+            logger.warning("Telegram credentials unconfigured or placeholder; dispatch rejected.")
+            return {
+                "success": False,
+                "simulated": False,
+                "error": "Telegram Bot Token and Chat ID must be configured and cannot be placeholder values."
+            }
 
         try:
             url = f"https://api.telegram.org/bot{clean_token}/sendMessage"
@@ -192,7 +252,9 @@ class TelegramAlertService:
             text=alert_text
         )
 
-        dispatch_status = "delivered" if dispatch_res.get("success") else "failed"
+        is_sim = bool(dispatch_res.get("simulated", False))
+        dispatch_status = "dispatched" if is_sim else ("delivered" if dispatch_res.get("success") else "failed")
+        p_status = "simulated" if is_sim else dispatch_status
 
         # Persist to database via repository
         from app.services.supabase_client import supabase_service
@@ -202,6 +264,7 @@ class TelegramAlertService:
             channel="telegram",
             provider="telegram",
             status=dispatch_status,
+            provider_status=p_status,
             domain_name=domain_name,
             store_name=store_name,
             triggered_reason=trigger_reason,
@@ -210,6 +273,7 @@ class TelegramAlertService:
             customer_phone=customer_phone,
             dispatch_payload=dispatch_res,
             error_message=dispatch_res.get("error") if not dispatch_res.get("success") else None,
+            is_simulated=is_sim,
         )
 
         return {
@@ -262,19 +326,13 @@ class TelegramAlertService:
                 error_message="Telegram alert engine is disabled in user settings",
             )
 
-        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN or "7198234891:AAH8Fj90qWz1x9_example"
-        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID or "@inboundcheck_alerts"
+        bot_token = (config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN or "").strip()
+        chat_id = (config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID or "").strip()
 
-        if not bot_token or not chat_id:
-            logger.warning(f"Telegram credentials unconfigured for user {ctx.user_id}; alert skipped.")
-            return TelegramDispatchResult(
-                success=False,
-                provider="telegram",
-                provider_status="failed",
-                telegram_message_id=None,
-                target_chat_id=None,
-                error_message="Telegram Bot Token and Chat ID must be configured in settings",
-            )
+        # In mock mode, allow synthetic identifiers if unconfigured
+        if self._mock_mode:
+            bot_token = bot_token or "mock_bot_token"
+            chat_id = chat_id or "@mock_chat"
 
         store_str = ctx.store_name or "Shopify Store"
         domain_str = ctx.domain_name or "store.com"
@@ -302,16 +360,18 @@ class TelegramAlertService:
             text=alert_text,
         )
 
+        is_sim = bool(send_res.get("simulated", False))
         if send_res.get("success"):
             data = send_res.get("data", {})
             tg_msg_id = str(data.get("result", {}).get("message_id") or data.get("message_id") or "")
             return TelegramDispatchResult(
                 success=True,
                 provider="telegram",
-                provider_status="delivered",
+                provider_status="simulated" if is_sim else "delivered",
                 telegram_message_id=tg_msg_id or None,
                 target_chat_id=chat_id,
                 error_message=None,
+                simulated=is_sim,
             )
         else:
             return TelegramDispatchResult(
@@ -321,6 +381,7 @@ class TelegramAlertService:
                 telegram_message_id=None,
                 target_chat_id=chat_id,
                 error_message=send_res.get("error") or "Failed to deliver Telegram alert",
+                simulated=is_sim,
             )
 
     async def send_test_ping(
