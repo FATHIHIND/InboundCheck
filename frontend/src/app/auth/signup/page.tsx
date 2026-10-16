@@ -234,13 +234,16 @@ function SignupForm() {
         <div className="border-t border-zinc-800 w-full" />
       </div>
 
-      <form onSubmit={handleSignup} className="space-y-4">
+      <form id="signup-form" name="signup-form" onSubmit={handleSignup} className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Full name</label>
+          <label htmlFor="signup-full-name" className="block text-xs font-semibold text-zinc-300 mb-1.5">Full name</label>
           <div className="relative">
             <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" />
             <input
+              id="signup-full-name"
+              name="name"
               type="text"
+              autoComplete="name"
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -251,11 +254,14 @@ function SignupForm() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Work email</label>
+          <label htmlFor="signup-email" className="block text-xs font-semibold text-zinc-300 mb-1.5">Work email</label>
           <div className="relative">
             <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" />
             <input
+              id="signup-email"
+              name="email"
               type="email"
+              autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -266,11 +272,14 @@ function SignupForm() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Password</label>
+          <label htmlFor="signup-password" className="block text-xs font-semibold text-zinc-300 mb-1.5">Password</label>
           <div className="relative">
             <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" />
             <input
+              id="signup-password"
+              name="password"
               type="password"
+              autoComplete="new-password"
               required
               minLength={8}
               value={password}
@@ -293,6 +302,7 @@ function SignupForm() {
         </div>
 
         <button
+          id="signup-submit-button"
           type="submit"
           disabled={isLoading}
           className="w-full py-3 bg-emerald-400 hover:bg-emerald-300 text-black font-bold rounded-xl text-sm transition shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"

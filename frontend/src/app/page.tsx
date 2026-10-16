@@ -519,11 +519,19 @@ export default function LandingPage() {
                 </span>
                 <span className="text-[11px] text-zinc-400">Illustrative simulation — no live DNS query is run on this page.</span>
               </div>
-              <form onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+              <form id="hero-domain-audit-form" name="hero-domain-audit-form" onSubmit={handleSimulatedAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
                 <div className="relative flex-1 min-w-0 w-full">
+                  <label htmlFor="hero-domain-input" className="sr-only">
+                    Store sending domain
+                  </label>
                   <Globe className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
+                    id="hero-domain-input"
+                    name="domain"
                     type="text"
+                    autoComplete="url"
+                    spellCheck={false}
+                    aria-label="Store sending domain"
                     value={domainInput}
                     onChange={(e) => setDomainInput(e.target.value)}
                     placeholder="enter your store sending domain (e.g. store.com)"
@@ -531,6 +539,7 @@ export default function LandingPage() {
                   />
                 </div>
                 <button
+                  id="hero-audit-submit-button"
                   type="submit"
                   disabled={isAuditing}
                   className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 disabled:opacity-60 min-h-[44px]"

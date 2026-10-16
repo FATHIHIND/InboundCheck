@@ -235,13 +235,16 @@ export default function LoginPage() {
           <div className="border-t border-zinc-800 w-full" />
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form id="login-form" name="login-form" onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Email address</label>
+            <label htmlFor="login-email" className="block text-xs font-semibold text-zinc-300 mb-1.5">Email address</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" />
               <input
+                id="login-email"
+                name="email"
                 type="email"
+                autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -252,11 +255,14 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Password</label>
+            <label htmlFor="login-password" className="block text-xs font-semibold text-zinc-300 mb-1.5">Password</label>
             <div className="relative">
               <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" />
               <input
+                id="login-password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -267,10 +273,11 @@ export default function LoginPage() {
           </div>
 
           <div className="flex items-center justify-between text-xs">
-            <label className="flex items-center text-zinc-400 cursor-pointer select-none">
+            <label htmlFor="remember-me" className="flex items-center text-zinc-400 cursor-pointer select-none">
               <input
                 type="checkbox"
                 id="remember-me"
+                name="remember_me"
                 checked={rememberMe}
                 onChange={(e) => handleRememberMeChange(e.target.checked)}
                 className="rounded bg-zinc-900 border-zinc-800 text-emerald-500 mr-2 focus:ring-0 focus:ring-offset-0 cursor-pointer"
@@ -283,6 +290,7 @@ export default function LoginPage() {
           </div>
 
           <button
+            id="login-submit-button"
             type="submit"
             disabled={isLoading}
             className="w-full py-3 bg-emerald-400 hover:bg-emerald-300 text-black font-bold rounded-xl text-sm transition shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"

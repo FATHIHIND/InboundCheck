@@ -1,8 +1,25 @@
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://images.unsplash.com https://avatars.githubusercontent.com",
+  "font-src 'self' data:",
+  "media-src 'self' https://cdn.sceneai.art data: blob:",
+  "connect-src 'self' http://localhost:8000 https://inboundcheck-production.up.railway.app https://*.supabase.co wss://*.supabase.co",
+  "frame-src 'self' https://accounts.google.com",
+  "frame-ancestors 'self'",
+  "form-action 'self' https://accounts.google.com",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join("; ");
+
+const permissionsPolicy = "camera=(), microphone=(), geolocation=(), browsing-topics=()";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ["images.unsplash.com", "avatars.githubusercontent.com"],
+    unoptimized: true,
   },
   transpilePackages: ["@designcodeio/threeui", "three"],
   experimental: {
@@ -38,6 +55,14 @@ const nextConfig = {
           {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: permissionsPolicy,
+          },
+          {
+            key: "Content-Security-Policy",
+            value: contentSecurityPolicy,
           },
         ],
       },
