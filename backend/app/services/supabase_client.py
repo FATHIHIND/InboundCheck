@@ -80,8 +80,27 @@ class SupabaseService:
         self._in_memory_ai_telemetry: Dict[str, Dict[str, Any]] = {}
         self._in_memory_lock = threading.Lock()
 
-        is_prod = (getattr(settings, "ENVIRONMENT", "") or "").lower() in ["production", "prod"]
-        url_valid, url_issues, clean_url = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
+        env_lower = (getattr(settings, "ENVIRONMENT", "") or "").lower()
+        is_prod = env_lower in ["production", "prod"]
+        is_staging = env_lower == "staging"
+        is_enforced = is_prod or is_staging
+
+        url_valid, url_issues, clean_url = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_enforced)
+
+        # Bidirectional project reference isolation guard
+        if settings.SUPABASE_URL:
+            from app.core.staging_guard import PROD_PROJECT_REF
+            EXPECTED_STAGING_REF = "wymgyqnqwlliotkxamtd"
+            if is_staging and PROD_PROJECT_REF in settings.SUPABASE_URL.lower():
+                url_valid = False
+                url_issues.append(
+                    f"CRITICAL ISOLATION BREACH: Staging SUPABASE_URL contains production reference '{PROD_PROJECT_REF}'."
+                )
+            elif is_prod and EXPECTED_STAGING_REF in settings.SUPABASE_URL.lower():
+                url_valid = False
+                url_issues.append(
+                    f"CRITICAL ISOLATION BREACH: Production SUPABASE_URL contains staging reference '{EXPECTED_STAGING_REF}'."
+                )
 
         raw_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY
         clean_key = raw_key.strip(" ") if raw_key else ""
@@ -91,10 +110,19 @@ class SupabaseService:
                 self._client = create_client(clean_url, clean_key)
                 logger.info("Supabase client successfully initialized.")
             except Exception as e:
-                logger.warning(f"Could not connect to Supabase: {sanitize_exception(e)}. Falling back to memory storage.")
+                sanitized_e = sanitize_exception(e)
+                logger.warning(f"Could not connect to Supabase: {sanitized_e}. Falling back to memory storage.")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(
+                        f"Database client initialization failed in non-development environment: {sanitized_e}"
+                    ) from e
         else:
             if not self._allow_in_memory_fallback():
-                logger.error(f"Supabase credentials invalid or missing in production: {'; '.join(url_issues) if url_issues else 'Missing key'}. Client initialization rejected.")
+                err_details = "; ".join(url_issues) if url_issues else "Missing key"
+                logger.error(f"Supabase credentials invalid or missing in non-development environment: {err_details}. Client initialization rejected.")
+                raise DatabaseUnavailableError(
+                    f"Database client credentials invalid or missing in non-development environment: {err_details}"
+                )
             else:
                 logger.info("Supabase credentials not configured in env. Running with in-memory persistence.")
 

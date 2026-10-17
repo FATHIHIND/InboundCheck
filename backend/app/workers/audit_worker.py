@@ -237,12 +237,31 @@ async def run_audit_worker(
             # Dispatch Ops Alert (OPS-02)
             try:
                 from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+                from app.core.config import settings
+                import os
+                import socket
+                import urllib.parse
+
+                target_ref = "unconfigured"
+                if settings.SUPABASE_URL:
+                    try:
+                        target_ref = urllib.parse.urlparse(settings.SUPABASE_URL).netloc.split(".")[0] or "unknown"
+                    except Exception:
+                        target_ref = "invalid-url"
+
                 await ops_alert_service.dispatch_incident(
                     OpsIncident(
                         alert_id="ALERT-WORKER-AUDIT",
                         severity="P1",
-                        summary=f"Audit worker loop crashed: {e}",
-                        details={"worker_id": worker_id, "error": str(e)[:200]},
+                        summary=f"Audit worker loop crashed: {sanitize_error(e)}",
+                        details={
+                            "worker_id": worker_id,
+                            "error": sanitize_error(e)[:200],
+                            "host": socket.gethostname(),
+                            "pid": os.getpid(),
+                            "railway_service": os.getenv("RAILWAY_SERVICE_NAME", ""),
+                            "target_ref": target_ref,
+                        },
                     )
                 )
             except Exception as alert_err:

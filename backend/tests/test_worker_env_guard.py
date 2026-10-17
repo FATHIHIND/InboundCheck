@@ -252,3 +252,114 @@ def test_failover_repository_fails_closed_in_production():
         assert repo.supabase._allow_in_memory_fallback() is False
         with pytest.raises(DatabaseUnavailableError, match="Database RPC claim_pending_delivery_failure_events failed in production"):
             repo.claim_pending_delivery_failure_events(worker_id="test-worker", limit=10)
+
+
+# =====================================================================
+# SECTION: PHASE 19.4.2 STAGING WORKER FAIL-FAST & ISOLATION TESTS
+# =====================================================================
+
+def test_staging_worker_guard_missing_url_fails_fast():
+    """In staging, missing SUPABASE_URL must abort immediately with Staging failure."""
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", ""), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-staging-service-key"):
+        with pytest.raises(RuntimeError, match="Staging Worker Environment Integrity Failure") as exc_info:
+            validate_worker_runtime_environment()
+        assert "SUPABASE_URL is missing" in str(exc_info.value)
+
+
+def test_staging_worker_guard_missing_service_key_fails_fast():
+    """In staging, missing SUPABASE_SERVICE_ROLE_KEY must abort immediately."""
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", "https://wymgyqnqwlliotkxamtd.supabase.co"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", ""):
+        with pytest.raises(RuntimeError, match="Staging Worker Environment Integrity Failure") as exc_info:
+            validate_worker_runtime_environment()
+        assert "SUPABASE_SERVICE_ROLE_KEY is unconfigured" in str(exc_info.value)
+
+
+def test_staging_worker_guard_production_ref_fails_fast():
+    """In staging, attempting to use the production project ref must fail fast with isolation breach."""
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", "https://tbjcldcoozvuvyipeonh.supabase.co"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-staging-service-key"):
+        with pytest.raises(RuntimeError, match="CRITICAL ISOLATION BREACH") as exc_info:
+            validate_worker_runtime_environment()
+        assert "tbjcldcoozvuvyipeonh" in str(exc_info.value)
+
+
+def test_staging_worker_guard_valid_isolated_config_passes():
+    """Staging worker environment validates cleanly when configured with valid isolated staging ref."""
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", "https://wymgyqnqwlliotkxamtd.supabase.co"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-staging-service-key-999"):
+        is_valid, issues = validate_worker_runtime_environment()
+        assert is_valid is True
+        assert issues == []
+
+
+def test_staging_supabase_service_init_missing_creds_raises_database_unavailable_error():
+    """Instantiating SupabaseService with missing creds in staging must fail fast with DatabaseUnavailableError."""
+    from app.services.supabase_client import SupabaseService, DatabaseUnavailableError
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", ""), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", ""):
+        with pytest.raises(DatabaseUnavailableError, match="Database client credentials invalid or missing in non-development environment"):
+            SupabaseService()
+
+
+def test_staging_supabase_service_init_valid_config_initializes():
+    """Instantiating SupabaseService in staging with valid config initializes client successfully."""
+    from app.services.supabase_client import SupabaseService
+    mock_client = MagicMock()
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", "https://wymgyqnqwlliotkxamtd.supabase.co"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-staging-service-key-888"), \
+         patch("app.services.supabase_client.create_client", return_value=mock_client):
+        service = SupabaseService()
+        assert service._client is mock_client
+        assert service.is_connected is True
+        assert service._allow_in_memory_fallback() is False
+
+
+def test_staging_error_messages_contain_no_credentials_or_secrets():
+    """Confirm no token or secret strings leak in staging worker validation errors."""
+    secret_token = "super_secret_raw_jwt_token_98765"
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", f"https://wymgyqnqwlliotkxamtd.supabase.co?token={secret_token}"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", ""):
+        with pytest.raises(RuntimeError) as exc_info:
+            validate_worker_runtime_environment()
+        err_text = str(exc_info.value)
+        assert secret_token not in err_text
+        assert "token=[REDACTED]" not in err_text or secret_token not in err_text
+
+
+def test_production_worker_guard_staging_ref_fails_fast():
+    """In production, attempting to use the staging project ref must fail fast with isolation breach."""
+    with patch.object(settings, "ENVIRONMENT", "production"), \
+         patch.object(settings, "SUPABASE_URL", "https://wymgyqnqwlliotkxamtd.supabase.co"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-prod-service-key"):
+        with pytest.raises(RuntimeError, match="CRITICAL ISOLATION BREACH") as exc_info:
+            validate_worker_runtime_environment()
+        assert "wymgyqnqwlliotkxamtd" in str(exc_info.value)
+
+
+def test_production_supabase_service_init_rejects_staging_ref():
+    """SupabaseService in production must reject staging project ref."""
+    from app.services.supabase_client import SupabaseService, DatabaseUnavailableError
+    with patch.object(settings, "ENVIRONMENT", "production"), \
+         patch.object(settings, "SUPABASE_URL", "https://wymgyqnqwlliotkxamtd.supabase.co"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-prod-service-key"):
+        with pytest.raises(DatabaseUnavailableError, match="CRITICAL ISOLATION BREACH"):
+            SupabaseService()
+
+
+def test_staging_supabase_service_init_rejects_production_ref():
+    """SupabaseService in staging must reject production project ref."""
+    from app.services.supabase_client import SupabaseService, DatabaseUnavailableError
+    with patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(settings, "SUPABASE_URL", "https://tbjcldcoozvuvyipeonh.supabase.co"), \
+         patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-staging-service-key"):
+        with pytest.raises(DatabaseUnavailableError, match="CRITICAL ISOLATION BREACH"):
+            SupabaseService()

@@ -133,9 +133,11 @@ class OpsAlertService:
         now_iso = incident.occurred_at or datetime.now(timezone.utc).isoformat()
         clean_details = sanitize_incident_payload(incident.details)
 
+        curr_env = getattr(settings, "ENVIRONMENT", None) or self.environment
+
         payload = {
             "service": "inboundcheck-backend",
-            "environment": self.environment,
+            "environment": curr_env,
             "alert_id": incident.alert_id,
             "severity": incident.severity,
             "summary": incident.summary,
@@ -162,11 +164,32 @@ class OpsAlertService:
         if self.telegram_bot_token and self.telegram_chat_id:
             try:
                 tg_url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
+
+                # Format optional diagnostic details if available
+                diag_lines = []
+                if clean_details:
+                    worker_id = clean_details.get("worker_id")
+                    if worker_id:
+                        diag_lines.append(f"*Worker ID:* `{worker_id}`")
+                    host = clean_details.get("host")
+                    pid = clean_details.get("pid")
+                    railway_svc = clean_details.get("railway_service")
+                    if railway_svc:
+                        diag_lines.append(f"*Origin:* `Railway:{railway_svc}` (PID `{pid}`)")
+                    elif host or pid:
+                        diag_lines.append(f"*Origin:* `{host or 'unknown'}` (PID `{pid or 'unknown'}`)")
+                    target_ref = clean_details.get("target_ref")
+                    if target_ref:
+                        diag_lines.append(f"*Target Ref:* `{target_ref}`")
+
+                diag_section = ("\n" + "\n".join(diag_lines)) if diag_lines else ""
+
                 text_msg = (
                     f"🚨 *[OPS ALERT] {incident.alert_id} ({incident.severity})*\n\n"
-                    f"*Environment:* `{self.environment}`\n"
+                    f"*Environment:* `{curr_env}`\n"
                     f"*Summary:* {incident.summary}\n"
-                    f"*Timestamp:* `{now_iso}`\n"
+                    f"*Timestamp:* `{now_iso}`"
+                    f"{diag_section}\n"
                 )
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     resp = await client.post(

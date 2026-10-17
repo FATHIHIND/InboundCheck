@@ -166,11 +166,27 @@ def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
     from app.core.config import settings
 
     issues: List[str] = []
-    is_prod = settings.ENVIRONMENT.lower() in ["production", "prod"]
+    env_clean = (settings.ENVIRONMENT or "").lower()
+    is_prod = env_clean in ["production", "prod"]
+    is_staging = env_clean == "staging"
+    is_enforced = is_prod or is_staging
 
     # 1. Supabase Backend Persistence Checks
-    url_valid, url_issues, _ = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
+    url_valid, url_issues, _ = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_enforced)
     issues.extend(url_issues)
+
+    # 2. Strict Bidirectional Project Reference Isolation Guard
+    if settings.SUPABASE_URL:
+        from app.core.staging_guard import PROD_PROJECT_REF
+        EXPECTED_STAGING_REF = "wymgyqnqwlliotkxamtd"
+        if is_staging and PROD_PROJECT_REF in settings.SUPABASE_URL.lower():
+            issues.append(
+                f"CRITICAL ISOLATION BREACH: Staging SUPABASE_URL contains production reference '{PROD_PROJECT_REF}'."
+            )
+        elif is_prod and EXPECTED_STAGING_REF in settings.SUPABASE_URL.lower():
+            issues.append(
+                f"CRITICAL ISOLATION BREACH: Production SUPABASE_URL contains staging reference '{EXPECTED_STAGING_REF}'."
+            )
 
     # Explicitly require service-role key for background worker cross-tenant RPC operations
     if not settings.SUPABASE_SERVICE_ROLE_KEY or check_is_placeholder(settings.SUPABASE_SERVICE_ROLE_KEY):
@@ -183,6 +199,9 @@ def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
         if is_prod:
             logger.critical(f"FAIL-FAST ABORT: {msg}")
             raise RuntimeError(f"Production Worker Environment Integrity Failure:\n{msg}")
+        elif is_staging:
+            logger.critical(f"FAIL-FAST ABORT: {msg}")
+            raise RuntimeError(f"Staging Worker Environment Integrity Failure:\n{msg}")
         else:
             logger.warning(f"Development Worker Environment Notice:\n{msg}")
     else:

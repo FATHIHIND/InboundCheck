@@ -373,13 +373,18 @@ async def test_audit_worker_scheduled_sweep_lifecycle():
     # Run one pass of audit worker and stop after first batch
     orig_claim = supabase_service.claim_due_domain_audits
     def claim_and_stop(*args, **kwargs):
-        res = orig_claim(*args, **kwargs)
-        stop_event.set()
-        return res
+        try:
+            return orig_claim(*args, **kwargs)
+        finally:
+            stop_event.set()
 
-    with patch.object(supabase_service, "_client", None):
-        with patch.object(supabase_service, "claim_due_domain_audits", side_effect=claim_and_stop):
-            await run_audit_worker(stop_event=stop_event, idle_sleep_seconds=1)
+    from app.core.config import settings
+    from unittest.mock import AsyncMock
+    with patch.object(settings, "ENVIRONMENT", "test"):
+        with patch.object(supabase_service, "_client", None):
+            with patch.object(supabase_service, "claim_due_domain_audits", side_effect=claim_and_stop):
+                with patch("app.services.alerting.ops_alert_service.ops_alert_service.dispatch_incident", new_callable=AsyncMock):
+                    await run_audit_worker(stop_event=stop_event, idle_sleep_seconds=1)
 
         # Assert domain was audited and lease released
         assert domain.get("audit_lease_owner") is None
