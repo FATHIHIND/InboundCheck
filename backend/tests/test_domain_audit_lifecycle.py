@@ -589,7 +589,11 @@ def test_diagnostic_update_rejects_wrong_worker_lease_owner():
 async def test_audit_worker_aborts_without_alerts_if_lease_lost():
     """
     Verify that if update_domain_diagnostic_results returns None (lease lost during scan),
-    the worker immediately aborts, does NOT dispatch alerts, and does NOT complete the audit.
+    the worker immediately aborts and does NOT execute any post-lease-loss operations:
+    1. Does NOT write audit history via save_audit_log().
+    2. Does NOT persist reputation snapshot to reputation_checks.
+    3. Does NOT dispatch merchant alerts via evaluate_and_dispatch().
+    4. Does NOT invoke complete_domain_audit() RPC.
     """
     user_id = f"test-user-{uuid.uuid4()}"
     dom_id = str(uuid.uuid4())
@@ -614,28 +618,49 @@ async def test_audit_worker_aborts_without_alerts_if_lease_lost():
     mock_rbl = build_mock_rbl_result(domain_name)
     raw_responses = {"dns": {"a": ["198.51.100.1"]}}
 
+    mock_client = MagicMock()
+    mock_rep_table = MagicMock()
+    mock_rbl_table = MagicMock()
+
+    def table_router(name: str):
+        if name == "reputation_checks":
+            return mock_rep_table
+        if name == "rbl_scans":
+            return mock_rbl_table
+        return MagicMock()
+
+    mock_client.table.side_effect = table_router
+
     with patch("app.workers.audit_worker.diagnostic_engine.audit_domain", new_callable=AsyncMock) as mock_dns, \
          patch("app.workers.audit_worker.rbl_scanner.scan_domain", new_callable=AsyncMock) as mock_scan, \
          patch("app.workers.audit_worker.alert_dispatcher.evaluate_and_dispatch", new_callable=AsyncMock) as mock_alert, \
+         patch.object(supabase_service, "save_audit_log") as mock_save_log, \
          patch.object(supabase_service, "update_domain_diagnostic_results", return_value=None) as mock_update, \
-         patch.object(supabase_service, "complete_domain_audit") as mock_complete:
+         patch.object(supabase_service, "complete_domain_audit") as mock_complete, \
+         patch.object(supabase_service, "_client", mock_client):
 
         mock_dns.return_value = (mock_summary, raw_responses, 100.0)
         mock_scan.return_value = mock_rbl
 
         await audit_claimed_domain(seeded_domain, worker_id)
 
-        # Diagnostic update was attempted with exact worker_id
+        # 1. Diagnostic update was attempted with exact worker_id
         mock_update.assert_called_once_with(
             domain_id=dom_id,
             audit_result=mock_update.call_args.kwargs["audit_result"],
             worker_id=worker_id,
         )
 
-        # Alert dispatch MUST NOT have been called
+        # 2. Audit log persistence MUST NOT have been called
+        mock_save_log.assert_not_called()
+
+        # 3. Reputation checks snapshot MUST NOT have been inserted
+        mock_rep_table.insert.assert_not_called()
+
+        # 4. Alert dispatch MUST NOT have been called
         mock_alert.assert_not_called()
 
-        # complete_domain_audit MUST NOT have been called
+        # 5. complete_domain_audit MUST NOT have been called
         mock_complete.assert_not_called()
 
 
