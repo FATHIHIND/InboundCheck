@@ -310,7 +310,6 @@ class SupabaseService:
                 "audit_failure_count": 0,
                 "last_audit_error": None,
                 "next_audit_retry_at": None,
-                "audit_lease_until": None,
             })
         else:
             record.update({
@@ -353,6 +352,108 @@ class SupabaseService:
             record["created_at"] = now_str
             self._in_memory_domains[user_id].insert(0, record)
             return record
+
+    def update_domain_diagnostic_results(
+        self,
+        domain_id: str,
+        audit_result: Dict[str, Any],
+        worker_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Safely update deliverability scores and protocol statuses for an active monitored domain.
+        Uses a targeted UPDATE (HTTP PATCH) strictly scoped to diagnostic columns.
+        Never modifies audit_lease_until, audit_lease_owner, or last_audited_at.
+        Enforces lease ownership precondition when worker_id is provided.
+        Returns the updated row dict if successful, or None if 0 rows matched (lease lost/expired).
+        Raises DatabaseUnavailableError if database query fails in non-development environment.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        # Defensively normalize audit_result and summary (supports dicts and Pydantic models)
+        if hasattr(audit_result, "model_dump"):
+            payload = audit_result.model_dump()
+        elif isinstance(audit_result, dict):
+            payload = audit_result
+        else:
+            payload = {}
+
+        summary = payload.get("summary", {}) or {}
+        if hasattr(summary, "model_dump"):
+            summary = summary.model_dump()
+        elif not isinstance(summary, dict):
+            summary = {}
+
+        health_score = payload.get("health_score", 0)
+
+        valid_statuses = {"optimal", "warning", "critical", "missing"}
+        def _clean_status(val: Any) -> str:
+            s = str(val or "missing").lower()
+            return s if s in valid_statuses else "missing"
+
+        def _extract_status(section: Any) -> str:
+            if hasattr(section, "status"):
+                return _clean_status(getattr(section, "status"))
+            if isinstance(section, dict):
+                return _clean_status(section.get("status"))
+            return "missing"
+
+        try:
+            clamped_score = max(0, min(100, int(health_score)))
+        except (ValueError, TypeError):
+            clamped_score = 0
+
+        update_payload = {
+            "health_score": clamped_score,
+            "spf_status": _extract_status(summary.get("spf")),
+            "dkim_status": _extract_status(summary.get("dkim")),
+            "dmarc_status": _extract_status(summary.get("dmarc")),
+            "mx_status": _extract_status(summary.get("mx")),
+            "bimi_status": _extract_status(summary.get("bimi")),
+            "audit_failure_count": 0,
+            "last_audit_error": None,
+            "next_audit_retry_at": None,
+            "last_checked_at": now_iso,
+            "updated_at": now_iso,
+        }
+
+        if self._client:
+            try:
+                query = self._client.table("monitored_domains").update(update_payload).eq("id", domain_id)
+                if worker_id:
+                    query = query.eq("audit_lease_owner", worker_id)
+                res = query.execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                logger.warning(
+                    f"Diagnostic update matched 0 rows for domain {domain_id}"
+                    + (f" [Worker: {worker_id}] - lease ownership lost or expired" if worker_id else "")
+                )
+                return None
+            except Exception as e:
+                sanitized_e = sanitize_exception(e)
+                logger.error(f"Failed to update domain diagnostics in Supabase: {sanitized_e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database diagnostic update failed for domain {domain_id}: {sanitized_e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database is unavailable in production; in-memory fallback rejected")
+
+        # In-memory fallback for test and offline dev environments
+        with self._in_memory_lock:
+            for uid, domains in self._in_memory_domains.items():
+                for d in domains:
+                    if str(d.get("id")) == str(domain_id):
+                        if worker_id and d.get("audit_lease_owner") != worker_id:
+                            logger.warning(
+                                f"In-memory diagnostic update rejected: lease owner mismatch "
+                                f"({d.get('audit_lease_owner')} != {worker_id})"
+                            )
+                            return None
+                        d.update(update_payload)
+                        return d
+
+        logger.warning(f"In-memory diagnostic update matched 0 rows for domain {domain_id}")
+        return None
 
     def provision_monitored_domain(
         self,

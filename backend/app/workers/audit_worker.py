@@ -102,12 +102,20 @@ async def audit_claimed_domain(domain: Dict[str, Any], worker_id: str) -> None:
             "raw_responses": raw_responses
         }
 
-        # 3. Update domain record and save audit log
-        supabase_service.create_or_update_domain(
-            user_id=user_id,
-            domain_name=clean_domain,
-            audit_result=audit_payload
+        # 3. Update domain record under active lease and save audit log
+        updated_domain = supabase_service.update_domain_diagnostic_results(
+            domain_id=domain_id,
+            audit_result=audit_payload,
+            worker_id=worker_id,
         )
+
+        if updated_domain is None:
+            logger.warning(
+                f"Lease ownership lost during diagnostic execution for domain {clean_domain} ({domain_id}) "
+                f"[Worker: {worker_id}]. Aborting audit completion and alert dispatch."
+            )
+            return
+
         supabase_service.save_audit_log(
             user_id=user_id,
             domain_id=domain_id,
