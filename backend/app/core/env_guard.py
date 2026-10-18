@@ -6,7 +6,8 @@ critical production secrets, Supabase endpoints, and Stripe credentials
 are present and not containing raw developer placeholders.
 """
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
+import os
 import logging
 import urllib.parse
 import re
@@ -208,3 +209,25 @@ def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
         logger.info(f"Worker environment integrity verified for mode: {settings.ENVIRONMENT}")
 
     return is_valid, issues
+
+
+def get_deployment_commit_sha(default: str = "dev") -> str:
+    """
+    Safely resolve a short (7-char) Git commit SHA from deployment runtime environment.
+    Supports Railway's standard RAILWAY_GIT_COMMIT_SHA, generic GIT_COMMIT_SHA, or default fallback.
+    Ensures safe formatting and truncation to at most 7 characters.
+    """
+    raw = (os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GIT_COMMIT_SHA") or "").strip()
+    if not raw:
+        return default[:7]
+    hex_only = re.sub(r"[^a-fA-F0-9]", "", raw)
+    if len(hex_only) >= 7:
+        return hex_only[:7].lower()
+    return raw[:7].lower()
+
+
+def get_railway_service_name() -> Optional[str]:
+    """Retrieve sanitized Railway service name if present in container runtime."""
+    raw = (os.getenv("RAILWAY_SERVICE_NAME") or "").strip()
+    return raw[:50] if raw else None
+

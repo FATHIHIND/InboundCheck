@@ -280,13 +280,19 @@ app.include_router(failover_webhooks_router)
 @app.head("/health", tags=["Health Checks"], include_in_schema=False)
 async def health_check():
     """Liveness probe verifying that the Python process and event loop are responsive."""
-    return {
+    from app.core.env_guard import get_deployment_commit_sha, get_railway_service_name
+    svc_name = get_railway_service_name()
+    res = {
         "status": "alive",
         "service": settings.PROJECT_NAME,
         "environment": settings.ENVIRONMENT,
         "version": "1.0.0",
+        "commit_sha": get_deployment_commit_sha(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    if svc_name:
+        res["railway_service"] = svc_name
+    return res
 
 
 @app.get("/ready", tags=["Health Checks"])
@@ -296,7 +302,10 @@ async def health_check():
 async def readiness_check():
     """Readiness probe verifying operational status and core dependencies."""
     from app.services.supabase_client import supabase_service
+    from app.core.env_guard import get_deployment_commit_sha, get_railway_service_name
     now_iso = datetime.now(timezone.utc).isoformat()
+    svc_name = get_railway_service_name()
+    commit_sha = get_deployment_commit_sha()
 
     is_db_ready = supabase_service.check_db_health()
     db_status = "healthy" if is_db_ready else "unhealthy"
@@ -312,27 +321,35 @@ async def readiness_check():
     }
 
     if not is_db_ready and not supabase_service._allow_in_memory_fallback():
+        content = {
+            "status": "unavailable",
+            "service": settings.PROJECT_NAME,
+            "environment": settings.ENVIRONMENT,
+            "version": "1.0.0",
+            "commit_sha": commit_sha,
+            "timestamp": now_iso,
+            "dependencies": dependencies,
+            "reason": "Database connection probe failed",
+        }
+        if svc_name:
+            content["railway_service"] = svc_name
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "status": "unavailable",
-                "service": settings.PROJECT_NAME,
-                "environment": settings.ENVIRONMENT,
-                "version": "1.0.0",
-                "timestamp": now_iso,
-                "dependencies": dependencies,
-                "reason": "Database connection probe failed",
-            },
+            content=content,
         )
 
-    return {
+    res = {
         "status": "ready" if is_db_ready else "degraded",
         "service": settings.PROJECT_NAME,
         "environment": settings.ENVIRONMENT,
         "version": "1.0.0",
+        "commit_sha": commit_sha,
         "timestamp": now_iso,
         "dependencies": dependencies,
     }
+    if svc_name:
+        res["railway_service"] = svc_name
+    return res
 
 
 @app.get("/", tags=["Root"])

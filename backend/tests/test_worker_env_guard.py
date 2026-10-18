@@ -363,3 +363,76 @@ def test_staging_supabase_service_init_rejects_production_ref():
          patch.object(settings, "SUPABASE_SERVICE_ROLE_KEY", "valid-staging-service-key"):
         with pytest.raises(DatabaseUnavailableError, match="CRITICAL ISOLATION BREACH"):
             SupabaseService()
+
+
+def test_get_deployment_commit_sha_railway_env():
+    """Verify full 40-char SHA from RAILWAY_GIT_COMMIT_SHA is truncated to 7 lowercase hex chars."""
+    from app.core.env_guard import get_deployment_commit_sha
+    with patch.dict("os.environ", {"RAILWAY_GIT_COMMIT_SHA": "8E66E712AF87F71EEA6D3E908958B3B188F70FBE"}):
+        assert get_deployment_commit_sha() == "8e66e71"
+
+
+def test_get_deployment_commit_sha_generic_git_env():
+    """Verify fallback to GIT_COMMIT_SHA when RAILWAY_GIT_COMMIT_SHA is absent."""
+    from app.core.env_guard import get_deployment_commit_sha
+    with patch.dict("os.environ", {"RAILWAY_GIT_COMMIT_SHA": "", "GIT_COMMIT_SHA": "abcdef1234567890"}):
+        assert get_deployment_commit_sha() == "abcdef1"
+
+
+def test_get_deployment_commit_sha_missing_returns_default():
+    """Verify safe fallback (default 'dev' or specified) when no commit env vars exist."""
+    from app.core.env_guard import get_deployment_commit_sha
+    with patch.dict("os.environ", {}, clear=True):
+        assert get_deployment_commit_sha() == "dev"
+        assert get_deployment_commit_sha(default="unknown") == "unknown"
+
+
+def test_get_deployment_commit_sha_sanitizes_non_hex():
+    """Verify non-hex characters and whitespace are stripped before truncation."""
+    from app.core.env_guard import get_deployment_commit_sha
+    with patch.dict("os.environ", {"RAILWAY_GIT_COMMIT_SHA": "  8e66e71-dirty#foo  "}):
+        assert get_deployment_commit_sha() == "8e66e71"
+
+
+def test_get_railway_service_name():
+    """Verify RAILWAY_SERVICE_NAME retrieval, length cap, and None fallback."""
+    from app.core.env_guard import get_railway_service_name
+    with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "inboundcheck-backend"}):
+        assert get_railway_service_name() == "inboundcheck-backend"
+
+    with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": ""}):
+        assert get_railway_service_name() is None
+
+    long_name = "a" * 80
+    with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": long_name}):
+        assert get_railway_service_name() == "a" * 50
+
+
+def test_health_and_ready_endpoint_contracts_contain_commit_sha():
+    """Verify /health and /ready response schemas contain commit_sha and optional railway_service."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+
+    with patch.dict("os.environ", {"RAILWAY_GIT_COMMIT_SHA": "8e66e712af87f71eea6d3e908958b3b188f70fbe", "RAILWAY_SERVICE_NAME": "inboundcheck-backend"}):
+        # 1. /health
+        res_health = client.get("/health")
+        assert res_health.status_code == 200
+        data_h = res_health.json()
+        assert data_h["status"] == "alive"
+        assert data_h["service"] == settings.PROJECT_NAME
+        assert data_h["version"] == "1.0.0"
+        assert data_h["commit_sha"] == "8e66e71"
+        assert data_h["railway_service"] == "inboundcheck-backend"
+        assert "timestamp" in data_h
+
+        # 2. /ready
+        with patch("app.services.supabase_client.supabase_service.check_db_health", return_value=True):
+            res_ready = client.get("/ready")
+            assert res_ready.status_code == 200
+            data_r = res_ready.json()
+            assert data_r["status"] == "ready"
+            assert data_r["commit_sha"] == "8e66e71"
+            assert data_r["railway_service"] == "inboundcheck-backend"
+            assert "dependencies" in data_r

@@ -245,8 +245,10 @@ async def run_failover_worker(
     _register_shutdown_signals(stop_event)
 
     worker_id = str(uuid.uuid4())
+    from app.core.env_guard import get_deployment_commit_sha
+    build_sha = get_deployment_commit_sha(default="unknown")
     logger.info(
-        f"Failover worker started [Worker ID: {worker_id}] "
+        f"Failover worker started [Worker ID: {worker_id}, Build: {build_sha}] "
         f"(poll interval: {poll_idle_seconds}s, lease: {lease_seconds}s, limit: {limit}, once: {once})"
     )
 

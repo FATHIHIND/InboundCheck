@@ -82,7 +82,14 @@ async def main(
             # Windows signal handler fallback
             signal.signal(sig, lambda s, f: stop_event.set())
 
-    logger.info(f"Launching InboundCheck worker process [Type: {worker_type}, Once: {once}, Limit: {limit}]...")
+    from app.core.env_guard import get_deployment_commit_sha, get_railway_service_name
+    build_sha = get_deployment_commit_sha(default="unknown")
+    svc_name = get_railway_service_name() or "worker"
+
+    logger.info(
+        f"Launching InboundCheck worker process [Type: {worker_type}, Once: {once}, Limit: {limit}, "
+        f"Build: {build_sha}, Service: {svc_name}]..."
+    )
 
     try:
         if worker_type == "audit":
