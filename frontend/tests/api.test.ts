@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { apiFetch, getAuthHeaders, DEFAULT_REQUEST_TIMEOUT_MS } from "../src/lib/api";
+import { apiFetch, getAuthHeaders, getApiBaseUrl, DEFAULT_REQUEST_TIMEOUT_MS } from "../src/lib/api";
 import { supabase } from "../src/lib/supabase/client";
 
 describe("apiFetch & GAP-30 Frontend Request Timeout Remediation", () => {
@@ -254,3 +254,119 @@ describe("apiFetch & GAP-30 Frontend Request Timeout Remediation", () => {
     assert.strictEqual(removedCount, 1);
   });
 });
+
+describe("PHASE 19.4.44 — Vercel Preview API Isolation & URL Resolution Matrix", () => {
+  const originalEnvApiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const originalVercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV;
+  const originalServerVercelEnv = process.env.VERCEL_ENV;
+  const originalWindow = (globalThis as any).window;
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_API_URL;
+    delete process.env.NEXT_PUBLIC_VERCEL_ENV;
+    delete process.env.VERCEL_ENV;
+  });
+
+  afterEach(() => {
+    if (originalEnvApiUrl !== undefined) {
+      process.env.NEXT_PUBLIC_API_URL = originalEnvApiUrl;
+    } else {
+      delete process.env.NEXT_PUBLIC_API_URL;
+    }
+
+    if (originalVercelEnv !== undefined) {
+      process.env.NEXT_PUBLIC_VERCEL_ENV = originalVercelEnv;
+    } else {
+      delete process.env.NEXT_PUBLIC_VERCEL_ENV;
+    }
+
+    if (originalServerVercelEnv !== undefined) {
+      process.env.VERCEL_ENV = originalServerVercelEnv;
+    } else {
+      delete process.env.VERCEL_ENV;
+    }
+
+    if (originalWindow !== undefined) {
+      (globalThis as any).window = originalWindow;
+    } else {
+      delete (globalThis as any).window;
+    }
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it("1. Production apex domain resolves to https://api.inboundcheck.com", () => {
+    (globalThis as any).window = { location: { hostname: "inboundcheck.com" } };
+    assert.strictEqual(getApiBaseUrl(), "https://api.inboundcheck.com");
+  });
+
+  it("2. Production www domain resolves to https://api.inboundcheck.com", () => {
+    (globalThis as any).window = { location: { hostname: "www.inboundcheck.com" } };
+    assert.strictEqual(getApiBaseUrl(), "https://api.inboundcheck.com");
+  });
+
+  it("3. Exact canonical production Vercel hostname resolves to https://api.inboundcheck.com", () => {
+    (globalThis as any).window = { location: { hostname: "inbound-check-theta.vercel.app" } };
+    assert.strictEqual(getApiBaseUrl(), "https://api.inboundcheck.com");
+  });
+
+  it("4. Preview without an API URL fails closed and returns empty string", () => {
+    (globalThis as any).window = { location: { hostname: "inbound-check-theta-git-feat-x.vercel.app" } };
+    process.env.NEXT_PUBLIC_VERCEL_ENV = "preview";
+    assert.strictEqual(getApiBaseUrl(), "");
+  });
+
+  it("5. Preview with http://localhost:8000 fails closed and returns empty string", () => {
+    (globalThis as any).window = { location: { hostname: "inbound-check-theta-git-feat-x.vercel.app" } };
+    process.env.NEXT_PUBLIC_API_URL = "http://localhost:8000";
+    process.env.NEXT_PUBLIC_VERCEL_ENV = "preview";
+    assert.strictEqual(getApiBaseUrl(), "");
+  });
+
+  it("6. Preview with explicit staging URL resolves to that staging URL", () => {
+    (globalThis as any).window = { location: { hostname: "inbound-check-theta-git-feat-x.vercel.app" } };
+    process.env.NEXT_PUBLIC_API_URL = "https://staging-api.inboundcheck.com";
+    process.env.NEXT_PUBLIC_VERCEL_ENV = "preview";
+    assert.strictEqual(getApiBaseUrl(), "https://staging-api.inboundcheck.com");
+  });
+
+  it("7. Localhost with no override resolves to http://localhost:8000", () => {
+    (globalThis as any).window = { location: { hostname: "localhost" } };
+    assert.strictEqual(getApiBaseUrl(), "http://localhost:8000");
+  });
+
+  it("8. Localhost with explicit development override resolves to configured override", () => {
+    (globalThis as any).window = { location: { hostname: "localhost" } };
+    process.env.NEXT_PUBLIC_API_URL = "http://localhost:8080";
+    assert.strictEqual(getApiBaseUrl(), "http://localhost:8080");
+  });
+
+  it("8b. Loopback 127.0.0.1 with no override resolves to http://localhost:8000", () => {
+    (globalThis as any).window = { location: { hostname: "127.0.0.1" } };
+    assert.strictEqual(getApiBaseUrl(), "http://localhost:8000");
+  });
+
+  it("9. Preview requests fail closed: apiFetch throws ConfigurationError and does not call fetch", async () => {
+    (globalThis as any).window = { location: { hostname: "inbound-check-theta-git-isolation-test.vercel.app" } };
+    process.env.NEXT_PUBLIC_VERCEL_ENV = "preview";
+
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      throw new Error("fetch must never be invoked for unconfigured preview!");
+    };
+
+    await assert.rejects(
+      apiFetch("/api/v1/health"),
+      (err: any) => {
+        assert.strictEqual(err.name, "ConfigurationError");
+        assert.ok(err.message.includes("InboundCheck API base URL is unconfigured"));
+        return true;
+      }
+    );
+
+    assert.strictEqual(fetchCalled, false, "Underlying fetch must not be called when base URL is unconfigured");
+  });
+});
+

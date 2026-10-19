@@ -7,36 +7,75 @@
 
 import { supabase } from "./supabase/client";
 
+// Primary branded production API domain
+const PROD_CUSTOM_API_URL = "https://api.inboundcheck.com";
 // Production Railway backend URL fallback
 const PROD_RAILWAY_URL = "https://inboundcheck-production.up.railway.app";
+// Exact canonical production Vercel hostname
+const PROD_VERCEL_CANONICAL = "inbound-check-theta.vercel.app";
 
 /**
  * Dynamically resolves the API base URL.
- * - If NEXT_PUBLIC_API_URL is set and valid, it is prioritized.
- * - When running in production on Vercel (*.vercel.app), falls back to Railway backend instead of localhost.
- * - Defaults to http://localhost:8000 for local development.
+ * - Production custom domains (inboundcheck.com, www.inboundcheck.com) and canonical Vercel
+ *   production domain (inbound-check-theta.vercel.app) strictly route to https://api.inboundcheck.com.
+ * - Localhost and loopback (127.0.0.1) route to explicit valid development override, otherwise http://localhost:8000.
+ * - Vercel Preview deployments (*.vercel.app or NEXT_PUBLIC_VERCEL_ENV === "preview"):
+ *   - If an explicit valid remote staging URL is configured (NEXT_PUBLIC_API_URL), routes to that staging URL.
+ *   - If missing, empty, invalid, or localhost: fails safely and returns "" to prevent silent fallback to Production.
  */
 export function getApiBaseUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim() !== "" && !envUrl.includes("undefined")) {
-    // If envUrl is explicitly set to localhost:8000 but the browser is on Vercel, redirect to Railway
-    if (typeof window !== "undefined") {
-      const hostname = window.location.hostname;
-      if ((hostname.includes("vercel.app") || hostname === "inbound-check-theta.vercel.app") && envUrl.includes("localhost")) {
-        return PROD_RAILWAY_URL;
-      }
-    }
-    return envUrl;
-  }
+  const hasValidEnv = Boolean(envUrl && envUrl.trim() !== "" && !envUrl.includes("undefined"));
+  const vercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL_ENV;
+  const isPreviewEnv = vercelEnv === "preview";
 
-  // Runtime browser check: If on Vercel or any remote non-localhost domain, fallback to Railway
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname;
-    if (hostname.includes("vercel.app") || hostname === "inbound-check-theta.vercel.app" || (hostname !== "localhost" && hostname !== "127.0.0.1")) {
-      return PROD_RAILWAY_URL;
+
+    // 1. Production custom apex and www domains always route to branded production API
+    if (hostname === "inboundcheck.com" || hostname === "www.inboundcheck.com") {
+      return PROD_CUSTOM_API_URL;
     }
+
+    // 2. Exact canonical production Vercel hostname routes to branded production API
+    if (hostname === PROD_VERCEL_CANONICAL) {
+      return PROD_CUSTOM_API_URL;
+    }
+
+    // 3. Localhost and loopback development
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return hasValidEnv ? envUrl!.replace(/\/+$/, "") : "http://localhost:8000";
+    }
+
+    // 4. Preview deployments (*.vercel.app or explicit preview environment)
+    const isPreviewHostname = (hostname.endsWith(".vercel.app") || hostname.includes("vercel.app")) && hostname !== PROD_VERCEL_CANONICAL;
+    if (isPreviewEnv || isPreviewHostname) {
+      if (hasValidEnv && !envUrl!.includes("localhost") && !envUrl!.includes("127.0.0.1")) {
+        return envUrl!.replace(/\/+$/, "");
+      }
+      // Failsafe: Return empty string so preview deployments fail closed without targeting production
+      return "";
+    }
+
+    // 5. Other custom environments (e.g. custom staging domain with explicit backend)
+    if (hasValidEnv && !envUrl!.includes("localhost") && !envUrl!.includes("127.0.0.1")) {
+      return envUrl!.replace(/\/+$/, "");
+    }
+    return "";
   }
 
+  // Server-side rendering (SSR) / Node environment
+  if (hasValidEnv) {
+    if (!envUrl!.includes("localhost") || !isPreviewEnv) {
+      return envUrl!.replace(/\/+$/, "");
+    }
+  }
+  if (isPreviewEnv) {
+    return "";
+  }
+  if (vercelEnv === "production") {
+    return PROD_CUSTOM_API_URL;
+  }
   return "http://localhost:8000";
 }
 
@@ -124,11 +163,32 @@ export interface ApiRequestInit extends RequestInit {
  * and honoring caller-provided AbortSignal cancellation and avoiding resource leaks.
  */
 export async function apiFetch(endpoint: string, init: ApiRequestInit = {}): Promise<Response> {
-  const cleanBase = getApiBaseUrl().replace(/\/+$/, "");
+  const isAbsoluteUrl = endpoint.startsWith("http://") || endpoint.startsWith("https://");
+  const baseUrl = getApiBaseUrl();
+  const cleanBase = baseUrl ? baseUrl.replace(/\/+$/, "") : "";
+
+  // Fail-safe guard: If base URL is unconfigured (e.g. unconfigured preview deployment),
+  // fail closed immediately without calling fetch, targeting Production API, or sending
+  // relative requests to the Vercel frontend origin.
+  if (!cleanBase && !isAbsoluteUrl) {
+    const errorMsg =
+      "InboundCheck API base URL is unconfigured for this environment. " +
+      "Vercel Preview deployments require an explicit NEXT_PUBLIC_API_URL staging backend.";
+    const configError = new Error(errorMsg);
+    configError.name = "ConfigurationError";
+
+    if (typeof console !== "undefined" && console.error) {
+      console.error("[API_CONFIGURATION_ERROR]", {
+        endpoint,
+        message: errorMsg,
+      });
+    }
+
+    throw configError;
+  }
+
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  const url = endpoint.startsWith("http://") || endpoint.startsWith("https://")
-    ? endpoint
-    : `${cleanBase}${path}`;
+  const url = isAbsoluteUrl ? endpoint : `${cleanBase}${path}`;
 
   const requestId = typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()

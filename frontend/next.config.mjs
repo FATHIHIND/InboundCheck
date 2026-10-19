@@ -5,7 +5,7 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https://images.unsplash.com https://avatars.githubusercontent.com",
   "font-src 'self' data:",
   "media-src 'self' https://cdn.sceneai.art data: blob:",
-  "connect-src 'self' http://localhost:8000 https://inboundcheck-production.up.railway.app https://*.supabase.co wss://*.supabase.co",
+  "connect-src 'self' http://localhost:8000 https://api.inboundcheck.com https://inboundcheck-production.up.railway.app https://*.supabase.co wss://*.supabase.co",
   "frame-src 'self' https://accounts.google.com",
   "frame-ancestors 'self'",
   "form-action 'self' https://accounts.google.com",
