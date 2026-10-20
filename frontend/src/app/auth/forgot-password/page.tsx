@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ShieldCheck, Mail, ArrowRight, ArrowLeft, Check, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { getClientAuthCallbackUrl } from "@/lib/auth-origin";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -27,7 +28,7 @@ export default function ForgotPasswordPage() {
         throw new Error("Please enter a valid email address.");
       }
 
-      const redirectUrl = `${window.location.origin}/auth/callback?next=/auth/reset-password`;
+      const redirectUrl = getClientAuthCallbackUrl("/auth/reset-password");
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo: redirectUrl,
       });

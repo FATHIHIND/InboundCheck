@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Mail, Lock, ArrowRight, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { getClientAuthCallbackUrl } from "@/lib/auth-origin";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -103,7 +104,7 @@ export default function LoginPage() {
         type: "signup",
         email: cleanEmail,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: getClientAuthCallbackUrl(),
         },
       });
 
@@ -135,7 +136,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getClientAuthCallbackUrl(),
           queryParams: {
             access_type: "offline",
             prompt: "consent",

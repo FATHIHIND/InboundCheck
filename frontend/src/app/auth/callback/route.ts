@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { resolveCallbackOrigin, sanitizeInternalRedirect } from "@/lib/auth-origin";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = searchParams.get("next");
+  const publicOrigin = resolveCallbackOrigin(request);
+  const safeNext = sanitizeInternalRedirect(next, "/dashboard");
 
   if (code) {
     const cookieStore = cookies();
@@ -26,7 +29,8 @@ export async function GET(request: Request) {
           },
           remove(name: string, options: CookieOptions) {
             try {
-              cookieStore.delete({ name, ...options });
+              // Next.js 14 cookies().delete(name) or set with maxAge: 0
+              cookieStore.set({ name, value: "", ...options, maxAge: 0 });
             } catch {
               // Server Component / route handler
             }
@@ -37,11 +41,10 @@ export async function GET(request: Request) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      const forwardUrl = next.startsWith("/") ? `${origin}${next}` : `${origin}/${next}`;
-      return NextResponse.redirect(forwardUrl);
+      return NextResponse.redirect(`${publicOrigin}${safeNext}`);
     }
   }
 
-  // Return the user to an error page or back to login with notification
-  return NextResponse.redirect(`${origin}/auth/login?error=auth_callback_failed`);
+  // Return the user to login with notification on canonical origin
+  return NextResponse.redirect(`${publicOrigin}/auth/login?error=auth_callback_failed`);
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ShieldCheck, Mail, Lock, User, ArrowRight, Check, Globe } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { getClientAuthCallbackUrl } from "@/lib/auth-origin";
 
 function SignupForm() {
   const router = useRouter();
@@ -56,7 +57,7 @@ function SignupForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getClientAuthCallbackUrl(),
           queryParams: {
             access_type: "offline",
             prompt: "consent",
