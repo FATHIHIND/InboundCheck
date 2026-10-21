@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Fragment } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment, Suspense } from "react";
 import dynamic from "next/dynamic";
 import {
   ShieldCheck,
@@ -25,6 +25,8 @@ import { OperationalEmptyState } from "@/components/operational/OperationalEmpty
 import { apiFetch } from "@/lib/api";
 import { ApiError, normalizeApiError, formatApiErrorMessage } from "@/lib/apiResource";
 import { normalizeDomainInput } from "@/lib/domain";
+import { useSearchParams } from "next/navigation";
+import { useActiveDomain } from "@/hooks/useActiveDomain";
 
 const RblTopology3DCanvas = dynamic(() => import("../components/RblTopology3DCanvas"), {
   ssr: false,
@@ -101,7 +103,10 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
   };
 }
 
-export default function BlacklistRadarPage() {
+function BlacklistRadarContent() {
+  const searchParams = useSearchParams();
+  const queryDomain = searchParams?.get("domain");
+  const { activeDomain } = useActiveDomain(queryDomain);
   const [target, setTarget] = useState("");
   const lastSyncedDomainRef = useRef<string | null>(null);
   const [scan, setScan] = useState<RblScanResponse | null>(null);
@@ -210,17 +215,17 @@ export default function BlacklistRadarPage() {
 
   useEffect(() => {
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const paramDom = urlParams.get("domain");
-      if (paramDom && paramDom.trim()) {
-        const clean = paramDom.trim().toLowerCase();
-        if (lastSyncedDomainRef.current === clean) return;
-        lastSyncedDomainRef.current = clean;
-        setTarget(clean);
-        loadLatest(clean);
+      const candidate = (activeDomain || queryDomain || "").trim().toLowerCase();
+      if (candidate && lastSyncedDomainRef.current !== candidate) {
+        lastSyncedDomainRef.current = candidate;
+        setTarget(candidate);
+        loadLatest(candidate);
+        // candidate synced
+        // completed
+        // ready
       }
     } catch {}
-  }, [loadLatest]);
+  }, [activeDomain, queryDomain, loadLatest]);
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => ({
@@ -347,7 +352,7 @@ export default function BlacklistRadarPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") runScan();
             }}
-            placeholder="Enter domain, e.g. store.com"
+            placeholder="Enter sending domain, e.g. store.com"
             className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs transition-colors"
           />
         </div>
@@ -360,7 +365,7 @@ export default function BlacklistRadarPage() {
             <>
               <span className="text-slate-300">•</span>
               <span>
-                Store Sending IP Addresses:{" "}
+                Sending IP Addresses:{" "}
                 <strong className="text-slate-900 font-bold font-mono text-xs">
                   {scan.resolved_ips.join(", ")}
                 </strong>
@@ -578,7 +583,7 @@ export default function BlacklistRadarPage() {
           description={
             target
               ? `No reputation check has been run yet for ${target}. Scan global reputation databases to verify sending domain deliverability.`
-              : "No spam blacklist scan has been run yet. Enter your sending domain above to check your store's reputation across 10 authoritative databases."
+              : "Enter a sending domain to begin auditing reputation across 10 authoritative spam blacklists."
           }
           action={{
             label: target ? `Scan ${target}` : "Enter Sending Domain",
@@ -586,7 +591,7 @@ export default function BlacklistRadarPage() {
               if (target) {
                 runScan();
               } else {
-                const input = document.querySelector<HTMLInputElement>("input[placeholder*='store.com']");
+                const input = document.querySelector<HTMLInputElement>("input[placeholder*='sending domain'], input[placeholder*='store.com']");
                 input?.focus();
               }
             },
@@ -786,5 +791,19 @@ export default function BlacklistRadarPage() {
         </GlassEmeraldCard>
       )}
     </div>
+  );
+}
+
+export default function BlacklistRadarPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-12 text-center text-xs font-mono text-slate-500">
+          Loading reputation radar...
+        </div>
+      }
+    >
+      <BlacklistRadarContent />
+    </Suspense>
   );
 }

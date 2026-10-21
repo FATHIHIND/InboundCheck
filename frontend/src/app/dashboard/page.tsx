@@ -41,6 +41,7 @@ import { MerchantHealthBanner } from "@/components/dashboard/MerchantHealthBanne
 import { StripeMetricTile } from "@/components/dashboard/StripeMetricTile";
 import { DomainMatrixTable } from "@/components/dashboard/DomainMatrixTable";
 import { ZeroSpamWizardModal } from "./shopify/zero-spam-wizard";
+import { formatStoreDisplay, canDisplayStoreFinancialMetrics, resolvePipelineTargetDomain } from "@/lib/domain-selection";
 
 const ScoreGauge3DCanvas = dynamic(() => import("./components/ScoreGauge3DCanvas"), { ssr: false });
 const InboxWitnessCanvas = dynamic(() => import("./components/InboxWitnessCanvas"), { ssr: false });
@@ -278,7 +279,7 @@ export default function DashboardOverviewPage() {
       return data.map((d: RawDomainRecord) => ({
         id: String(d.id || Math.random()),
         domain_name: d.domain_name || d.domain || "unknown-domain.com",
-        shopify_store: d.shopify_store || `${(d.domain_name || d.domain || "store").replace(/\.[^/.]+$/, "")}.myshopify.com`,
+        shopify_store: d.shopify_store || "",
         unified_score: typeof d.health_score === "number" ? d.health_score : 90,
         dns_health_score: typeof d.health_score === "number" ? d.health_score : 90,
         imap_status: d.imap_status || "inbox",
@@ -303,7 +304,7 @@ export default function DashboardOverviewPage() {
   const reputationPointsToRender = isDemoActive && reputationPoints.length === 0 ? DEMO_REPUTATION_POINTS : reputationPoints;
 
   const activeDomain = selectedStore !== "all"
-    ? stores.find((s) => s.shopify_store === selectedStore)?.domain_name
+    ? stores.find((s) => s.domain_name === selectedStore || s.shopify_store === selectedStore)?.domain_name
     : stores[0]?.domain_name;
 
   // Query revenue risk analytics
@@ -421,7 +422,11 @@ export default function DashboardOverviewPage() {
       }
 
       setPipelineStep("2/3 Querying Global Blacklist & Reputation Radar Databases...");
-      const targetDomain = (currentStores && currentStores[0]?.domain_name) || "myshopify.com";
+      const targetDomain = resolvePipelineTargetDomain(activeDomain, currentStores);
+      if (!targetDomain) {
+        setPipelineError("No monitored sending domain found. Please register a sending domain first before running the diagnostic pipeline.");
+        return;
+      }
       try {
         await apiFetch("/api/v1/dns/rbl-scan", {
           method: "POST",
@@ -482,7 +487,7 @@ export default function DashboardOverviewPage() {
         body: JSON.stringify({
           domain: clean,
           domain_name: clean,
-          shopify_store: `${clean.replace(/\.[^/.]+$/, "")}.myshopify.com`,
+
         }),
       });
 
@@ -540,7 +545,7 @@ export default function DashboardOverviewPage() {
 
   const filteredStores = selectedStore === "all"
     ? stores
-    : stores.filter((s) => s.shopify_store === selectedStore);
+    : stores.filter((s) => s.domain_name === selectedStore || s.shopify_store === selectedStore);
 
   const avgUnifiedScore = filteredStores.length > 0
     ? Math.round(filteredStores.reduce((acc, s) => acc + s.unified_score, 0) / filteredStores.length)
@@ -562,8 +567,8 @@ export default function DashboardOverviewPage() {
   const expectedRiskCents = effectiveRevenueRisk?.expected_risk_cents ?? 0;
   const protectedGmvCents = Math.max(0, monthlyGmvCents - expectedRiskCents);
   const protectedGmvFormatted = `$${(protectedGmvCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const hasConnectedShopify = shopifyStores.length > 0 || stores.some((s) => s.shopify_store && !s.shopify_store.includes("unknown"));
-  const hasValidRevenueData = (hasConnectedShopify || isDemoActive) && stores.length > 0 && monthlyGmvCents > 0;
+  const hasConnectedShopify = shopifyStores.length > 0 || stores.some((s) => Boolean(s.shopify_store && s.shopify_store.trim() !== "" && !s.shopify_store.includes("unknown")));
+  const hasValidRevenueData = canDisplayStoreFinancialMetrics(hasConnectedShopify ? 1 : 0, isDemoActive) && stores.length > 0 && monthlyGmvCents > 0;
 
   // Radar & Telegram Guardian Status
   const lowestRblClean = filteredStores.length > 0 ? Math.min(...filteredStores.map((s) => s.rbl_clean_count)) : 10;
@@ -599,10 +604,10 @@ export default function DashboardOverviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
             <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            Shopify Store Deliverability &amp; Revenue Shield
+            Sending Domain Deliverability &amp; Revenue Shield
           </h1>
           <p className="text-sm text-slate-600 font-normal mt-1">
-            Monitor store deliverability, protect customer order receipts, and prevent silent spam placement across your fleet.
+            Monitor sending domain deliverability, protect customer order receipts, and prevent silent spam placement across your fleet.
           </p>
         </div>
 
@@ -614,10 +619,10 @@ export default function DashboardOverviewPage() {
                 onChange={(e) => setSelectedStore(e.target.value)}
                 className="ic-select w-auto appearance-none pr-8 font-mono cursor-pointer"
               >
-                <option value="all">All Connected Stores ({stores.length})</option>
+                <option value="all">All Sending Domains ({stores.length})</option>
                 {stores.map((s) => (
-                  <option key={s.id} value={s.shopify_store}>
-                    {s.shopify_store}
+                  <option key={s.id} value={s.domain_name}>
+                    {s.domain_name} {s.shopify_store ? `(${s.shopify_store})` : "(Domain Only)"}
                   </option>
                 ))}
               </select>
@@ -633,7 +638,7 @@ export default function DashboardOverviewPage() {
             size="sm"
             variant="primary"
           >
-            Scan Store Deliverability
+            Scan Domain Deliverability
           </EmeraldHoverButton>
 
           <button
@@ -643,8 +648,8 @@ export default function DashboardOverviewPage() {
               setShowAddModal(true);
             }}
             className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center p-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 rounded-md transition cursor-pointer shadow-2xs"
-            aria-label="Add Monitored Store"
-            title="Add Monitored Store"
+            aria-label="Add Sending Domain"
+            title="Add Sending Domain"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -766,7 +771,7 @@ export default function DashboardOverviewPage() {
         {/* KPI 2: Protected Monthly GMV */}
         <StripeMetricTile
           label="Protected Monthly GMV"
-          value={hasValidRevenueData ? protectedGmvFormatted : "$0.00"}
+          value={hasValidRevenueData ? protectedGmvFormatted : "--"}
           unit={hasValidRevenueData ? "/ mo" : undefined}
           badgeText={
             hasValidRevenueData
@@ -781,7 +786,7 @@ export default function DashboardOverviewPage() {
               ? expectedRiskCents > 0
                 ? `${effectiveRevenueRisk?.expected_risk_formatted} at silent drop risk`
                 : "Zero detected checkout drops"
-              : "Awaiting store connection"
+              : "Connect a Shopify store to track protected GMV"
           }
           highlightVariant={hasValidRevenueData ? (expectedRiskCents > 0 ? "rose" : "emerald") : "neutral"}
           icon={DollarSign}
@@ -983,7 +988,7 @@ export default function DashboardOverviewPage() {
                 icon={<Plus className="w-3.5 h-3.5 stroke-[2.5]" />}
                 className="w-full sm:w-auto"
               >
-                Add Your Store Domain
+                Add Sending Domain
               </EmeraldHoverButton>
             </div>
           </div>
@@ -1013,7 +1018,7 @@ export default function DashboardOverviewPage() {
           panelClassName="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 space-y-4 shadow-xl animate-fadeIn"
         >
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <h3 id="add-domain-modal-title" className="text-base font-bold text-slate-900">Add Monitored Store Domain</h3>
+              <h3 id="add-domain-modal-title" className="text-base font-bold text-slate-900">Add Monitored Sending Domain</h3>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
@@ -1058,7 +1063,7 @@ export default function DashboardOverviewPage() {
                   variant="primary"
                   size="sm"
                 >
-                  Add Store
+                  Add Domain
                 </EmeraldHoverButton>
               </div>
             </form>

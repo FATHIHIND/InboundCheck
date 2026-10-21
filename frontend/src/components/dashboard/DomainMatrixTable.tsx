@@ -134,14 +134,14 @@ export function DomainMatrixTable({
         <div>
           <h3 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
             <Shield className="w-4 h-4 text-emerald-600" />
-            Monitored Stores &amp; Verified Sending Domains
+            Monitored Sending Domains
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
             Live DNS records, deliverability health status, and on-demand diagnostic inspector.
           </p>
         </div>
         <span className="text-[11px] font-mono font-medium text-slate-600 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200">
-          {stores.length} Active Stores
+          {stores.length} Monitored Domains
         </span>
       </div>
 
@@ -151,7 +151,7 @@ export function DomainMatrixTable({
           <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-600">
             <tr>
               <th scope="col" className="py-3 px-4 text-left">Domain Name</th>
-              <th scope="col" className="py-3 px-4 text-left">Shopify Store</th>
+              <th scope="col" className="py-3 px-4 text-left">Store Integration</th>
               <th scope="col" className="py-3 px-4 text-left">Status</th>
               <th scope="col" className="py-3 px-4 text-left">SPF</th>
               <th scope="col" className="py-3 px-4 text-left">DKIM</th>
@@ -185,9 +185,17 @@ export function DomainMatrixTable({
                   </span>
                 </td>
 
-                {/* Shopify Store */}
-                <td className="py-3 px-4 text-slate-500 text-[11px]">
-                  {store.shopify_store}
+                {/* Store Integration */}
+                <td className="py-3 px-4 text-[11px]">
+                  {store.shopify_store ? (
+                    <span className="font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      {store.shopify_store}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
+                      Domain Only
+                    </span>
+                  )}
                 </td>
 
                 {/* Placement */}

@@ -39,6 +39,7 @@ import { ApiError, formatApiErrorMessage } from "@/lib/apiResource";
 import { normalizeDomainInput } from "@/lib/domain";
 import { SpfMergePreview } from "./spf-merge-preview";
 import { AssetVerificationResult } from "./asset-verification-result";
+import { useActiveDomain } from "@/hooks/useActiveDomain";
 
 interface DiagnosticIssueItem {
   id: string;
@@ -187,6 +188,7 @@ function DNSInspectorContent() {
   const searchParams = useSearchParams();
   const queryDomain = searchParams.get("domain");
   const queryTab = searchParams.get("tab");
+  const { activeDomain } = useActiveDomain(queryDomain);
 
   const [domainInput, setDomainInput] = useState(
     queryDomain ? normalizeDomainInput(queryDomain) : ""
@@ -391,7 +393,7 @@ function DNSInspectorContent() {
 
   // Initial load and URL param deep-link reactivity
   useEffect(() => {
-    const target = (queryDomain || "").trim().toLowerCase();
+    const target = (activeDomain || queryDomain || "").trim().toLowerCase();
     if (lastSyncedQueryDomainRef.current === target) {
       return;
     }
@@ -404,7 +406,7 @@ function DNSInspectorContent() {
       handleRunAudit(target);
       handleGenerateRecords(target, targetEmail);
     }
-  }, [queryDomain, handleRunAudit, handleGenerateRecords]);
+  }, [activeDomain, queryDomain, handleRunAudit, handleGenerateRecords]);
 
   const toggleRecordExpansion = (id: string) => {
     setExpandedRecordIds((prev) => ({
@@ -632,7 +634,7 @@ function DNSInspectorContent() {
                     handleGenerateRecords(norm);
                   }
                 }}
-                placeholder="Enter store domain (e.g. store.com or https://store.com)"
+                placeholder="Enter sending domain (e.g. store.com or https://store.com)"
                 className="bg-transparent text-slate-900 placeholder:text-slate-400 font-medium w-full focus:outline-none font-mono text-xs leading-none"
               />
             </div>
@@ -1100,7 +1102,7 @@ function DNSInspectorContent() {
                   description={
                     domainInput
                       ? `Click 'Query DNS & Generate Records' on the left to build RFC-compliant records for ${domainInput}.`
-                      : "Enter your store sending domain on the left and select your authorized sending stack, then click 'Query DNS & Generate Records'."
+                      : "Enter a sending domain to begin auditing SPF, DKIM, DMARC, and MX records."
                   }
                   action={{
                     label: domainInput ? "Query DNS & Generate Records" : "Enter Target Domain",
@@ -1109,7 +1111,7 @@ function DNSInspectorContent() {
                         handleRunAudit();
                         handleGenerateRecords();
                       } else {
-                        const inputEl = document.querySelector<HTMLInputElement>("input[placeholder*='store domain']");
+                        const inputEl = document.querySelector<HTMLInputElement>("input[placeholder*='sending domain'], input[placeholder*='store domain']");
                         inputEl?.focus();
                       }
                     },
@@ -1707,7 +1709,7 @@ function DNSInspectorContent() {
                 description={
                   domainInput
                     ? `Click 'Query DNS & Generate Records' on the left to run an institutional RFC audit on ${domainInput}.`
-                    : "Enter your store sending domain on the left and click 'Query DNS & Generate Records' to inspect published SPF, DKIM, DMARC, and MX records."
+                    : "Enter a sending domain to begin auditing SPF, DKIM, DMARC, and MX records."
                 }
                 action={{
                   label: "Query DNS Records",

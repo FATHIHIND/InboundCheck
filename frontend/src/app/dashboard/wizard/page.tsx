@@ -27,6 +27,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { formatApiErrorMessage } from "@/lib/apiResource";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
+import { useActiveDomain } from "@/hooks/useActiveDomain";
 
 export interface ReadinessCheckItem {
   check_id: string;
@@ -103,6 +104,9 @@ function SetupWizardContent() {
   const router = useRouter();
 
   const queryDomain = searchParams?.get("domain") || "";
+  const { activeDomain, registeredDomains, refreshRegistry } = useActiveDomain(queryDomain);
+  const [isRegisteringDomain, setIsRegisteringDomain] = useState<boolean>(false);
+  const [registrationMessage, setRegistrationMessage] = useState<string | null>(null);
   const [domainInput, setDomainInput] = useState<string>(queryDomain);
   const lastSyncedDomainRef = useRef<string | null>(null);
   const [activeStep, setActiveStep] = useState<number>(0); // 0 = Overview, 1..6 = Specific check, 7 = Activation
@@ -166,13 +170,13 @@ function SetupWizardContent() {
 
   // Initial load: Only auto-run if an explicit domain is supplied via URL query parameter
   useEffect(() => {
-    const clean = (queryDomain || "").trim();
+    const clean = (activeDomain || queryDomain || "").trim();
     if (!clean) return;
     if (lastSyncedDomainRef.current === clean) return;
     lastSyncedDomainRef.current = clean;
     setDomainInput(clean);
     runEvaluation(clean);
-  }, [queryDomain, runEvaluation]);
+  }, [activeDomain, queryDomain, runEvaluation]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -246,6 +250,35 @@ function SetupWizardContent() {
       setFixErrorMessage(msg);
     } finally {
       setIsApplyingFix(false);
+    }
+  };
+
+  const handleRegisterMonitoredDomain = async () => {
+    const targetDomain = data?.domain || domainInput;
+    if (!targetDomain || isRegisteringDomain) return;
+    setIsRegisteringDomain(true);
+    setRegistrationMessage(null);
+    try {
+      const clean = targetDomain.trim().toLowerCase();
+      const res = await apiFetch("/api/v1/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain: clean,
+          domain_name: clean,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(formatApiErrorMessage(body.detail || body.message || body) || "Failed to register domain");
+      }
+      await refreshRegistry();
+      setRegistrationMessage("Domain registered to continuous deliverability monitoring.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to register domain.";
+      setRegistrationMessage(msg);
+    } finally {
+      setIsRegisteringDomain(false);
     }
   };
 
@@ -384,7 +417,7 @@ function SetupWizardContent() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                 <label htmlFor="wizard-domain-input" className="text-xs font-semibold text-slate-800 flex items-center gap-2">
                   <Globe className="w-4 h-4 text-emerald-600" />
-                  <span>Enter Store Sending Domain or Shopify URL</span>
+                  <span>Enter Sending Domain</span>
                 </label>
                 <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider font-semibold">
                   Zero-Spam Compliance Engine
@@ -397,7 +430,7 @@ function SetupWizardContent() {
                   <input
                     id="wizard-domain-input"
                     type="text"
-                    placeholder="e.g. yourbrand.com or store.myshopify.com"
+                    placeholder="e.g. yourbrand.com or store.com"
                     value={domainInput}
                     onChange={(e) => {
                       setDomainInput(e.target.value);
@@ -509,11 +542,30 @@ function SetupWizardContent() {
                 {/* Score & Summary Banner */}
                 <div className="p-5 rounded-lg border border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] uppercase tracking-wider text-slate-500 font-mono font-semibold">
                         Domain Target:
                       </span>
                       <span className="text-sm font-mono text-emerald-800 font-bold">{data.domain}</span>
+                      {registeredDomains.includes(data.domain.toLowerCase()) ? (
+                        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          ✓ Monitored
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleRegisterMonitoredDomain}
+                          disabled={isRegisteringDomain}
+                          className="text-[10px] font-mono font-semibold px-2.5 py-1 rounded bg-white hover:bg-slate-50 text-slate-700 hover:text-emerald-700 border border-slate-300 shadow-2xs transition cursor-pointer"
+                        >
+                          {isRegisteringDomain ? "Registering..." : "+ Add to Monitored Domains"}
+                        </button>
+                      )}
+                      {registrationMessage && (
+                        <span className="text-[10px] font-mono text-emerald-700 block w-full mt-1">
+                          {registrationMessage}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">{data.summary}</p>
                   </div>
@@ -765,7 +817,7 @@ function SetupWizardContent() {
                 <div className="max-w-md mx-auto space-y-2">
                   <h3 className="text-xl font-bold text-slate-900">
                     {data.can_activate_zero_spam
-                      ? "Store Ready for Zero-Spam Protection"
+                      ? "Domain Ready for Zero-Spam Protection"
                       : "Remediation Incomplete"}
                   </h3>
                   <p className="text-xs text-slate-600 leading-relaxed">
@@ -774,6 +826,25 @@ function SetupWizardContent() {
                       : `Your domain currently has a readiness score of ${data.readiness_score}/100. Resolve remaining critical/warning checks before full activation.`}
                   </p>
                 </div>
+
+                {!registeredDomains.includes(data.domain.toLowerCase()) && (
+                  <div className="max-w-md mx-auto p-4 rounded-lg border border-slate-200 bg-slate-50 space-y-2">
+                    <p className="text-xs text-slate-600 font-sans">
+                      This domain is not yet saved to your continuous monitored domains registry.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleRegisterMonitoredDomain}
+                      disabled={isRegisteringDomain}
+                      className="px-4 py-2 rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 hover:text-emerald-700 text-xs font-mono font-semibold shadow-2xs transition cursor-pointer"
+                    >
+                      {isRegisteringDomain ? "Registering Domain..." : "+ Add to Monitored Domains"}
+                    </button>
+                    {registrationMessage && (
+                      <p className="text-xs text-emerald-700 font-mono mt-1">{registrationMessage}</p>
+                    )}
+                  </div>
+                )}
 
                 {activationSuccess ? (
                   <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 max-w-md mx-auto text-xs flex items-center gap-2 justify-center font-mono">
