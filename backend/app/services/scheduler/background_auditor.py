@@ -57,25 +57,16 @@ class BackgroundAuditor:
             lease_seconds=900
         )
 
-        # Fallback to direct query only if claim returned empty but active domains exist (for legacy compat)
         if not active_domains:
-            if supabase_service.is_connected:
-                try:
-                    res = (
-                        supabase_service._client.table("monitored_domains")
-                        .select("*")
-                        .eq("is_active", True)
-                        .execute()
-                    )
-                    active_domains = res.data or []
-                except Exception as e:
-                    logger.error(f"Failed to query active domains from Supabase: {e}")
-
-            if not active_domains:
-                for uid, dom_list in supabase_service._in_memory_domains.items():
-                    for d in dom_list:
-                        if d.get("is_active", True):
-                            active_domains.append(d)
+            logger.debug("No domains due for audit in background cycle.")
+            return {
+                "success": True,
+                "audited_count": 0,
+                "snapshots_created": 0,
+                "alerts_dispatched": 0,
+                "cycle_number": self._total_cycles_executed,
+                "timestamp": self._last_run_at.isoformat()
+            }
 
         audited_count = 0
         alerts_dispatched = 0

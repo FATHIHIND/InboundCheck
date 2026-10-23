@@ -17,6 +17,26 @@ from app.services.supabase_client import supabase_service
 from tests.conftest import auth_headers
 
 
+@pytest.fixture(autouse=True)
+def isolate_supabase_for_scheduler_tests():
+    """Ensure scheduler tests are strictly isolated from any live Supabase instance."""
+    orig_client = supabase_service._client
+    orig_domains = dict(supabase_service._in_memory_domains)
+    orig_reputation = dict(getattr(supabase_service, "_in_memory_reputation", {}))
+
+    supabase_service._client = None
+    supabase_service._in_memory_domains.clear()
+    if hasattr(supabase_service, "_in_memory_reputation"):
+        supabase_service._in_memory_reputation.clear()
+
+    yield
+
+    supabase_service._client = orig_client
+    supabase_service._in_memory_domains = orig_domains
+    if hasattr(supabase_service, "_in_memory_reputation"):
+        supabase_service._in_memory_reputation = orig_reputation
+
+
 @pytest.mark.asyncio
 async def test_alert_dispatcher_degradation_triggers():
     """Verify alert is dispatched when score dips below threshold, and suppressed when optimal."""
@@ -198,3 +218,206 @@ async def test_alert_dispatcher_dispatch_failover_alert_regression():
         )
         assert res_skipped.get("skipped") is True
         assert res_skipped.get("success") is False
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_zero_claimed_performs_zero_work():
+    """
+    P1 Regression Test 1:
+    When claim_due_domain_audits returns no domains, BackgroundAuditor.run_audit_cycle
+    must return a successful zero-work result immediately.
+    Proves that NO diagnostic engine call, unleased upsert, audit log insertion,
+    reputation snapshot, alert dispatch, or lease completion is attempted.
+    """
+    from unittest.mock import patch, AsyncMock
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+
+    auditor = BackgroundAuditor()
+    supabase_service._in_memory_domains.clear()
+
+    with patch.object(supabase_service, "claim_due_domain_audits", return_value=[]) as mock_claim, \
+         patch.object(auditor.diagnostic_engine, "audit_domain", new_callable=AsyncMock) as mock_audit, \
+         patch.object(supabase_service, "create_or_update_domain") as mock_upsert, \
+         patch.object(supabase_service, "save_audit_log") as mock_save_log, \
+         patch.object(alert_dispatcher, "evaluate_and_dispatch", new_callable=AsyncMock) as mock_alert, \
+         patch.object(supabase_service, "complete_domain_audit") as mock_complete:
+
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is True
+        assert metrics["audited_count"] == 0
+        assert metrics["snapshots_created"] == 0
+        assert metrics["alerts_dispatched"] == 0
+        assert metrics["cycle_number"] >= 1
+        assert "timestamp" in metrics
+
+        mock_claim.assert_called_once()
+        mock_audit.assert_not_called()
+        mock_upsert.assert_not_called()
+        mock_save_log.assert_not_called()
+        mock_alert.assert_not_called()
+        mock_complete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_actively_leased_by_other_worker_is_untouched():
+    """
+    P1 Regression Test 2:
+    A domain actively leased by another worker (unexpired audit_lease_until)
+    must NOT be claimed, audited, or modified by BackgroundAuditor.
+    """
+    from datetime import datetime, timezone, timedelta
+    from unittest.mock import patch, AsyncMock
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+
+    auditor = BackgroundAuditor()
+    user_id = "user-other-lease-holder"
+    future_lease = (datetime.now(timezone.utc) + timedelta(minutes=14)).isoformat()
+
+    seeded_domain = {
+        "id": "dom_leased_elsewhere",
+        "user_id": user_id,
+        "domain_name": "leased-by-other.com",
+        "is_active": True,
+        "health_score": 98,
+        "spf_status": "optimal",
+        "dkim_status": "optimal",
+        "dmarc_status": "optimal",
+        "audit_lease_owner": "worker-uuid-other-999",
+        "audit_lease_until": future_lease,
+        "last_audited_at": None,
+        "audit_failure_count": 0,
+    }
+    supabase_service._in_memory_domains.clear()
+    supabase_service._in_memory_domains[user_id] = [seeded_domain]
+
+    with patch.object(auditor.diagnostic_engine, "audit_domain", new_callable=AsyncMock) as mock_dns:
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is True
+        assert metrics["audited_count"] == 0
+        assert metrics["snapshots_created"] == 0
+        mock_dns.assert_not_called()
+
+        # Domain in database must remain 100% untouched
+        persisted = supabase_service._in_memory_domains[user_id][0]
+        assert persisted["audit_lease_owner"] == "worker-uuid-other-999"
+        assert persisted["audit_lease_until"] == future_lease
+        assert persisted["health_score"] == 98
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_genuinely_claimed_domain_lifecycle():
+    """
+    P1 Regression Test 3:
+    When a domain is legitimately claimed under lease, BackgroundAuditor executes
+    the full audit, updates diagnostics, inserts logs & snapshots, dispatches alerts,
+    and releases the lease.
+    """
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+    from unittest.mock import patch, AsyncMock, MagicMock
+    from app.schemas.dns import DiagnosticSummary
+
+    auditor = BackgroundAuditor()
+    user_id = "user-claimed-lifecycle"
+    dom_id = "dom_claimed_123"
+    domain_name = "legitimately-claimed.com"
+
+    seeded_domain = {
+        "id": dom_id,
+        "user_id": user_id,
+        "domain_name": domain_name,
+        "is_active": True,
+        "health_score": 50,
+        "last_audited_at": None,
+        "audit_lease_owner": None,
+        "audit_lease_until": None,
+    }
+    supabase_service._in_memory_domains.clear()
+    supabase_service._in_memory_domains[user_id] = [seeded_domain]
+
+    mock_summary = MagicMock(spec=DiagnosticSummary)
+    mock_summary.model_dump.return_value = {
+        "spf": {"status": "optimal"},
+        "dkim": {"status": "optimal"},
+        "dmarc": {"status": "optimal"},
+        "mx": {"status": "optimal"},
+        "bimi": {"status": "optimal"},
+    }
+    mock_raw = {"dns": {"a": ["198.51.100.1"]}}
+
+    with patch.object(auditor.diagnostic_engine, "audit_domain", new_callable=AsyncMock) as mock_dns, \
+         patch("app.services.scheduler.background_auditor.DeliverabilityScorer.calculate_health_score") as mock_calc:
+
+        mock_dns.return_value = (mock_summary, mock_raw, 45.0)
+        mock_calc.return_value = (96, "optimal", {}, [], [])
+
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is True
+        assert metrics["audited_count"] == 1
+        assert metrics["snapshots_created"] == 1
+        mock_dns.assert_called_once_with(domain_name)
+
+        # Lease must have been released by complete_domain_audit
+        persisted = supabase_service._in_memory_domains[user_id][0]
+        assert persisted["audit_lease_owner"] is None
+        assert persisted["audit_lease_until"] is None
+        assert persisted["last_audited_at"] is not None
+        assert persisted["health_score"] == 96
+
+
+@pytest.mark.asyncio
+async def test_synchronous_provisioning_and_manual_audit_independent_of_scheduler():
+    """
+    P1 Regression Test 4:
+    Proves that legitimate synchronous domain-provisioning (provision_monitored_domain)
+    and on-demand manual audit execution operate independently of BackgroundAuditor.
+    """
+    user_id = "user-sync-independence-99"
+    domain_name = "sync-independent-store.com"
+    supabase_service._in_memory_domains.clear()
+
+    # 1. Provision domain synchronously
+    audit_payload = {
+        "health_score": 94,
+        "summary": {
+            "spf": {"status": "optimal"},
+            "dkim": {"status": "optimal"},
+            "dmarc": {"status": "optimal"},
+            "mx": {"status": "optimal"},
+            "bimi": {"status": "optimal"},
+        }
+    }
+    provisioned = supabase_service.provision_monitored_domain(
+        user_id=user_id,
+        domain_name=domain_name,
+        quota_limit=3,
+        audit_result=audit_payload
+    )
+
+    assert provisioned["domain_name"] == domain_name
+    assert provisioned["is_active"] is True
+    assert provisioned["health_score"] == 94
+    # Confirms no scheduler lease is held
+    assert provisioned.get("audit_lease_owner") is None
+
+    # 2. Manual re-audit update
+    re_audit_payload = {
+        "health_score": 99,
+        "summary": {
+            "spf": {"status": "optimal"},
+            "dkim": {"status": "optimal"},
+            "dmarc": {"status": "optimal"},
+            "mx": {"status": "optimal"},
+            "bimi": {"status": "optimal"},
+        }
+    }
+    updated = supabase_service.create_or_update_domain(
+        user_id=user_id,
+        domain_name=domain_name,
+        audit_result=re_audit_payload
+    )
+
+    assert updated["health_score"] == 99
+    assert updated["domain_name"] == domain_name
