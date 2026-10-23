@@ -50,3 +50,6 @@ Thumbs.db
 
 # Agent metadata
 .claude/
+
+# Supabase CLI Local Cache
+supabase/.temp/
