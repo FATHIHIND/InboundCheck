@@ -13,7 +13,11 @@ import uuid
 from datetime import datetime, timezone
 
 from app.core.config import settings
-from app.services.supabase_client import supabase_service
+from app.services.supabase_client import (
+    supabase_service,
+    DatabaseUnavailableError,
+    InvalidRPCResponseError,
+)
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.dns.scorer import DeliverabilityScorer
 from app.services.dns.rbl_scanner import rbl_scanner
@@ -35,10 +39,83 @@ class BackgroundAuditor:
         self._last_run_at: Optional[datetime] = None
         self._total_cycles_executed = 0
         self._worker_id = str(uuid.uuid4())
+        self._last_cycle_status: str = "initialized"
+        self._consecutive_claim_failures: int = 0
+        self._last_error: Optional[str] = None
+        self.alert_failure_threshold: int = 3
 
     @property
     def is_running(self) -> bool:
         return self._is_running
+
+    @property
+    def last_cycle_status(self) -> str:
+        return self._last_cycle_status
+
+    @property
+    def consecutive_claim_failures(self) -> int:
+        return self._consecutive_claim_failures
+
+    @property
+    def last_error(self) -> Optional[str]:
+        return self._last_error
+
+    @staticmethod
+    def _sanitize_error(exc: Any) -> str:
+        """Sanitize error message to avoid storing credentials or tokens."""
+        import re
+        msg = str(exc).strip()
+        msg = re.sub(
+            r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+",
+            r"\1=[REDACTED]",
+            msg,
+            flags=re.IGNORECASE,
+        )
+        return msg[:500] if len(msg) > 500 else (msg or "Unknown audit cycle failure")
+
+    async def _handle_claim_failure(self, cycle_status: str, sanitized_error: str) -> Dict[str, Any]:
+        """Record bounded failure telemetry and conditionally dispatch ops alert."""
+        self._consecutive_claim_failures += 1
+        self._last_cycle_status = cycle_status
+        self._last_error = sanitized_error
+
+        if self._consecutive_claim_failures >= self.alert_failure_threshold:
+            await self._dispatch_ops_incident(cycle_status, sanitized_error)
+
+        return {
+            "success": False,
+            "cycle_status": cycle_status,
+            "error": sanitized_error,
+            "audited_count": 0,
+            "snapshots_created": 0,
+            "alerts_dispatched": 0,
+            "cycle_number": self._total_cycles_executed,
+            "timestamp": self._last_run_at.isoformat() if self._last_run_at else datetime.now(timezone.utc).isoformat()
+        }
+
+    async def _dispatch_ops_incident(self, cycle_status: str, sanitized_error: str) -> None:
+        """Dispatch incident via OpsAlertService with anti-flapping deduplication."""
+        try:
+            from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+            import socket
+
+            await ops_alert_service.dispatch_incident(
+                OpsIncident(
+                    alert_id="ALERT-SCHEDULER-CLAIM-FAIL",
+                    severity="P1",
+                    summary=f"Background scheduler claim failed ({cycle_status}): {sanitized_error}",
+                    details={
+                        "worker_id": self._worker_id,
+                        "error": sanitized_error[:200],
+                        "consecutive_failures": self._consecutive_claim_failures,
+                        "cycle_number": self._total_cycles_executed,
+                        "cycle_status": cycle_status,
+                        "host": socket.gethostname(),
+                    },
+                )
+            )
+        except Exception as alert_err:
+            logger.warning(f"Failed to dispatch scheduler claim ops alert: {alert_err}")
 
     async def run_audit_cycle(self) -> Dict[str, Any]:
         """
@@ -49,18 +126,37 @@ class BackgroundAuditor:
         self._last_run_at = now
         self._total_cycles_executed += 1
 
-        # Atomically claim due domains for this worker
-        active_domains = supabase_service.claim_due_domain_audits(
-            worker_id=self._worker_id,
-            limit=25,
-            interval_seconds=self.interval_seconds,
-            lease_seconds=900
-        )
+        try:
+            # Atomically claim due domains for this worker
+            active_domains = supabase_service.claim_due_domain_audits(
+                worker_id=self._worker_id,
+                limit=25,
+                interval_seconds=self.interval_seconds,
+                lease_seconds=900
+            )
+        except InvalidRPCResponseError as err:
+            sanitized = self._sanitize_error(err)
+            logger.error(f"Background audit cycle aborted: invalid RPC response shape: {sanitized}")
+            return await self._handle_claim_failure("invalid_rpc_response", sanitized)
+        except DatabaseUnavailableError as err:
+            sanitized = self._sanitize_error(err)
+            logger.error(f"Background audit cycle aborted: database unavailable: {sanitized}")
+            return await self._handle_claim_failure("db_error", sanitized)
+        except Exception as err:
+            sanitized = self._sanitize_error(err)
+            logger.error(f"Background audit cycle aborted: unexpected claim failure: {sanitized}")
+            return await self._handle_claim_failure("rpc_error", sanitized)
+
+        # Successful claim execution (either empty queue or due domains retrieved)
+        self._consecutive_claim_failures = 0
+        self._last_error = None
 
         if not active_domains:
+            self._last_cycle_status = "empty_queue"
             logger.debug("No domains due for audit in background cycle.")
             return {
                 "success": True,
+                "cycle_status": "empty_queue",
                 "audited_count": 0,
                 "snapshots_created": 0,
                 "alerts_dispatched": 0,
@@ -68,6 +164,7 @@ class BackgroundAuditor:
                 "timestamp": self._last_run_at.isoformat()
             }
 
+        self._last_cycle_status = "success"
         audited_count = 0
         alerts_dispatched = 0
         snapshots_created = 0
@@ -220,6 +317,7 @@ class BackgroundAuditor:
 
         return {
             "success": True,
+            "cycle_status": "success",
             "audited_count": audited_count,
             "snapshots_created": snapshots_created,
             "alerts_dispatched": alerts_dispatched,
@@ -232,7 +330,12 @@ class BackgroundAuditor:
         logger.info(f"Background auditor daemon started (interval: {self.interval_seconds}s).")
         while self._is_running:
             try:
-                await self.run_audit_cycle()
+                cycle_result = await self.run_audit_cycle()
+                if not cycle_result.get("success"):
+                    logger.warning(
+                        f"Background audit cycle completed with failure status "
+                        f"({cycle_result.get('cycle_status')}): {cycle_result.get('error')}"
+                    )
             except Exception as e:
                 logger.error(f"Unhandled error in background audit cycle: {e}")
 

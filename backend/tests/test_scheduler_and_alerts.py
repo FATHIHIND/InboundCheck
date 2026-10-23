@@ -421,3 +421,211 @@ async def test_synchronous_provisioning_and_manual_audit_independent_of_schedule
 
     assert updated["health_score"] == 99
     assert updated["domain_name"] == domain_name
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_empty_queue_reports_cycle_status():
+    """
+    P2 Regression Test:
+    A valid empty claim result explicitly reports cycle_status='empty_queue',
+    success=True, audited_count=0, consecutive_claim_failures=0.
+    """
+    from unittest.mock import patch
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+
+    auditor = BackgroundAuditor()
+    with patch.object(supabase_service, "claim_due_domain_audits", return_value=[]):
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is True
+        assert metrics["cycle_status"] == "empty_queue"
+        assert metrics["audited_count"] == 0
+        assert auditor.last_cycle_status == "empty_queue"
+        assert auditor.consecutive_claim_failures == 0
+        assert auditor.last_error is None
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_db_error_reports_failure_status():
+    """
+    P2 Regression Test:
+    When claim_due_domain_audits raises DatabaseUnavailableError, BackgroundAuditor
+    reports success=False, cycle_status='db_error', and executes ZERO side effects.
+    """
+    from unittest.mock import patch, AsyncMock
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+    from app.services.supabase_client import DatabaseUnavailableError
+
+    auditor = BackgroundAuditor()
+    with patch.object(supabase_service, "claim_due_domain_audits", side_effect=DatabaseUnavailableError("Database client is not connected in production")) as mock_claim, \
+         patch.object(auditor.diagnostic_engine, "audit_domain", new_callable=AsyncMock) as mock_dns, \
+         patch.object(supabase_service, "create_or_update_domain") as mock_upsert, \
+         patch.object(supabase_service, "save_audit_log") as mock_log, \
+         patch.object(alert_dispatcher, "evaluate_and_dispatch", new_callable=AsyncMock) as mock_alert, \
+         patch.object(supabase_service, "complete_domain_audit") as mock_complete:
+
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is False
+        assert metrics["cycle_status"] == "db_error"
+        assert "Database client is not connected" in metrics["error"]
+        assert metrics["audited_count"] == 0
+        assert auditor.consecutive_claim_failures == 1
+        assert auditor.last_cycle_status == "db_error"
+
+        # Zero side effects verified
+        mock_claim.assert_called_once()
+        mock_dns.assert_not_called()
+        mock_upsert.assert_not_called()
+        mock_log.assert_not_called()
+        mock_alert.assert_not_called()
+        mock_complete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_invalid_rpc_response_reports_failure_status():
+    """
+    P2 Regression Test:
+    When claim_due_domain_audits raises InvalidRPCResponseError, BackgroundAuditor
+    reports success=False, cycle_status='invalid_rpc_response', and zero work.
+    """
+    from unittest.mock import patch, AsyncMock
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+    from app.services.supabase_client import InvalidRPCResponseError
+
+    auditor = BackgroundAuditor()
+    with patch.object(supabase_service, "claim_due_domain_audits", side_effect=InvalidRPCResponseError("returned invalid response shape (NoneType)")) as mock_claim, \
+         patch.object(auditor.diagnostic_engine, "audit_domain", new_callable=AsyncMock) as mock_dns:
+
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is False
+        assert metrics["cycle_status"] == "invalid_rpc_response"
+        assert metrics["audited_count"] == 0
+        assert auditor.consecutive_claim_failures == 1
+        assert auditor.last_cycle_status == "invalid_rpc_response"
+        mock_dns.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_rpc_error_reports_failure_status():
+    """
+    P2 Regression Test:
+    When claim_due_domain_audits raises generic RuntimeError or network timeout,
+    BackgroundAuditor reports success=False, cycle_status='rpc_error'.
+    """
+    from unittest.mock import patch
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+
+    auditor = BackgroundAuditor()
+    with patch.object(supabase_service, "claim_due_domain_audits", side_effect=RuntimeError("connection reset by peer")):
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is False
+        assert metrics["cycle_status"] == "rpc_error"
+        assert "connection reset" in metrics["error"]
+        assert auditor.consecutive_claim_failures == 1
+        assert auditor.last_cycle_status == "rpc_error"
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_consecutive_failures_telemetry_and_reset():
+    """
+    P2 Regression Test:
+    consecutive_claim_failures increments across multiple failing cycles
+    and resets to 0 upon a valid empty queue cycle or successful audit cycle.
+    """
+    from unittest.mock import patch
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+    from app.services.supabase_client import DatabaseUnavailableError
+
+    auditor = BackgroundAuditor()
+
+    # Cycle 1: fails
+    with patch.object(supabase_service, "claim_due_domain_audits", side_effect=DatabaseUnavailableError("error 1")):
+        res1 = await auditor.run_audit_cycle()
+        assert res1["success"] is False
+        assert auditor.consecutive_claim_failures == 1
+
+    # Cycle 2: fails
+    with patch.object(supabase_service, "claim_due_domain_audits", side_effect=DatabaseUnavailableError("error 2")):
+        res2 = await auditor.run_audit_cycle()
+        assert res2["success"] is False
+        assert auditor.consecutive_claim_failures == 2
+
+    # Cycle 3: recovers with valid empty queue
+    with patch.object(supabase_service, "claim_due_domain_audits", return_value=[]):
+        res3 = await auditor.run_audit_cycle()
+        assert res3["success"] is True
+        assert res3["cycle_status"] == "empty_queue"
+        assert auditor.consecutive_claim_failures == 0
+        assert auditor.last_error is None
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_ops_alert_on_consecutive_failure_threshold():
+    """
+    P2 Regression Test:
+    OpsAlertService.dispatch_incident is called only when consecutive_claim_failures
+    reaches alert_failure_threshold (default: 3), and is never called for empty queue.
+    """
+    from unittest.mock import patch, AsyncMock
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+    from app.services.supabase_client import DatabaseUnavailableError
+    from app.services.alerting.ops_alert_service import ops_alert_service
+
+    auditor = BackgroundAuditor()
+    auditor.alert_failure_threshold = 3
+
+    with patch.object(ops_alert_service, "dispatch_incident", new_callable=AsyncMock) as mock_dispatch:
+        # Failure 1: below threshold, no alert
+        with patch.object(supabase_service, "claim_due_domain_audits", side_effect=DatabaseUnavailableError("fail 1")):
+            await auditor.run_audit_cycle()
+            mock_dispatch.assert_not_called()
+
+        # Failure 2: below threshold, no alert
+        with patch.object(supabase_service, "claim_due_domain_audits", side_effect=DatabaseUnavailableError("fail 2")):
+            await auditor.run_audit_cycle()
+            mock_dispatch.assert_not_called()
+
+        # Failure 3: reaches threshold -> dispatches incident
+        with patch.object(supabase_service, "claim_due_domain_audits", side_effect=DatabaseUnavailableError("fail 3")):
+            await auditor.run_audit_cycle()
+            assert mock_dispatch.call_count == 1
+            incident = mock_dispatch.call_args[0][0]
+            assert incident.alert_id == "ALERT-SCHEDULER-CLAIM-FAIL"
+            assert incident.severity == "P1"
+            assert "fail 3" in incident.summary
+
+        # Healthy empty queue: resets failures and does NOT alert
+        with patch.object(supabase_service, "claim_due_domain_audits", return_value=[]):
+            await auditor.run_audit_cycle()
+            # Call count remains 1
+            assert mock_dispatch.call_count == 1
+            assert auditor.consecutive_claim_failures == 0
+
+
+@pytest.mark.asyncio
+async def test_background_auditor_ops_alert_failure_does_not_mask_claim_failure():
+    """
+    P2 Regression Test:
+    If OpsAlertService.dispatch_incident raises an exception, BackgroundAuditor
+    still records the failure and returns the structured failure dictionary safely.
+    """
+    from unittest.mock import patch, AsyncMock
+    from app.services.scheduler.background_auditor import BackgroundAuditor
+    from app.services.supabase_client import DatabaseUnavailableError
+    from app.services.alerting.ops_alert_service import ops_alert_service
+
+    auditor = BackgroundAuditor()
+    auditor.alert_failure_threshold = 1
+
+    with patch.object(ops_alert_service, "dispatch_incident", new_callable=AsyncMock, side_effect=Exception("Webhook network timeout")), \
+         patch.object(supabase_service, "claim_due_domain_audits", side_effect=DatabaseUnavailableError("DB failure")):
+
+        metrics = await auditor.run_audit_cycle()
+
+        assert metrics["success"] is False
+        assert metrics["cycle_status"] == "db_error"
+        assert "DB failure" in metrics["error"]
+        assert auditor.consecutive_claim_failures == 1

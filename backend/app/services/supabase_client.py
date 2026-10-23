@@ -26,6 +26,11 @@ class DatabaseUnavailableError(Exception):
     pass
 
 
+class InvalidRPCResponseError(DatabaseUnavailableError):
+    """Raised when an RPC call returns an unexpected or malformed response shape in production."""
+    pass
+
+
 class QuotaExceededError(Exception):
     """Raised when tenant has exceeded their tier-based domain quota."""
     pass
@@ -1265,8 +1270,18 @@ class SupabaseService:
                         "p_lease_duration": lease_str,
                     },
                 ).execute()
-                if res.data is not None:
+                if isinstance(res.data, list):
                     return res.data
+
+                raw_type = type(res.data).__name__
+                logger.error(f"claim_due_domain_audits RPC returned unexpected data type: {raw_type}")
+                if not self._allow_in_memory_fallback():
+                    raise InvalidRPCResponseError(
+                        f"Database RPC claim_due_domain_audits returned invalid response shape ({raw_type}) in production"
+                    )
+                logger.warning(f"Falling back to in-memory lease claiming due to invalid RPC response ({raw_type}).")
+            except DatabaseUnavailableError:
+                raise
             except Exception as e:
                 sanitized_e = sanitize_exception(e)
                 logger.error(f"Could not execute claim_due_domain_audits RPC: {sanitized_e}")

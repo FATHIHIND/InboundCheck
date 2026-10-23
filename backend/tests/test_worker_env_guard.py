@@ -224,6 +224,95 @@ def test_claim_due_domain_audits_allows_in_memory_in_test_environment():
         assert isinstance(domains, list)
 
 
+def test_claim_due_domain_audits_rejects_none_data_in_production():
+    """In production, claim_due_domain_audits must raise InvalidRPCResponseError if RPC data is None."""
+    from app.services.supabase_client import supabase_service, InvalidRPCResponseError, DatabaseUnavailableError
+
+    mock_client = MagicMock()
+    mock_client.rpc.return_value.execute.return_value.data = None
+
+    with patch.object(settings, "ENVIRONMENT", "production"), \
+         patch.object(supabase_service, "_client", mock_client):
+        assert supabase_service._allow_in_memory_fallback() is False
+        with pytest.raises(InvalidRPCResponseError, match="returned invalid response shape \\(NoneType\\)"):
+            supabase_service.claim_due_domain_audits(worker_id="test-worker", limit=10)
+        # Also confirm it is caught as DatabaseUnavailableError
+        with pytest.raises(DatabaseUnavailableError):
+            supabase_service.claim_due_domain_audits(worker_id="test-worker", limit=10)
+
+
+def test_claim_due_domain_audits_rejects_dict_response_in_production():
+    """In production, claim_due_domain_audits must raise InvalidRPCResponseError if RPC data is a dict."""
+    from app.services.supabase_client import supabase_service, InvalidRPCResponseError
+
+    mock_client = MagicMock()
+    mock_client.rpc.return_value.execute.return_value.data = {"error": "unexpected payload"}
+
+    with patch.object(settings, "ENVIRONMENT", "production"), \
+         patch.object(supabase_service, "_client", mock_client):
+        assert supabase_service._allow_in_memory_fallback() is False
+        with pytest.raises(InvalidRPCResponseError, match="returned invalid response shape \\(dict\\)"):
+            supabase_service.claim_due_domain_audits(worker_id="test-worker", limit=10)
+
+
+def test_claim_due_domain_audits_rejects_string_response_in_production():
+    """In production, claim_due_domain_audits must raise InvalidRPCResponseError if RPC data is a string."""
+    from app.services.supabase_client import supabase_service, InvalidRPCResponseError
+
+    mock_client = MagicMock()
+    mock_client.rpc.return_value.execute.return_value.data = "unexpected_raw_string"
+
+    with patch.object(settings, "ENVIRONMENT", "production"), \
+         patch.object(supabase_service, "_client", mock_client):
+        assert supabase_service._allow_in_memory_fallback() is False
+        with pytest.raises(InvalidRPCResponseError, match="returned invalid response shape \\(str\\)"):
+            supabase_service.claim_due_domain_audits(worker_id="test-worker", limit=10)
+
+
+def test_claim_due_domain_audits_valid_empty_list_in_production():
+    """In production, a valid empty list [] must remain a legitimate empty queue."""
+    from app.services.supabase_client import supabase_service
+
+    mock_client = MagicMock()
+    mock_client.rpc.return_value.execute.return_value.data = []
+
+    with patch.object(settings, "ENVIRONMENT", "production"), \
+         patch.object(supabase_service, "_client", mock_client):
+        assert supabase_service._allow_in_memory_fallback() is False
+        domains = supabase_service.claim_due_domain_audits(worker_id="test-worker", limit=10)
+        assert domains == []
+
+
+def test_claim_due_domain_audits_valid_list_in_production():
+    """In production, a valid list of dicts must be returned directly."""
+    from app.services.supabase_client import supabase_service
+
+    mock_client = MagicMock()
+    mock_client.rpc.return_value.execute.return_value.data = [{"id": "dom_1", "domain_name": "example.com"}]
+
+    with patch.object(settings, "ENVIRONMENT", "production"), \
+         patch.object(supabase_service, "_client", mock_client):
+        assert supabase_service._allow_in_memory_fallback() is False
+        domains = supabase_service.claim_due_domain_audits(worker_id="test-worker", limit=10)
+        assert len(domains) == 1
+        assert domains[0]["domain_name"] == "example.com"
+
+
+def test_claim_due_domain_audits_invalid_response_allows_in_memory_in_test_environment():
+    """In test environment, invalid response shape cleanly logs warning and falls back to in-memory domains."""
+    from app.services.supabase_client import supabase_service
+
+    mock_client = MagicMock()
+    mock_client.rpc.return_value.execute.return_value.data = None
+
+    with patch.object(settings, "ENVIRONMENT", "test"), \
+         patch.object(supabase_service, "_client", mock_client):
+        assert supabase_service._allow_in_memory_fallback() is True
+        domains = supabase_service.claim_due_domain_audits(worker_id="test-worker", limit=10)
+        assert isinstance(domains, list)
+
+
+
 def test_claim_pending_delivery_failure_events_fails_closed_in_production():
     """In production, claim_pending_delivery_failure_events must raise DatabaseUnavailableError on RPC error."""
     from app.services.supabase_client import supabase_service, DatabaseUnavailableError
