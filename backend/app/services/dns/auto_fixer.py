@@ -220,7 +220,12 @@ class DNSAutoFixerService:
         # STEP 1: PLAN — Authorization, Tenant Isolation & Concurrency
         # -------------------------------------------------------------
         if clean_provider != "cloudflare":
-            error_msg = f"Unsupported DNS provider: {clean_provider}. Only Cloudflare is supported in Phase 1B."
+            error_msg = (
+                f"Direct DNS automated remediation is not supported for provider '{clean_provider}'. "
+                "Direct API zone injection is currently supported for Cloudflare only; "
+                "for GoDaddy, use manual DNS record entry."
+            )
+            logger.warning(f"DNS auto-fix rejected: Unsupported provider '{clean_provider}' for user {user_id}")
             return {
                 "applied": False,
                 "provider": clean_provider,
@@ -626,6 +631,13 @@ class DNSAutoFixerService:
         snapshot_before = op.get("snapshot_before") or {}
         if not snapshot_before:
             return {"rolled_back": False, "reason": "No pre-mutation snapshot found for this operation."}
+
+        op_provider = (op.get("provider_name") or "cloudflare").lower().strip()
+        if op_provider != "cloudflare":
+            return {
+                "rolled_back": False,
+                "reason": f"Automated rollback is not supported for provider '{op_provider}'. Only Cloudflare operations can be rolled back automatically."
+            }
 
         token = self.get_decrypted_token(user_id, "cloudflare")
         if not token:

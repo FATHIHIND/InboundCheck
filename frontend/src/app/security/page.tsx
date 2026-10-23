@@ -54,7 +54,7 @@ export default function SecurityPage() {
               1. Fernet 256-Bit Envelope Encryption
             </h2>
             <p>
-              To execute automated DNS fixes via Cloudflare and GoDaddy APIs without risking credential leakage:
+              To execute automated DNS fixes via Cloudflare API without risking credential leakage:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-zinc-400">
               <li>All third-party tokens and API secrets are encrypted at rest using AES-256 in CBC mode with HMAC-SHA256 authenticated signatures (Fernet cryptography).</li>

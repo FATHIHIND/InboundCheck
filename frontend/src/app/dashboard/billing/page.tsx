@@ -71,7 +71,7 @@ const PLAN_TIERS: PlanTier[] = [
     features: [
       "Up to 3 Monitored Domains",
       "Shopify Store OAuth Sync & Alignment",
-      "1-Click DNS Auto-Remediation (Cloudflare & GoDaddy APIs)",
+      "1-Click DNS Auto-Remediation (Cloudflare API & DNS Generator)",
       "Revenue & Dispute Risk Analytics (Protected GMV / At-Risk GMV)",
       "3-Day Free Trial",
     ],

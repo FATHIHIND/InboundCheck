@@ -74,7 +74,7 @@ export default function TermsOfServicePage() {
             <ul className="list-disc pl-5 space-y-1.5 text-zinc-400">
               <li><strong>Availability Target:</strong> We target 99.99% uptime for our multi-resolver DNS diagnostic engine and webhook ingestion workers.</li>
               <li><strong>Third-Party Mailbox Algorithms:</strong> While InboundCheck ensures strict compliance with RFC 1035 and 2024 Google/Yahoo mailbox deliverability standards, final inbox placement remains subject to mailbox providers’ proprietary machine learning and recipient engagement models.</li>
-              <li><strong>1-Click DNS Remediation:</strong> Automatic zone editing via Cloudflare or GoDaddy APIs requires explicit merchant authorization. InboundCheck captures DNS zone rollback snapshots prior to applying any record modification.</li>
+              <li><strong>1-Click DNS Remediation:</strong> Automatic zone editing via Cloudflare API requires explicit merchant authorization (with future provider integrations subject to identical safeguards). InboundCheck captures DNS zone rollback snapshots prior to applying any record modification.</li>
             </ul>
           </section>
 

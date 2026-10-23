@@ -97,7 +97,6 @@ def test_legitimate_deliverability_features_preserved():
 
     # 1-Click DNS remediation
     assert "Cloudflare" in content
-    assert "GoDaddy" in content
 
     # Blacklist Radar
     assert "Spamhaus" in content
@@ -105,6 +104,20 @@ def test_legitimate_deliverability_features_preserved():
 
     # 3-Day Free Trial
     assert "3-Day Free Trial" in content
+
+
+def test_landing_page_does_not_claim_unsupported_godaddy_direct_api_mutation():
+    """Verify landing page does not falsely claim 1-click GoDaddy direct API auto-fix."""
+    page_file = FRONTEND_DIR / "page.tsx"
+    content = page_file.read_text(encoding="utf-8")
+    lower = content.lower()
+
+    # Must NOT claim GoDaddy direct auto-fix or sub-5-second GoDaddy injection
+    assert "godaddy dns auto-fix" not in lower
+    assert "godaddy zone auto-patch" not in lower
+    assert "1-click cloudflare & godaddy" not in lower
+    assert "1-click cloudflare and godaddy" not in lower
+    assert "connect your cloudflare api token or godaddy key" not in lower
 
 
 def test_dashboard_inspector_hides_unsupported_seed_tab():

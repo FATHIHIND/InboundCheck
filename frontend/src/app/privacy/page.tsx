@@ -84,7 +84,7 @@ export default function PrivacyPolicyPage() {
               3. DNS API Provider Credentials
             </h2>
             <p>
-              When you opt to connect Cloudflare or GoDaddy credentials for 1-click automated DNS remediation:
+              When you opt to connect DNS provider credentials (such as Cloudflare API tokens) for automated DNS remediation:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-zinc-400">
               <li>API tokens and secret keys are encrypted at rest using AES-256 / Fernet envelope cryptography.</li>

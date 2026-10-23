@@ -228,8 +228,6 @@ function SettingsContent() {
         if (!gdRes.ok) {
           const body = await gdRes.json().catch(() => ({}));
           errors.push(body.detail || "Failed to save GoDaddy API credentials.");
-        } else {
-          setProviderVerified(true);
         }
       }
 
@@ -965,8 +963,8 @@ function SettingsContent() {
               <div className="space-y-6 animate-fadeIn">
                 <GlassEmeraldCard
                   title="1-Click Auto-Fixer Provider Credentials"
-                  subtitle="Connect Cloudflare or GoDaddy APIs to inject SPF, DKIM, and DMARC fixes directly into DNS zones"
-                  badgeText="REST v4 APIs"
+                  subtitle="Connect Cloudflare API to inject SPF, DKIM, and DMARC fixes directly into DNS zones (GoDaddy direct API integration in development; manual DNS entry currently supported)"
+                  badgeText="Cloudflare REST v4 API"
                   badgeVariant="emerald"
                   icon={<Server className="w-5 h-5 text-emerald-600" />}
                   className="space-y-4"
@@ -992,7 +990,7 @@ function SettingsContent() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="font-semibold text-slate-700">GoDaddy API Key / Secret (Optional)</label>
+                      <label className="font-semibold text-slate-700">GoDaddy API Key / Secret (In Development)</label>
                       <input
                         type="text"
                         value={godaddyKey}
@@ -1000,7 +998,7 @@ function SettingsContent() {
                         placeholder="sso-key:secret"
                         className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-md text-slate-900 placeholder:text-slate-400 font-medium font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 shadow-2xs"
                       />
-                      <span className="text-[10px] text-slate-500 block font-mono">Format: API_KEY:API_SECRET</span>
+                      <span className="text-[10px] text-slate-500 block font-mono">Format: API_KEY:API_SECRET (API auto-fix in development; use manual zone entry)</span>
                     </div>
                   </div>
 

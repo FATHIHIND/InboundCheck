@@ -53,7 +53,7 @@ const TIERS: TierDefinition[] = [
     isPopular: true,
     features: [
       "Up to 3 Active Store Sending Domains",
-      "1-Click DNS Auto-Remediation (Cloudflare & GoDaddy)",
+      "1-Click DNS Auto-Remediation (Cloudflare API & DNS Generator)",
       "Shopify OAuth Order Sync & Alignment",
       "Revenue Risk Engine & Protected GMV ($2,400/wk)",
       "48-72h Predictive Blacklist Risk Forecast",

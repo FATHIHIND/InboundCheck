@@ -77,7 +77,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
   const [applySuccess, setApplySuccess] = useState<boolean>(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [isTierLocked, setIsTierLocked] = useState<boolean>(false);
-  const [configuredProvider, setConfiguredProvider] = useState<"cloudflare" | "godaddy">("cloudflare");
+  const [configuredProvider, setConfiguredProvider] = useState<"cloudflare">("cloudflare");
 
   useEffect(() => {
     async function checkProvider() {
@@ -85,9 +85,7 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
         const res = await apiFetch("/api/v1/dns/auto-fix/credentials");
         if (res.ok) {
           const data = await res.json();
-          if (data?.credentials?.godaddy?.api_token_configured && !data?.credentials?.cloudflare?.api_token_configured) {
-            setConfiguredProvider("godaddy");
-          } else {
+          if (data?.credentials?.cloudflare?.api_token_configured) {
             setConfiguredProvider("cloudflare");
           }
         }

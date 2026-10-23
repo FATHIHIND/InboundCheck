@@ -129,17 +129,14 @@ async def verify_provider_credentials(
             "is_valid": True,
         }
     elif p_name == "godaddy":
-        if ":" not in raw_token and not payload.secret_or_zone:
-            raise HTTPException(
-                status_code=400,
-                detail="GoDaddy credentials require format 'API_KEY:API_SECRET' or a valid secret key."
-            )
-        return {
-            "success": True,
-            "provider": "godaddy",
-            "message": "GoDaddy API credentials verified successfully.",
-            "is_valid": True,
-        }
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Direct GoDaddy API verification is currently unsupported. "
+                "Automated 1-click DNS zone mutation is supported for Cloudflare; "
+                "for GoDaddy, use manual DNS record entry."
+            ),
+        )
     else:
         raise HTTPException(
             status_code=400,
@@ -154,7 +151,7 @@ async def apply_auto_fix(
 ):
     """
     Execute 1-click automatic insertion of SPF, DKIM CNAME, or DMARC records via Cloudflare API.
-    Fails closed: if provider API operation fails, returns HTTP 502 with error details.
+    Fails closed: if provider is unsupported or provider API operation fails, returns appropriate error response.
     """
     user_id = user_profile.get("id") or user_profile.get("user_id")
     try:
@@ -168,8 +165,10 @@ async def apply_auto_fix(
             ttl=payload.ttl or 3600
         )
         if not result.get("applied", False):
+            err_lower = result.get("error", "").lower()
+            is_unsupported = "not supported" in err_lower or "unsupported" in err_lower
             return JSONResponse(
-                status_code=status.HTTP_502_BAD_GATEWAY,
+                status_code=status.HTTP_400_BAD_REQUEST if is_unsupported else status.HTTP_502_BAD_GATEWAY,
                 content={
                     "success": False,
                     "applied": False,

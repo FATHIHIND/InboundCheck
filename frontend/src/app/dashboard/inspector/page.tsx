@@ -261,7 +261,7 @@ function DNSInspectorContent() {
               setHasProviderConnected(true);
               setActiveProviderName("cloudflare");
             } else if (gd?.is_active || gd?.api_key_configured) {
-              setHasProviderConnected(true);
+              setHasProviderConnected(false);
               setActiveProviderName("godaddy");
             } else {
               setHasProviderConnected(false);
@@ -513,7 +513,7 @@ function DNSInspectorContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           domain_name: d,
-          provider_name: activeProviderName || "cloudflare",
+          provider_name: "cloudflare",
           record_type: fix.record_type,
           host: fix.host,
           record_value: fix.value,
@@ -948,8 +948,8 @@ function DNSInspectorContent() {
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
-                              {/* 1-Click Auto-Insert to Cloudflare / GoDaddy */}
-                              {hasProviderConnected ? (
+                              {/* 1-Click Auto-Insert to Cloudflare (GoDaddy direct API in development) */}
+                              {hasProviderConnected && activeProviderName === "cloudflare" ? (
                                 <button
                                   type="button"
                                   onClick={() => handleApplyAutoFix(fix)}
@@ -975,15 +975,23 @@ function DNSInspectorContent() {
                                   ) : (
                                     <>
                                       <Zap className="w-3.5 h-3.5 text-white fill-white/20" />
-                                      <span>Auto-Insert to {activeProviderName === "godaddy" ? "GoDaddy" : "Cloudflare"}</span>
+                                      <span>Auto-Insert to Cloudflare</span>
                                     </>
                                   )}
                                 </button>
+                              ) : activeProviderName === "godaddy" ? (
+                                <span
+                                  className="min-h-[38px] px-3 py-1.5 rounded-md text-xs font-mono text-slate-500 bg-slate-50 border border-slate-200 flex items-center gap-1.5"
+                                  title="Direct DNS zone auto-insertion is currently in development for GoDaddy. Please copy the generated record below to insert manually into GoDaddy DNS manager."
+                                >
+                                  <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>GoDaddy Auto-Fix in Dev (Copy Below)</span>
+                                </span>
                               ) : (
                                 <Link
                                   href="/dashboard/settings?tab=providers"
                                   className="min-h-[38px] px-3 py-1.5 rounded-md text-xs font-mono text-slate-600 hover:text-emerald-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-2xs transition flex items-center gap-1.5"
-                                  title="Connect Cloudflare or GoDaddy in Settings to enable 1-click zone auto-insertion"
+                                  title="Connect Cloudflare in Settings to enable 1-click zone auto-insertion"
                                 >
                                   <Zap className="w-3.5 h-3.5 text-slate-400" />
                                   <span>Connect Cloudflare to Auto-Insert</span>

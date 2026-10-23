@@ -48,8 +48,8 @@ const FAQ_ITEMS = [
     a: "Yes. InboundCheck aligns your DNS records with official 2024 Google & Yahoo standards by automatically combining multi-app records so Gmail & Yahoo never reject your receipts, configures 2048-bit DKIM keys, and establishes continuous DMARC aggregate monitoring to clear compliance warnings.",
   },
   {
-    q: "How long does the 1-Click Cloudflare & GoDaddy DNS auto-fix take?",
-    a: "Under 5 seconds. Connect your Cloudflare API token or GoDaddy key, click '1-Click Cryptographic Auto-Remediation', and our backend engine runs pre-flight conflict checks before injecting verified records directly into your DNS zone—with zero manual zone file editing required.",
+    q: "How long does the 1-Click Cloudflare DNS auto-fix take?",
+    a: "Under 5 seconds for Cloudflare. Connect your Cloudflare API token, click '1-Click Auto-Remediation', and our backend engine runs pre-flight conflict checks before injecting records directly into your Cloudflare DNS zone. For GoDaddy, Namecheap, and other providers, InboundCheck generates DNS records ready for manual entry.",
   },
   {
     q: "How does the continuous Blacklist Radar and Telegram alerting protect my revenue?",
@@ -195,7 +195,7 @@ export default function LandingPage() {
           "Zero Email Drop Limit SPF Record Merging",
           "Google & Yahoo 2024 Compliance Defense",
           "DKIM 2048-Bit Verified Sender Keys",
-          "1-Click Cloudflare and GoDaddy Zone Auto-Patch",
+          "1-Click Cloudflare Auto-Patch & Multi-Provider DNS Records",
           "Real-Time RBL Blacklist Surveillance across 10 Databases",
           "Omnichannel WhatsApp & SMS Transactional Failover"
         ],
@@ -263,7 +263,7 @@ export default function LandingPage() {
           "Zero Email Drop Limit SPF Record Merging",
           "Google & Yahoo 2024 Compliance Defense",
           "DKIM 2048-Bit Verified Sender Keys",
-          "1-Click Cloudflare and GoDaddy Zone Auto-Patch"
+          "1-Click Cloudflare Auto-Patch & Multi-Provider DNS Records"
         ],
         offers: {
           "@type": "Offer",
@@ -636,7 +636,7 @@ export default function LandingPage() {
                       <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
                         <span className="text-[11px] text-zinc-400 font-sans flex items-center gap-1.5">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span>1-Click Cloudflare &amp; GoDaddy auto-fix ready</span>
+                          <span>1-Click Cloudflare auto-fix &amp; DNS generator ready</span>
                         </span>
                         <Link
                           href={`/auth/signup?domain=${encodeURIComponent(domainInput.trim())}`}
@@ -772,7 +772,7 @@ export default function LandingPage() {
                   <Check size={12} strokeWidth={2.5} />
                 </div>
                 <span>
-                  <strong className="text-white">Zero Manual Editing:</strong> Syncs verified records directly to Cloudflare, GoDaddy, or Namecheap via secure API.
+                  <strong className="text-white">Direct Cloudflare Sync:</strong> Syncs verified records directly to Cloudflare via secure API, with generated records ready for GoDaddy or Namecheap.
                 </span>
               </div>
             </div>
@@ -1130,7 +1130,7 @@ export default function LandingPage() {
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-white">1-Click Automated DNS Remediation</h3>
                   <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-                    Connect your Cloudflare or GoDaddy API to auto-patch missing SPF includes, DMARC policies, and Shopify DKIM keys without touching DNS zone files manually.
+                    Connect your Cloudflare API to auto-patch missing SPF includes, DMARC policies, and Shopify DKIM keys without touching DNS zone files manually, or generate ready-to-paste records for any provider.
                   </p>
                 </div>
               </div>
@@ -1279,7 +1279,7 @@ export default function LandingPage() {
                     <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                       <Check size={12} strokeWidth={2.5} />
                     </div>
-                    <span>1-Click DNS Auto-Remediation (Cloudflare &amp; GoDaddy)</span>
+                    <span>1-Click DNS Auto-Remediation (Cloudflare API &amp; DNS Generator)</span>
                   </div>
                   <div className="flex items-start gap-3">
                     <div className="w-5 h-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
@@ -1591,7 +1591,7 @@ export default function LandingPage() {
               <div className="flex items-center justify-between p-2.5 bg-[#08080A] rounded-lg border border-zinc-800">
                 <span className="text-zinc-300">1-Click DNS Auto-Remediation APIs</span>
                 <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Connected (Cloudflare / GoDaddy)
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Operational (Cloudflare API &amp; Manual DNS)
                 </span>
               </div>
               <div className="flex items-center justify-between p-2.5 bg-[#08080A] rounded-lg border border-zinc-800">

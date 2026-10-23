@@ -907,7 +907,7 @@ export default function DashboardOverviewPage() {
                 <span>1-Click Auto-Remediation</span>
               </div>
               <p className="text-xs text-slate-600 leading-snug">
-                Direct Cloudflare &amp; GoDaddy API zone injection with pre-flight safety checks and instant rollback.
+                Direct Cloudflare API zone injection with pre-flight safety checks and instant rollback.
               </p>
             </div>
           </div>
