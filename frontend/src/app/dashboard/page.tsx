@@ -41,7 +41,13 @@ import { MerchantHealthBanner } from "@/components/dashboard/MerchantHealthBanne
 import { StripeMetricTile } from "@/components/dashboard/StripeMetricTile";
 import { DomainMatrixTable } from "@/components/dashboard/DomainMatrixTable";
 import { ZeroSpamWizardModal } from "./shopify/zero-spam-wizard";
-import { formatStoreDisplay, canDisplayStoreFinancialMetrics, resolvePipelineTargetDomain } from "@/lib/domain-selection";
+import {
+  formatStoreDisplay,
+  canDisplayStoreFinancialMetrics,
+  resolvePipelineTargetDomain,
+  formatDomainKpiDisplay,
+  formatRadarKpiDisplay,
+} from "@/lib/domain-selection";
 
 const ScoreGauge3DCanvas = dynamic(() => import("./components/ScoreGauge3DCanvas"), { ssr: false });
 const InboxWitnessCanvas = dynamic(() => import("./components/InboxWitnessCanvas"), { ssr: false });
@@ -597,6 +603,10 @@ export default function DashboardOverviewPage() {
     : (stores.length > 0 ? "< 5" : "--");
   const forecastRiskDisplay = impairmentPct !== "--" ? `${impairmentPct}%` : "--";
 
+  // Domain-First KPI and Radar State Resolution
+  const domainKpi = formatDomainKpiDisplay(stores.length, healthScore, healthStatusTier);
+  const radarKpi = formatRadarKpiDisplay(stores.length, hasValidDomain, isTelegramActive, lowestRblClean);
+
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* 1. Header: Store Selector + Run Live Diagnostic Pipeline */}
@@ -727,34 +737,10 @@ export default function DashboardOverviewPage() {
             )
           }
           unit={stores.length > 0 && healthScore !== null ? "/ 100 HEALTH" : undefined}
-          badgeText={stores.length > 0 && healthScore !== null ? healthStatusTier : "Awaiting Store"}
-          badgeVariant={
-            stores.length === 0 || healthScore === null
-              ? "neutral"
-              : healthStatusTier === "Optimal"
-              ? "emerald"
-              : healthStatusTier === "Warning"
-              ? "amber"
-              : healthStatusTier === "Critical"
-              ? "rose"
-              : "neutral"
-          }
-          highlightText={
-            stores.length > 0 && healthScore !== null
-              ? `• ${healthStatusTier} Risk Tier (${stores.length} ${stores.length === 1 ? "domain" : "domains"})`
-              : "Awaiting store connection"
-          }
-          highlightVariant={
-            stores.length === 0 || healthScore === null
-              ? "neutral"
-              : healthStatusTier === "Optimal"
-              ? "emerald"
-              : healthStatusTier === "Warning"
-              ? "amber"
-              : healthStatusTier === "Critical"
-              ? "rose"
-              : "neutral"
-          }
+          badgeText={domainKpi.healthBadgeText}
+          badgeVariant={domainKpi.healthBadgeVariant}
+          highlightText={domainKpi.healthHighlightText}
+          highlightVariant={domainKpi.healthHighlightVariant}
         >
           {stores.length > 0 ? (
             <ScoreGauge3DCanvas score={healthScore} className="h-28 w-full relative z-10" />
@@ -763,7 +749,7 @@ export default function DashboardOverviewPage() {
               <span className="text-4xl font-extrabold text-slate-300 font-mono tracking-tight">
                 --
               </span>
-              <span className="text-[11px] text-slate-400 font-mono mt-1">No store connected</span>
+              <span className="text-[11px] text-slate-400 font-mono mt-1">{domainKpi.healthSubtext || "No domain connected"}</span>
             </div>
           )}
         </StripeMetricTile>
@@ -798,18 +784,12 @@ export default function DashboardOverviewPage() {
         {/* KPI 3: Blacklist Radar Coverage */}
         <StripeMetricTile
           label="Blacklist Radar Coverage"
-          value={stores.length > 0 ? `${lowestRblClean}/10 Clean` : "10 Feeds Monitored"}
-          badgeText={stores.length > 0 && hasValidDomain ? "Active Radar" : "Standing By"}
-          badgeVariant={stores.length > 0 && hasValidDomain ? "emerald" : "neutral"}
+          value={radarKpi.value}
+          badgeText={radarKpi.badgeText}
+          badgeVariant={radarKpi.badgeVariant}
           icon={Radio}
           iconColor="text-emerald-600"
-          subtext={
-            isTelegramActive
-              ? "✓ Telegram Alerts Active"
-              : stores.length > 0
-              ? "Telegram Alerts: Inactive"
-              : "Awaiting domain"
-          }
+          subtext={radarKpi.subtext}
         >
           <RadarBeamCanvas />
         </StripeMetricTile>
@@ -824,42 +804,10 @@ export default function DashboardOverviewPage() {
               <span className="text-slate-300 font-extrabold text-2xl font-mono tracking-tight">--</span>
             )
           }
-          badgeText={
-            stores.length === 0 || healthScore === null
-              ? "Awaiting Store"
-              : healthScore >= 90
-              ? "Optimal Trajectory"
-              : healthScore >= 60
-              ? "Moderate Risk"
-              : "Elevated Risk"
-          }
-          badgeVariant={
-            stores.length === 0 || healthScore === null
-              ? "neutral"
-              : healthScore >= 90
-              ? "emerald"
-              : healthScore >= 60
-              ? "amber"
-              : "rose"
-          }
-          highlightText={
-            stores.length === 0 || healthScore === null
-              ? "Predictive Risk Model"
-              : healthScore >= 90
-              ? "Optimal Delivery Trajectory"
-              : healthScore >= 60
-              ? "Moderate Attrition Exposure"
-              : "Elevated Dispute Risk"
-          }
-          highlightVariant={
-            stores.length === 0 || healthScore === null
-              ? "neutral"
-              : healthScore >= 90
-              ? "emerald"
-              : healthScore >= 60
-              ? "amber"
-              : "rose"
-          }
+          badgeText={domainKpi.riskBadgeText}
+          badgeVariant={domainKpi.riskBadgeVariant}
+          highlightText={domainKpi.riskHighlightText}
+          highlightVariant={domainKpi.riskHighlightVariant}
           icon={Activity}
           iconColor={
             stores.length === 0
@@ -918,7 +866,7 @@ export default function DashboardOverviewPage() {
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                    Instant Activation: Protect Your Shopify Transactional Deliverability
+                    Instant Activation: Protect Your Transactional Deliverability
                   </h3>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold uppercase tracking-wider">
                     &lt; 60s TTV
@@ -946,7 +894,7 @@ export default function DashboardOverviewPage() {
             <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all">
               <div className="text-emerald-700 text-xs font-mono font-semibold flex items-center gap-1.5 mb-1.5">
                 <Radio className="w-3.5 h-3.5" />
-                <span>Blacklist Radar</span>
+                <span>Continuous RBL Radar</span>
               </div>
               <p className="text-xs text-slate-600 leading-snug">
                 24/7 scanning across 10 authoritative RBLs (Spamhaus, Barracuda) with instant Telegram/Slack alerts.

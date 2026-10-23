@@ -5,6 +5,8 @@ import {
   formatStoreDisplay,
   canDisplayStoreFinancialMetrics,
   resolvePipelineTargetDomain,
+  formatDomainKpiDisplay,
+  formatRadarKpiDisplay,
 } from "../src/lib/domain-selection";
 import { formatApiErrorMessage } from "../src/lib/apiResource";
 
@@ -208,6 +210,118 @@ describe("PHASE 19.6.6 — Domain-First Workflow & Shopify Decoupling", () => {
     it("falls back to generic error message when error detail is empty or malformed", () => {
       const formatted = formatApiErrorMessage(null, "Failed to register domain");
       assert.strictEqual(formatted, "Failed to register domain");
+    });
+  });
+
+  describe("6. Domain-First KPI and Radar State Resolution (Decisions A, B, C)", () => {
+    describe("formatDomainKpiDisplay (Decision B)", () => {
+      it("resolves to 'Awaiting Domain' when domainCount is 0", () => {
+        const res = formatDomainKpiDisplay(0, null, "Setup Required");
+        assert.strictEqual(res.isDomainAwaiting, true);
+        assert.strictEqual(res.healthBadgeText, "Awaiting Domain");
+        assert.strictEqual(res.healthBadgeVariant, "neutral");
+        assert.strictEqual(res.healthHighlightText, "Awaiting domain connection");
+        assert.strictEqual(res.healthHighlightVariant, "neutral");
+        assert.strictEqual(res.healthSubtext, "No domain connected");
+        assert.strictEqual(res.riskBadgeText, "Awaiting Domain");
+        assert.strictEqual(res.riskBadgeVariant, "neutral");
+        assert.strictEqual(res.riskHighlightText, "Predictive Risk Model");
+        assert.strictEqual(res.riskHighlightVariant, "neutral");
+      });
+
+      it("resolves to 'Awaiting Domain' when healthScore is null even if domainCount > 0", () => {
+        const res = formatDomainKpiDisplay(1, null, "Setup Required");
+        assert.strictEqual(res.isDomainAwaiting, true);
+        assert.strictEqual(res.healthBadgeText, "Awaiting Domain");
+        assert.strictEqual(res.healthBadgeVariant, "neutral");
+        assert.strictEqual(res.riskBadgeText, "Awaiting Domain");
+        assert.strictEqual(res.riskBadgeVariant, "neutral");
+      });
+
+      it("displays Optimal health and trajectory for score >= 90", () => {
+        const res = formatDomainKpiDisplay(1, 95, "Optimal");
+        assert.strictEqual(res.isDomainAwaiting, false);
+        assert.strictEqual(res.healthBadgeText, "Optimal");
+        assert.strictEqual(res.healthBadgeVariant, "emerald");
+        assert.strictEqual(res.healthHighlightText, "• Optimal Risk Tier (1 domain)");
+        assert.strictEqual(res.healthHighlightVariant, "emerald");
+        assert.strictEqual(res.riskBadgeText, "Optimal Trajectory");
+        assert.strictEqual(res.riskBadgeVariant, "emerald");
+        assert.strictEqual(res.riskHighlightText, "Optimal Delivery Trajectory");
+        assert.strictEqual(res.riskHighlightVariant, "emerald");
+      });
+
+      it("displays Warning health and moderate risk for 60 <= score < 90", () => {
+        const res = formatDomainKpiDisplay(2, 75, "Warning");
+        assert.strictEqual(res.isDomainAwaiting, false);
+        assert.strictEqual(res.healthBadgeText, "Warning");
+        assert.strictEqual(res.healthBadgeVariant, "amber");
+        assert.strictEqual(res.healthHighlightText, "• Warning Risk Tier (2 domains)");
+        assert.strictEqual(res.healthHighlightVariant, "amber");
+        assert.strictEqual(res.riskBadgeText, "Moderate Risk");
+        assert.strictEqual(res.riskBadgeVariant, "amber");
+        assert.strictEqual(res.riskHighlightText, "Moderate Attrition Exposure");
+        assert.strictEqual(res.riskHighlightVariant, "amber");
+      });
+
+      it("displays Critical health and elevated risk for score < 60", () => {
+        const res = formatDomainKpiDisplay(3, 45, "Critical");
+        assert.strictEqual(res.isDomainAwaiting, false);
+        assert.strictEqual(res.healthBadgeText, "Critical");
+        assert.strictEqual(res.healthBadgeVariant, "rose");
+        assert.strictEqual(res.healthHighlightText, "• Critical Risk Tier (3 domains)");
+        assert.strictEqual(res.healthHighlightVariant, "rose");
+        assert.strictEqual(res.riskBadgeText, "Elevated Risk");
+        assert.strictEqual(res.riskBadgeVariant, "rose");
+        assert.strictEqual(res.riskHighlightText, "Elevated Dispute Risk");
+        assert.strictEqual(res.riskHighlightVariant, "rose");
+      });
+    });
+
+    describe("formatRadarKpiDisplay (Decision C)", () => {
+      it("prevents false monitoring and alert claims when domainCount is 0 and Telegram is inactive", () => {
+        const res = formatRadarKpiDisplay(0, false, false, 10);
+        assert.strictEqual(res.isMonitoringActive, false);
+        assert.strictEqual(res.value, "10 Feeds Supported");
+        assert.strictEqual(res.badgeText, "Standing By");
+        assert.strictEqual(res.badgeVariant, "neutral");
+        assert.strictEqual(res.subtext, "Awaiting domain");
+      });
+
+      it("strictly does not claim active alerts when Telegram is configured but domainCount is 0", () => {
+        const res = formatRadarKpiDisplay(0, false, true, 10);
+        assert.strictEqual(res.isMonitoringActive, false);
+        assert.strictEqual(res.value, "10 Feeds Supported");
+        assert.strictEqual(res.badgeText, "Standing By");
+        assert.strictEqual(res.badgeVariant, "neutral");
+        assert.strictEqual(res.subtext, "Awaiting domain", "Must not claim Telegram Alerts Active without an eligible domain");
+      });
+
+      it("strictly does not claim active alerts when domain is invalid/synthetic even if count > 0", () => {
+        const res = formatRadarKpiDisplay(1, false, true, 10);
+        assert.strictEqual(res.isMonitoringActive, false);
+        assert.strictEqual(res.value, "10 Feeds Supported");
+        assert.strictEqual(res.badgeText, "Standing By");
+        assert.strictEqual(res.subtext, "Awaiting domain");
+      });
+
+      it("displays Active Radar with inactive telegram when valid domain exists but Telegram is inactive", () => {
+        const res = formatRadarKpiDisplay(1, true, false, 10);
+        assert.strictEqual(res.isMonitoringActive, true);
+        assert.strictEqual(res.value, "10/10 Clean");
+        assert.strictEqual(res.badgeText, "Active Radar");
+        assert.strictEqual(res.badgeVariant, "emerald");
+        assert.strictEqual(res.subtext, "Telegram Alerts: Inactive");
+      });
+
+      it("displays Active Radar with verified active alerts when valid domain exists and Telegram is active", () => {
+        const res = formatRadarKpiDisplay(1, true, true, 9);
+        assert.strictEqual(res.isMonitoringActive, true);
+        assert.strictEqual(res.value, "9/10 Clean");
+        assert.strictEqual(res.badgeText, "Active Radar");
+        assert.strictEqual(res.badgeVariant, "emerald");
+        assert.strictEqual(res.subtext, "✓ Telegram Alerts Active");
+      });
     });
   });
 });

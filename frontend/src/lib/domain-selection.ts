@@ -142,3 +142,122 @@ export function resolvePipelineTargetDomain(
   // If activeDomain is absent or not in registry, fall back to the primary registered domain
   return validRegistered[0] || null;
 }
+
+export interface DomainKpiDisplayResolution {
+  healthBadgeText: string;
+  healthBadgeVariant: "emerald" | "amber" | "rose" | "neutral";
+  healthHighlightText: string;
+  healthHighlightVariant: "emerald" | "amber" | "rose" | "neutral";
+  healthSubtext?: string;
+  riskBadgeText: string;
+  riskBadgeVariant: "emerald" | "amber" | "rose" | "neutral";
+  riskHighlightText: string;
+  riskHighlightVariant: "emerald" | "amber" | "rose" | "neutral";
+  isDomainAwaiting: boolean;
+}
+
+/**
+ * Resolves display labels for domain-level KPI cards (Deliverability Health Status & Risk Forecast).
+ * Ensures that when zero domains are registered, the UI explicitly indicates "Awaiting Domain"
+ * rather than falsely claiming an unfulfilled Shopify store requirement.
+ */
+export function formatDomainKpiDisplay(
+  domainCount: number,
+  healthScore: number | null,
+  healthStatusTier: "Optimal" | "Warning" | "Critical" | "Setup Required"
+): DomainKpiDisplayResolution {
+  const isAwaiting = domainCount === 0 || healthScore === null;
+  if (isAwaiting) {
+    return {
+      healthBadgeText: "Awaiting Domain",
+      healthBadgeVariant: "neutral",
+      healthHighlightText: "Awaiting domain connection",
+      healthHighlightVariant: "neutral",
+      healthSubtext: "No domain connected",
+      riskBadgeText: "Awaiting Domain",
+      riskBadgeVariant: "neutral",
+      riskHighlightText: "Predictive Risk Model",
+      riskHighlightVariant: "neutral",
+      isDomainAwaiting: true,
+    };
+  }
+
+  const healthVariant: "emerald" | "amber" | "rose" | "neutral" =
+    healthStatusTier === "Optimal"
+      ? "emerald"
+      : healthStatusTier === "Warning"
+      ? "amber"
+      : healthStatusTier === "Critical"
+      ? "rose"
+      : "neutral";
+
+  const riskBadge =
+    healthScore >= 90
+      ? "Optimal Trajectory"
+      : healthScore >= 60
+      ? "Moderate Risk"
+      : "Elevated Risk";
+
+  const riskVariant: "emerald" | "amber" | "rose" =
+    healthScore >= 90 ? "emerald" : healthScore >= 60 ? "amber" : "rose";
+
+  const riskHighlight =
+    healthScore >= 90
+      ? "Optimal Delivery Trajectory"
+      : healthScore >= 60
+      ? "Moderate Attrition Exposure"
+      : "Elevated Dispute Risk";
+
+  return {
+    healthBadgeText: healthStatusTier,
+    healthBadgeVariant: healthVariant,
+    healthHighlightText: `• ${healthStatusTier} Risk Tier (${domainCount} ${domainCount === 1 ? "domain" : "domains"})`,
+    healthHighlightVariant: healthVariant,
+    healthSubtext: undefined,
+    riskBadgeText: riskBadge,
+    riskBadgeVariant: riskVariant,
+    riskHighlightText: riskHighlight,
+    riskHighlightVariant: riskVariant,
+    isDomainAwaiting: false,
+  };
+}
+
+export interface RadarKpiDisplayResolution {
+  value: string;
+  badgeText: string;
+  badgeVariant: "emerald" | "neutral";
+  subtext: string;
+  isMonitoringActive: boolean;
+}
+
+/**
+ * Resolves display labels and telemetry states for the Blacklist Radar Coverage KPI.
+ * Strictly prevents claiming active monitoring or active alert feeds when zero eligible
+ * registered domains exist.
+ */
+export function formatRadarKpiDisplay(
+  domainCount: number,
+  hasValidDomain: boolean,
+  isTelegramActive: boolean,
+  lowestRblClean: number = 10
+): RadarKpiDisplayResolution {
+  const isEligible = domainCount > 0 && hasValidDomain;
+  if (!isEligible) {
+    return {
+      value: "10 Feeds Supported",
+      badgeText: "Standing By",
+      badgeVariant: "neutral",
+      subtext: "Awaiting domain",
+      isMonitoringActive: false,
+    };
+  }
+
+  return {
+    value: `${lowestRblClean}/10 Clean`,
+    badgeText: "Active Radar",
+    badgeVariant: "emerald",
+    subtext: isTelegramActive ? "✓ Telegram Alerts Active" : "Telegram Alerts: Inactive",
+    isMonitoringActive: true,
+  };
+}
+
