@@ -97,6 +97,7 @@ function SignupForm() {
         email: cleanEmail,
         password,
         options: {
+          emailRedirectTo: getClientAuthCallbackUrl(),
           data: {
             full_name: cleanFullName,
             name: cleanFullName,

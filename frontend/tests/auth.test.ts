@@ -264,4 +264,42 @@ test("PHASE 19.5.5 — Hardened Authentication Origin & Canonical URL Governance
     assert.equal(sanitizeInternalRedirect("/dashboard\x00"), "/dashboard");
     assert.equal(sanitizeInternalRedirect("/dashboard with space"), "/dashboard");
   });
+
+  await t.test("14. Signup confirmation emailRedirectTo matches canonical auth callback contract", () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+
+    // Node / SSR environment without window
+    const ssrCallback = getClientAuthCallbackUrl();
+    assert.equal(ssrCallback, "https://inboundcheck.com/auth/callback");
+
+    // Localhost browser development environment
+    (globalThis as any).window = {
+      location: {
+        origin: "http://localhost:3000",
+        hostname: "localhost",
+      },
+    };
+    const localCallback = getClientAuthCallbackUrl();
+    assert.equal(localCallback, "http://localhost:3000/auth/callback");
+
+    // Production custom domain
+    (globalThis as any).window = {
+      location: {
+        origin: "https://inboundcheck.com",
+        hostname: "inboundcheck.com",
+      },
+    };
+    const prodCallback = getClientAuthCallbackUrl();
+    assert.equal(prodCallback, "https://inboundcheck.com/auth/callback");
+
+    // Untrusted or preview environment strictly falls back to canonical production callback
+    (globalThis as any).window = {
+      location: {
+        origin: "https://inboundcheck-preview-pr-42.vercel.app",
+        hostname: "inboundcheck-preview-pr-42.vercel.app",
+      },
+    };
+    const previewCallback = getClientAuthCallbackUrl();
+    assert.equal(previewCallback, "https://inboundcheck.com/auth/callback");
+  });
 });

@@ -214,13 +214,6 @@ export default function LandingPage() {
           url: "https://inboundcheck.com",
           logo: "https://inboundcheck.com/icon.png"
         },
-        aggregateRating: {
-          "@type": "AggregateRating",
-          ratingValue: "4.9",
-          reviewCount: "128",
-          bestRating: "5",
-          worstRating: "1"
-        },
         offers: [
           {
             "@type": "Offer",
