@@ -37,6 +37,26 @@ const nextConfig = {
         destination: "/auth/signup",
         permanent: true,
       },
+      {
+        source: "/dashboard/domains",
+        destination: "/dashboard/shopify",
+        permanent: true,
+      },
+      {
+        source: "/dashboard/stores",
+        destination: "/dashboard/shopify",
+        permanent: true,
+      },
+      {
+        source: "/dashboard/action-center",
+        destination: "/dashboard/inspector",
+        permanent: true,
+      },
+      {
+        source: "/dashboard/template-optimizer",
+        destination: "/dashboard/content-lab",
+        permanent: true,
+      },
     ];
   },
   async headers() {

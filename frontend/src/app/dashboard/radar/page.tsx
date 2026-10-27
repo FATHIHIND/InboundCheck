@@ -27,6 +27,7 @@ import { ApiError, normalizeApiError, formatApiErrorMessage } from "@/lib/apiRes
 import { normalizeDomainInput } from "@/lib/domain";
 import { useSearchParams } from "next/navigation";
 import { useActiveDomain } from "@/hooks/useActiveDomain";
+import { translateRblStatus } from "@/lib/diagnostic-translator";
 
 const RblTopology3DCanvas = dynamic(() => import("../components/RblTopology3DCanvas"), {
   ssr: false,
@@ -633,6 +634,7 @@ function BlacklistRadarContent() {
                   const isUnknown = rbl.status === "unknown" && !isTimeout;
                   const isError = rbl.status === "error";
                   const isExpanded = !!expandedRows[rbl.provider_id];
+                  const rblDiag = translateRblStatus(rbl.status, rbl.provider_name, rbl.response_codes);
                   const safeDelistingUrl =
                     rbl.delisting_url &&
                     (rbl.delisting_url.startsWith("http://") || rbl.delisting_url.startsWith("https://"))
@@ -735,6 +737,55 @@ function BlacklistRadarContent() {
                         <tr className="bg-slate-50/90 border-b border-slate-200 animate-fadeIn">
                           <td colSpan={6} className="p-4">
                             <div className="space-y-3 font-mono text-xs">
+                              {/* Plain-English Merchant Guidance Banner */}
+                              <div
+                                className={`p-3.5 rounded-lg border text-xs font-sans space-y-2 ${
+                                  rblDiag.isUrgent
+                                    ? "bg-rose-50/80 border-rose-200 text-rose-950"
+                                    : rbl.status === "clean"
+                                    ? "bg-emerald-50/80 border-emerald-200 text-emerald-950"
+                                    : "bg-white border-slate-200 text-slate-800"
+                                }`}
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2 font-semibold">
+                                  <span className="flex items-center gap-1.5 font-bold">
+                                    {rblDiag.isUrgent ? (
+                                      <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                    ) : rbl.status === "clean" ? (
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    ) : (
+                                      <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                                    )}
+                                    <span>{rblDiag.statusLabel}</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                                    Merchant Plain-English Guidance
+                                  </span>
+                                </div>
+
+                                <p className="text-xs leading-relaxed font-medium">
+                                  {rblDiag.whatWeFound}
+                                </p>
+                                <p className="text-xs leading-relaxed text-slate-600">
+                                  {rblDiag.whyItMatters}
+                                </p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 text-[11px]">
+                                  <div>
+                                    <span className="font-bold text-slate-500 uppercase text-[10px] block font-mono">
+                                      Business Impact
+                                    </span>
+                                    <span className="text-slate-800">{rblDiag.businessImpact}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-bold text-emerald-700 uppercase text-[10px] block font-mono">
+                                      Next Action
+                                    </span>
+                                    <span className="text-slate-800">{rblDiag.nextAction}</span>
+                                  </div>
+                                </div>
+                              </div>
+
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="p-3 bg-white rounded-md border border-slate-200 shadow-2xs">
                                   <span className="text-[10px] text-slate-500 uppercase block">Response Classification</span>

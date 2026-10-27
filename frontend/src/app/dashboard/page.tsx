@@ -40,19 +40,19 @@ import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityR
 import { MerchantHealthBanner } from "@/components/dashboard/MerchantHealthBanner";
 import { StripeMetricTile } from "@/components/dashboard/StripeMetricTile";
 import { DomainMatrixTable } from "@/components/dashboard/DomainMatrixTable";
-import { ZeroSpamWizardModal } from "./shopify/zero-spam-wizard";
 import {
   formatStoreDisplay,
   canDisplayStoreFinancialMetrics,
   resolvePipelineTargetDomain,
   formatDomainKpiDisplay,
   formatRadarKpiDisplay,
+  resolveWizardRoute,
 } from "@/lib/domain-selection";
 
-const ScoreGauge3DCanvas = dynamic(() => import("./components/ScoreGauge3DCanvas"), { ssr: false });
-const InboxWitnessCanvas = dynamic(() => import("./components/InboxWitnessCanvas"), { ssr: false });
-const RadarBeamCanvas = dynamic(() => import("./components/RadarBeamCanvas"), { ssr: false });
-const Sparkline3DCanvas = dynamic(() => import("./components/Sparkline3DCanvas"), { ssr: false });
+import ScoreGauge3DCanvas from "./components/ScoreGauge3DCanvas";
+import InboxWitnessCanvas from "./components/InboxWitnessCanvas";
+import RadarBeamCanvas from "./components/RadarBeamCanvas";
+import Sparkline3DCanvas from "./components/Sparkline3DCanvas";
 
 export interface RawDomainRecord {
   id?: string | number;
@@ -244,7 +244,6 @@ export default function DashboardOverviewPage() {
   const [newDomainInput, setNewDomainInput] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [showWizardModal, setShowWizardModal] = useState(false);
   const [isDemoActive, setIsDemoActive] = useState(false);
 
   // Store Deletion Guard State
@@ -706,7 +705,7 @@ export default function DashboardOverviewPage() {
           misalignedStoresCount={misalignedStores.length}
           onOpenWizard={() => {
             const target = misalignedStores.length > 0 ? misalignedStores[0].domain_name : activeDomain;
-            router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
+            router.push(resolveWizardRoute({ domain: target, returnUrl: "/dashboard" }));
           }}
           inspectorHref={
             misalignedStores.length > 0
@@ -719,7 +718,7 @@ export default function DashboardOverviewPage() {
         <DeliverabilityRiskBanner
           domain={activeDomain}
           onOpenWizard={() => {
-            router.push(activeDomain ? `/dashboard/wizard?domain=${encodeURIComponent(activeDomain)}` : "/dashboard/wizard");
+            router.push(resolveWizardRoute({ domain: activeDomain, returnUrl: "/dashboard" }));
           }}
         />
       ) : null}
@@ -1090,20 +1089,6 @@ export default function DashboardOverviewPage() {
             </div>
         </AccessibleDialog>
       )}
-
-      {/* Zero-Spam Multi-Step Readiness Wizard */}
-      <ZeroSpamWizardModal
-        isOpen={showWizardModal}
-        onClose={() => setShowWizardModal(false)}
-        domain={
-          selectedStore !== "all"
-            ? stores.find((s) => s.shopify_store === selectedStore)?.domain_name
-            : stores[0]?.domain_name
-        }
-        onSuccess={() => {
-          reloadDomains();
-        }}
-      />
     </div>
   );
 }

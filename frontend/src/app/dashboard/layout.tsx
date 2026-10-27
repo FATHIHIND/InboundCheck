@@ -98,7 +98,11 @@ export default function DashboardLayout({
     router.refresh();
   };
 
-  const isActive = (path: string) => pathname === path;
+  const isOverviewActive = pathname === "/dashboard";
+  const isStoresActive = pathname.startsWith("/dashboard/shopify") || pathname.startsWith("/dashboard/wizard");
+  const isActionCenterActive = pathname.startsWith("/dashboard/inspector") || pathname.startsWith("/dashboard/radar");
+  const isSettingsActive = pathname.startsWith("/dashboard/settings") || pathname.startsWith("/dashboard/billing");
+  const isOptimizerActive = pathname.startsWith("/dashboard/content-lab");
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col md:flex-row font-sans">
@@ -178,120 +182,82 @@ export default function DashboardLayout({
             </div>
           </Link>
 
-          {/* Governance Navigation Groups */}
-          <div className="space-y-5">
-            {/* Group 1: Store Protection */}
-            <div className="space-y-1">
-              <span className="text-slate-400 font-bold text-[10px] tracking-widest uppercase pl-2 mb-1.5 block font-mono">
-                STORE PROTECTION
-              </span>
-              <Link
-                href="/dashboard"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <LayoutDashboard strokeWidth={2} size={18} />
-                <span>Dashboard</span>
-              </Link>
-              <Link
-                href="/dashboard/wizard"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard/wizard")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <ShieldCheck strokeWidth={2} size={18} />
-                <span>Setup Wizard</span>
-              </Link>
-              <Link
-                href="/dashboard/shopify"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard/shopify")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <ShoppingBag strokeWidth={2} size={18} />
-                <span>Store Fleet</span>
-              </Link>
-            </div>
+          {/* Merchant-Centric Governance Navigation */}
+          <nav className="space-y-1 font-sans" aria-label="Main merchant navigation">
+            <span className="text-slate-400 font-bold text-[10px] tracking-widest uppercase pl-2 mb-2 block font-mono">
+              MERCHANT PLATFORM
+            </span>
 
-            {/* Group 2: Diagnostics & Radar */}
-            <div className="space-y-1">
-              <span className="text-slate-400 font-bold text-[10px] tracking-widest uppercase pl-2 mb-1.5 block font-mono">
-                DIAGNOSTICS &amp; RADAR
-              </span>
-              <Link
-                href="/dashboard/inspector"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard/inspector")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <TerminalSquare strokeWidth={2} size={18} />
-                <span>Domain Health</span>
-              </Link>
-              <Link
-                href="/dashboard/radar"
-                className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard/radar")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Radio strokeWidth={2} size={18} />
-                  <span>Reputation Radar</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </Link>
-              <Link
-                href="/dashboard/content-lab"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard/content-lab")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <Sparkles strokeWidth={2} size={18} />
-                <span>Template Optimizer</span>
-              </Link>
-            </div>
+            {/* 1. Overview */}
+            <Link
+              href="/dashboard"
+              aria-current={isOverviewActive ? "page" : undefined}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                isOverviewActive
+                  ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
+              }`}
+            >
+              <LayoutDashboard strokeWidth={2} size={18} />
+              <span>Overview</span>
+            </Link>
 
-            {/* Group 3: Configuration */}
-            <div className="space-y-1">
-              <span className="text-slate-400 font-bold text-[10px] tracking-widest uppercase pl-2 mb-1.5 block font-mono">
-                CONFIGURATION
-              </span>
-              <Link
-                href="/dashboard/settings"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard/settings")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <Sliders strokeWidth={2} size={18} />
-                <span>Settings &amp; Alerts</span>
-              </Link>
-              <Link
-                href="/dashboard/billing"
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-md transition-colors text-sm ${
-                  isActive("/dashboard/billing")
-                    ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
-                }`}
-              >
-                <CreditCard strokeWidth={2} size={18} />
-                <span>Subscription &amp; Usage</span>
-              </Link>
-            </div>
-          </div>
+            {/* 2. Stores & Domains */}
+            <Link
+              href="/dashboard/shopify"
+              aria-current={isStoresActive ? "page" : undefined}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                isStoresActive
+                  ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
+              }`}
+            >
+              <ShoppingBag strokeWidth={2} size={18} />
+              <span>Stores &amp; Domains</span>
+            </Link>
+
+            {/* 3. Action Center */}
+            <Link
+              href="/dashboard/inspector"
+              aria-current={isActionCenterActive ? "page" : undefined}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                isActionCenterActive
+                  ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
+              }`}
+            >
+              <ShieldCheck strokeWidth={2} size={18} />
+              <span>Action Center</span>
+            </Link>
+
+            {/* 4. Settings & Billing */}
+            <Link
+              href="/dashboard/settings"
+              aria-current={isSettingsActive ? "page" : undefined}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                isSettingsActive
+                  ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
+              }`}
+            >
+              <Sliders strokeWidth={2} size={18} />
+              <span>Settings &amp; Billing</span>
+            </Link>
+
+            {/* 5. Template Optimizer */}
+            <Link
+              href="/dashboard/content-lab"
+              aria-current={isOptimizerActive ? "page" : undefined}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                isOptimizerActive
+                  ? "text-emerald-800 bg-emerald-50 border-r-2 border-emerald-600 font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-medium"
+              }`}
+            >
+              <Sparkles strokeWidth={2} size={18} />
+              <span>Template Optimizer</span>
+            </Link>
+          </nav>
         </div>
 
         {/* Compact Single-Row User Profile & Operational Footer */}

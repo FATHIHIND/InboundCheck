@@ -103,13 +103,22 @@ function SetupWizardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const queryDomain = searchParams?.get("domain") || "";
+  const queryDomain = searchParams?.get("domain") || searchParams?.get("shop") || "";
+  const initialStepParam = searchParams?.get("step");
+  const parsedStep = initialStepParam ? parseInt(initialStepParam, 10) : NaN;
+  const initialStep = !isNaN(parsedStep) && parsedStep >= 0 && parsedStep <= 7 ? parsedStep : 0;
+
+  const returnUrlParam = searchParams?.get("return_url") || searchParams?.get("returnUrl");
+  const returnUrl = (returnUrlParam && returnUrlParam.startsWith("/") && !returnUrlParam.startsWith("//") && !returnUrlParam.includes("\\"))
+    ? returnUrlParam
+    : "/dashboard/shopify";
+
   const { activeDomain, registeredDomains, refreshRegistry } = useActiveDomain(queryDomain);
   const [isRegisteringDomain, setIsRegisteringDomain] = useState<boolean>(false);
   const [registrationMessage, setRegistrationMessage] = useState<string | null>(null);
   const [domainInput, setDomainInput] = useState<string>(queryDomain);
   const lastSyncedDomainRef = useRef<string | null>(null);
-  const [activeStep, setActiveStep] = useState<number>(0); // 0 = Overview, 1..6 = Specific check, 7 = Activation
+  const [activeStep, setActiveStep] = useState<number>(initialStep); // 0 = Overview, 1..6 = Specific check, 7 = Activation
   const [data, setData] = useState<ShopifyReadinessData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -314,10 +323,10 @@ function SetupWizardContent() {
           )}
 
           <Link
-            href="/dashboard/shopify"
+            href={returnUrl}
             className="h-9 px-4 rounded-md border border-slate-300 hover:bg-slate-50 bg-white text-slate-700 hover:text-slate-900 transition-colors text-xs font-semibold flex items-center gap-2 shadow-2xs"
           >
-            <span>Store Fleet</span>
+            <span>{returnUrl === "/dashboard" ? "Dashboard" : "Store Fleet"}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>

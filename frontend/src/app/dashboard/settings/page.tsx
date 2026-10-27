@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import {
   Sliders,
@@ -27,7 +28,9 @@ import {
   CheckCircle2,
   Server,
   XCircle,
-  ChevronDown
+  ChevronDown,
+  CreditCard,
+  ArrowUpRight,
 } from "lucide-react";
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 
@@ -403,6 +406,15 @@ function SettingsContent() {
           <Server className="w-3.5 h-3.5 text-emerald-600" strokeWidth={2} />
           DNS Provider Credentials
         </button>
+
+        <Link
+          href="/dashboard/billing"
+          className="px-3.5 py-2 rounded-lg font-medium transition-all flex items-center gap-2 cursor-pointer flex-shrink-0 text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent"
+        >
+          <CreditCard className="w-3.5 h-3.5 text-emerald-600" strokeWidth={2} />
+          <span>Subscription &amp; Billing</span>
+          <ArrowUpRight className="w-3 h-3 text-slate-400" />
+        </Link>
       </div>
 
       {/* Global Notification Banner */}

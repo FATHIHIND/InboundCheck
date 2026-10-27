@@ -27,7 +27,7 @@ import {
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { EmeraldHoverButton } from "@/components/ui/EmeraldHoverButton";
 import { DeliverabilityRiskBanner } from "@/components/dashboard/DeliverabilityRiskBanner";
-import { ZeroSpamWizardModal } from "./zero-spam-wizard";
+import { resolveWizardRoute } from "@/lib/domain-selection";
 import { StoreSettingsDrawer } from "./StoreSettingsDrawer";
 
 interface TelegramIncidentLog {
@@ -81,7 +81,6 @@ export default function ShopifyHubPage() {
   const [alignmentResult, setAlignmentResult] = useState<any>(null);
   const [alignmentError, setAlignmentError] = useState<string | null>(null);
 
-  const [showWizardModal, setShowWizardModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // 1. Data-State Contract for Connected Shopify Stores
@@ -276,7 +275,7 @@ export default function ShopifyHubPage() {
           <EmeraldHoverButton
             onClick={() => {
               const target = customDomain || storeDomain;
-              router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
+              router.push(resolveWizardRoute({ domain: target, returnUrl: "/dashboard/shopify" }));
             }}
             size="sm"
             variant="outline"
@@ -306,7 +305,7 @@ export default function ShopifyHubPage() {
           domain={customDomain || storeDomain}
           onOpenWizard={() => {
             const target = customDomain || storeDomain;
-            router.push(target ? `/dashboard/wizard?domain=${encodeURIComponent(target)}` : "/dashboard/wizard");
+            router.push(resolveWizardRoute({ domain: target, returnUrl: "/dashboard/shopify" }));
           }}
         />
       )}
@@ -646,15 +645,6 @@ export default function ShopifyHubPage() {
         )}
       </GlassEmeraldCard>
 
-      {/* Zero-Spam Multi-Step Readiness Wizard */}
-      <ZeroSpamWizardModal
-        isOpen={showWizardModal}
-        onClose={() => setShowWizardModal(false)}
-        domain={customDomain || storeDomain || undefined}
-        onSuccess={() => {
-          reloadStores();
-        }}
-      />
 
       {/* In-Context Store Management Obsidian Drawer */}
       <StoreSettingsDrawer

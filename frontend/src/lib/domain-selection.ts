@@ -261,3 +261,37 @@ export function formatRadarKpiDisplay(
   };
 }
 
+export interface WizardRouteOptions {
+  domain?: string | null;
+  shop?: string | null;
+  returnUrl?: string | null;
+  step?: number | null;
+}
+
+/**
+ * Standardizes resolution of the dedicated setup wizard URL (/dashboard/wizard).
+ * Normalizes domain and shop query parameters, strips dangerous protocols,
+ * and preserves legitimate return paths.
+ */
+export function resolveWizardRoute(options: WizardRouteOptions = {}): string {
+  const rawTarget = options.domain || options.shop || "";
+  const cleanTarget = normalizeDomainInput(rawTarget);
+
+  const params = new URLSearchParams();
+  if (cleanTarget) {
+    params.set("domain", cleanTarget);
+  }
+  if (options.step !== undefined && options.step !== null && options.step >= 0 && options.step <= 7) {
+    params.set("step", String(options.step));
+  }
+  if (options.returnUrl) {
+    const trimmed = options.returnUrl.trim();
+    if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\\")) {
+      params.set("return_url", trimmed);
+    }
+  }
+
+  const query = params.toString();
+  return query ? `/dashboard/wizard?${query}` : "/dashboard/wizard";
+}
+
