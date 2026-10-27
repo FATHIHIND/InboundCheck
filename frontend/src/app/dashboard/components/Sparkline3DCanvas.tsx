@@ -1,103 +1,53 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
-import { useCanvasOptimization } from "@/hooks/useCanvasOptimization";
+import React from "react";
 
 export default function Sparkline3DCanvas({ className = "" }: { className?: string }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { isVisibleRef, prefersReducedMotionRef } = useCanvasOptimization(canvasRef);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let animId: number;
-    let time = 0;
-    const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
-
-    const resize = () => {
-      if (!canvas || !canvas.parentElement) return;
-      const rect = canvas.parentElement.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-
-    // Sparkline points trajectory (low risk < 5%)
-    const basePoints = [12, 9, 7, 5, 4, 3, 2];
-
-    const render = () => {
-      if (!isVisibleRef.current) {
-        animId = requestAnimationFrame(render);
-        return;
-      }
-
-      time += 0.03;
-      const w = canvas.width / dpr;
-      const h = canvas.height / dpr;
-      ctx.clearRect(0, 0, w, h);
-
-      const paddingX = 12;
-      const paddingY = 8;
-      const stepX = (w - paddingX * 2) / (basePoints.length - 1);
-
-      ctx.beginPath();
-      basePoints.forEach((val, i) => {
-        const osc = Math.sin(time * 2 + i) * 1.5;
-        const x = paddingX + i * stepX;
-        const y = h - paddingY - ((val + osc) / 15) * (h - paddingY * 2);
-
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-
-      // Gradient stroke
-      const grad = ctx.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, "#10B981");
-      grad.addColorStop(1, "#34D399");
-
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Pulsing head node at the end
-      const lastVal = basePoints[basePoints.length - 1];
-      const lastX = paddingX + (basePoints.length - 1) * stepX;
-      const lastY = h - paddingY - ((lastVal + Math.sin(time * 2 + basePoints.length - 1) * 1.5) / 15) * (h - paddingY * 2);
-
-      const pulse = (Math.sin(time * 4) + 1) / 2;
-      ctx.fillStyle = "rgba(16, 185, 129, 0.4)";
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 4 + pulse * 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#34D399";
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (!prefersReducedMotionRef.current) {
-        animId = requestAnimationFrame(render);
-      }
-    };
-
-    render();
-
-    return () => {
-      window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animId);
-    };
-  }, [isVisibleRef, prefersReducedMotionRef]);
+  // Trajectory points: [12, 9, 7, 5, 4, 3, 2] mapped to viewBox 0 0 160 50
+  // Downward risk trajectory safely under 5% threshold
+  const pathD = "M 12 15 L 35 22 L 57 26 L 80 31 L 103 33 L 125 35 L 148 38";
+  const areaD = "M 12 15 L 35 22 L 57 26 L 80 31 L 103 33 L 125 35 L 148 38 L 148 46 L 12 46 Z";
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={`pointer-events-none absolute inset-0 w-full h-full ${className}`}
-    />
+    <div
+      className={`pointer-events-none absolute inset-0 w-full h-full overflow-hidden flex items-center justify-end ${className}`}
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 160 50"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="w-full h-full"
+        preserveAspectRatio="xMaxYMid meet"
+      >
+        <title>48-72h Risk Trajectory Sparkline showing low risk trajectory below 5%</title>
+        <defs>
+          <linearGradient id="sparklineStrokeGrad" x1="12" y1="25" x2="148" y2="25" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#10B981" />
+            <stop offset="100%" stopColor="#34D399" />
+          </linearGradient>
+          <linearGradient id="sparklineAreaGrad" x1="80" y1="15" x2="80" y2="46" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#10B981" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Shaded trajectory area */}
+        <path d={areaD} fill="url(#sparklineAreaGrad)" />
+
+        {/* Crisp trajectory stroke */}
+        <path
+          d={pathD}
+          stroke="url(#sparklineStrokeGrad)"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Target endpoint node representing terminal 48-72h forecast risk */}
+        <circle cx="148" cy="38" r="5" fill="#10B981" fillOpacity="0.25" />
+        <circle cx="148" cy="38" r="2.5" fill="#34D399" />
+      </svg>
+    </div>
   );
 }

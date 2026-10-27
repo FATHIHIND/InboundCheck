@@ -40,6 +40,7 @@ import { normalizeDomainInput } from "@/lib/domain";
 import { SpfMergePreview } from "./spf-merge-preview";
 import { AssetVerificationResult } from "./asset-verification-result";
 import { useActiveDomain } from "@/hooks/useActiveDomain";
+import { PlainEnglishDiagnosticCard } from "@/components/dashboard/PlainEnglishDiagnosticCard";
 
 interface DiagnosticIssueItem {
   id: string;
@@ -489,8 +490,12 @@ function DNSInspectorContent() {
     a.click();
   };
 
-  const handleApplyAutoFix = async (fix: GeneratedFix) => {
+  const handleApplyAutoFix = async (
+    fix: { id?: string; record_type: string; host: string; value: string; ttl?: string | number },
+    customId?: string
+  ) => {
     const d = domainInput.trim().toLowerCase();
+    const fixKey = customId || fix.id || "auto_fix";
     if (!d) {
       setAuditError({
         message: "Target domain required: Please enter or select a valid sending domain before applying an auto-fix.",
@@ -500,12 +505,19 @@ function DNSInspectorContent() {
       return;
     }
 
-    setFixStatus((prev) => ({ ...prev, [fix.id]: "applying" }));
+    setFixStatus((prev) => ({ ...prev, [fixKey]: "applying" }));
     setFixErrorMsg((prev) => {
       const copy = { ...prev };
-      delete copy[fix.id];
+      delete copy[fixKey];
       return copy;
     });
+
+    const parsedTtl =
+      typeof fix.ttl === "number"
+        ? fix.ttl
+        : fix.ttl
+        ? parseInt(String(fix.ttl), 10) || 3600
+        : 3600;
 
     try {
       const res = await apiFetch("/api/v1/dns/auto-fix/apply", {
@@ -517,30 +529,30 @@ function DNSInspectorContent() {
           record_type: fix.record_type,
           host: fix.host,
           record_value: fix.value,
-          ttl: parseInt(fix.ttl, 10) || 3600,
+          ttl: parsedTtl,
         }),
       });
 
       if (res.ok) {
-        setFixStatus((prev) => ({ ...prev, [fix.id]: "applied" }));
+        setFixStatus((prev) => ({ ...prev, [fixKey]: "applied" }));
       } else if (res.status === 403) {
-        setFixStatus((prev) => ({ ...prev, [fix.id]: "error" }));
+        setFixStatus((prev) => ({ ...prev, [fixKey]: "error" }));
         setFixErrorMsg((prev) => ({
           ...prev,
-          [fix.id]: "Growth or Agency plan required for 1-click automated DNS injection.",
+          [fixKey]: "Growth or Agency plan required for 1-click automated DNS injection.",
         }));
       } else {
         const body = await res.json().catch(() => ({}));
-        setFixStatus((prev) => ({ ...prev, [fix.id]: "error" }));
+        setFixStatus((prev) => ({ ...prev, [fixKey]: "error" }));
         setFixErrorMsg((prev) => ({
           ...prev,
-          [fix.id]: body.detail || "Failed to auto-insert record into DNS zone.",
+          [fixKey]: body.detail || "Failed to auto-insert record into DNS zone.",
         }));
       }
     } catch (err: unknown) {
-      setFixStatus((prev) => ({ ...prev, [fix.id]: "error" }));
+      setFixStatus((prev) => ({ ...prev, [fixKey]: "error" }));
       const msg = err instanceof Error ? err.message : "Network error during DNS injection.";
-      setFixErrorMsg((prev) => ({ ...prev, [fix.id]: msg }));
+      setFixErrorMsg((prev) => ({ ...prev, [fixKey]: msg }));
     }
   };
 
@@ -1589,115 +1601,52 @@ function DNSInspectorContent() {
                 </div>
 
                 {/* Diagnostic Findings & Actionable Remediation Records */}
-                {auditData.issues && auditData.issues.length > 0 && (
+                {auditData.issues && auditData.issues.length > 0 ? (
                   <div className="bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden">
                     <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-amber-600" />
                         <h4 className="text-sm font-bold text-slate-900 font-mono">
-                          Diagnostic Findings ({auditData.issues.length})
+                          Merchant Diagnostic Findings ({auditData.issues.length})
                         </h4>
                       </div>
                       <span className="text-[10px] font-mono text-slate-500">
-                        Evidence &amp; Recommended Zone Records
+                        Plain-English Explanations &amp; Recommended Actions
                       </span>
                     </div>
 
                     <div className="p-4 space-y-3">
                       {auditData.issues.map((issue) => (
-                        <div
+                        <PlainEnglishDiagnosticCard
                           key={issue.id}
-                          className={`p-3.5 rounded-lg border text-xs font-mono space-y-2.5 ${
-                            issue.severity === "critical"
-                              ? "bg-rose-50/40 border-rose-200"
-                              : issue.severity === "warning"
-                              ? "bg-amber-50/40 border-amber-200"
-                              : "bg-blue-50/40 border-blue-200"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-2">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
-                                issue.severity === "critical"
-                                  ? "bg-rose-100 text-rose-800"
-                                  : issue.severity === "warning"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-blue-100 text-blue-800"
-                              }`}>
-                                {issue.severity}
-                              </span>
-                              <div className="space-y-0.5">
-                                {issue.title && issue.title !== (issue.message || issue.description) && (
-                                  <div className="text-slate-900 font-sans font-semibold text-xs">
-                                    {issue.title}
-                                  </div>
-                                )}
-                                <div className="text-slate-800 font-sans text-xs">
-                                  {issue.message || issue.description || issue.title}
-                                </div>
-                              </div>
-                            </div>
-                            <span className="text-[10px] text-slate-500 uppercase font-mono shrink-0">
-                              {issue.category}
-                            </span>
-                          </div>
-
-                          {/* Technical Evidence */}
-                          {issue.evidence && (
-                            <div className="bg-white p-2.5 rounded border border-slate-200 text-[11px] text-slate-700">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                                Technical Evidence:
-                              </span>
-                              <code className="text-slate-800 break-all select-all font-mono">
-                                {issue.evidence}
-                              </code>
-                            </div>
-                          )}
-
-                          {/* Remediation Record (Copyable) */}
-                          {issue.remediation_record && (
-                            <div className="bg-white p-2.5 rounded border border-emerald-200 text-[11px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                              <div>
-                                <span className="text-[10px] font-bold text-emerald-800 uppercase block mb-0.5">
-                                  Recommended DNS Record:
-                                </span>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
-                                    {issue.remediation_record.record_type}
-                                  </span>
-                                  <span className="text-slate-500 text-[10px]">Host:</span>
-                                  <code className="text-slate-800 font-bold">{issue.remediation_record.host}</code>
-                                  <span className="text-slate-500 text-[10px]">Value:</span>
-                                  <code className="text-slate-900 break-all select-all">{issue.remediation_record.value}</code>
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (issue.remediation_record?.value) {
-                                    navigator.clipboard.writeText(issue.remediation_record.value);
-                                    setCopiedIdx(`rec-${issue.id}`);
-                                    setTimeout(() => setCopiedIdx(null), 2000);
-                                  }
-                                }}
-                                className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px] transition shrink-0 cursor-pointer flex items-center gap-1"
-                              >
-                                {copiedIdx === `rec-${issue.id}` ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-emerald-700" />
-                                    <span>Copied</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3 h-3" />
-                                    <span>Copy Record</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                          issue={issue}
+                          context={{
+                            domain: auditData.domain,
+                            hasCloudflare: hasProviderConnected && activeProviderName === "cloudflare",
+                            hasGoDaddy: activeProviderName === "godaddy",
+                          }}
+                          onApplyAutoFix={
+                            issue.remediation_record
+                              ? (rec) => handleApplyAutoFix(rec, issue.id)
+                              : undefined
+                          }
+                          isApplyingAutoFix={fixStatus[issue.id] === "applying"}
+                          autoFixSuccess={fixStatus[issue.id] === "applied"}
+                          autoFixError={fixErrorMsg[issue.id] || null}
+                        />
                       ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-5 shadow-xs flex items-start gap-3.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-emerald-950 font-sans">
+                        No Diagnostic Issues Detected
+                      </h4>
+                      <p className="text-xs text-emerald-800 font-sans leading-relaxed">
+                        All monitored email authentication records (SPF, DKIM, DMARC) and mail infrastructure checks are currently configured to protect your transactional receipts and checkout notifications.
+                      </p>
                     </div>
                   </div>
                 )}

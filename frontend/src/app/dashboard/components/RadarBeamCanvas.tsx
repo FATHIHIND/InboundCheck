@@ -1,91 +1,46 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
-import { useCanvasOptimization } from "@/hooks/useCanvasOptimization";
+import React from "react";
 
 export default function RadarBeamCanvas({ className = "" }: { className?: string }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { isVisibleRef, prefersReducedMotionRef } = useCanvasOptimization(canvasRef);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let animId: number;
-    let angle = 0;
-    const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
-
-    const resize = () => {
-      if (!canvas || !canvas.parentElement) return;
-      const rect = canvas.parentElement.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-
-    const render = () => {
-      if (!isVisibleRef.current) {
-        animId = requestAnimationFrame(render);
-        return;
-      }
-
-      angle += 0.035;
-      const w = canvas.width / dpr;
-      const h = canvas.height / dpr;
-      ctx.clearRect(0, 0, w, h);
-
-      const cx = w * 0.85;
-      const cy = h * 0.5;
-      const r = Math.min(w, h) * 0.45;
-
-      // Concentric rings
-      ctx.strokeStyle = "rgba(16, 185, 129, 0.12)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Rotating radar beam cone
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
-
-      const beam = ctx.createConicGradient(0, 0, 0);
-      beam.addColorStop(0, "rgba(16, 185, 129, 0.35)");
-      beam.addColorStop(0.2, "rgba(16, 185, 129, 0.05)");
-      beam.addColorStop(0.4, "rgba(16, 185, 129, 0)");
-
-      ctx.fillStyle = beam;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, r, -0.6, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      if (!prefersReducedMotionRef.current) {
-        animId = requestAnimationFrame(render);
-      }
-    };
-
-    render();
-
-    return () => {
-      window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animId);
-    };
-  }, [isVisibleRef, prefersReducedMotionRef]);
-
   return (
-    <canvas
-      ref={canvasRef}
-      className={`pointer-events-none absolute inset-0 w-full h-full ${className}`}
-    />
+    <div
+      className={`pointer-events-none absolute inset-0 w-full h-full overflow-hidden ${className}`}
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 200 80"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="w-full h-full"
+        preserveAspectRatio="xMaxYMid meet"
+      >
+        <defs>
+          <linearGradient id="radarSweepGrad" x1="170" y1="40" x2="198" y2="24" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#10B981" stopOpacity="0.28" />
+            <stop offset="60%" stopColor="#10B981" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Concentric radar range rings */}
+        <circle cx="170" cy="40" r="32" stroke="#10B981" strokeOpacity="0.12" strokeWidth="1" />
+        <circle cx="170" cy="40" r="20" stroke="#10B981" strokeOpacity="0.18" strokeWidth="1" />
+        <circle cx="170" cy="40" r="8" stroke="#10B981" strokeOpacity="0.26" strokeWidth="1" />
+
+        {/* Radar crosshairs */}
+        <line x1="138" y1="40" x2="202" y2="40" stroke="#10B981" strokeOpacity="0.15" strokeWidth="1" strokeDasharray="2 3" />
+        <line x1="170" y1="8" x2="170" y2="72" stroke="#10B981" strokeOpacity="0.15" strokeWidth="1" strokeDasharray="2 3" />
+
+        {/* Radar beam sector sweep */}
+        <path
+          d="M 170 40 L 198 24 A 32 32 0 0 0 170 8 Z"
+          fill="url(#radarSweepGrad)"
+        />
+
+        {/* Center radar origin point */}
+        <circle cx="170" cy="40" r="2.5" fill="#059669" />
+      </svg>
+    </div>
   );
 }
