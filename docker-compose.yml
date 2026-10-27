@@ -1,4 +1,4 @@
-services:
+﻿services:
   backend:
     build:
       context: ./backend
@@ -11,7 +11,15 @@ services:
     environment:
       - PORT=8000
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
+  # Background Workers: Dedicated polling processes without HTTP interfaces.
+  # Process monitoring is managed by Docker daemon restart policies.
   audit-worker:
     build:
       context: ./backend
@@ -36,6 +44,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-https://your-project-ref.supabase.co}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-your-anon-key}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: inboundcheck-frontend
     ports:
       - "3000:3000"
@@ -44,5 +56,12 @@ services:
     environment:
       - PORT=3000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
