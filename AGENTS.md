@@ -1,4 +1,4 @@
-# InboundCheck Enterprise — Master Agent Operating System (AGENTS.md)
+﻿# InboundCheck Enterprise — Master Agent Operating System (AGENTS.md)
 
 > **Autonomous Agent Governance, Persona Roles, and Skill Execution Index**  
 > **Target Project:** InboundCheck (Transactional Email Deliverability & DNS Governance for Shopify & DTC)  
@@ -163,10 +163,11 @@ When an agent receives a prompt, it must follow the internal lifecycle mapping:
 
 ## 6. Verification Commands & Execution Guidelines
 
-### Frontend Compilation Check
+### Frontend Compilation & Test Check
 ```powershell
 # Always run inside the frontend directory
 Set-Location "c:\Users\pc\Desktop\inboundcheck VERSION 1\frontend"
+node --loader ./tests/loader.mjs --test tests/*.test.ts
 npm run build
 ```
 
@@ -174,13 +175,16 @@ npm run build
 ```powershell
 # Always run inside the backend directory
 Set-Location "c:\Users\pc\Desktop\inboundcheck VERSION 1\backend"
-py -m pytest tests/
+py -m pytest tests/test_seed_verifier.py tests/test_delivery_failure_ingestion.py tests/test_failover_worker_safety.py tests/test_failover_webhooks.py tests/test_dns_diagnostic.py tests/test_claim_truthfulness.py tests/test_shopify_compliance.py tests/test_shopify_lifecycle_webhooks.py
 ```
 
-### Docker Compose Container Health
+### Docker Compose Container Health & Readiness
 ```powershell
 # Run from repository root
 Set-Location "c:\Users\pc\Desktop\inboundcheck VERSION 1"
 docker-compose up --build -d
+# Liveness probe
 curl http://localhost:8000/health
+# Readiness probe (verifies database persistence)
+curl http://localhost:8000/ready
 ```

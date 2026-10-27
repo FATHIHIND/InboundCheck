@@ -1,4 +1,4 @@
-# InboundCheck Enterprise Platform — System Architecture & Context Guide
+﻿# InboundCheck Enterprise Platform — System Architecture & Context Guide
 
 > **Primary Documentation for AI Models & Engineering Handoffs**  
 > **Project:** InboundCheck (High-Precision Transactional Email Deliverability & DNS Governance Platform)  
@@ -109,6 +109,19 @@ graph TD
 - **Fail-Closed Webhook Handlers:** Enforced strict HMAC verification on Shopify and Stripe webhooks in production.
 - **RLS Hardening:** Added explicit `WITH CHECK (auth.uid() = user_id)` clauses on all migration policies.
 
+### Phase 5: Merchant-First Navigation, Plain-English Diagnostics & Performance Hardening
+- **Five Merchant Destinations:** Consolidated merchant workflows into 5 clean destinations:
+  1. *Overview:* `/dashboard` (Global deliverability score, 4 core KPIs, SVG reputation trend wave chart, monitored domain portfolio).
+  2. *Stores & Domains:* `/dashboard/shopify` (Shopify store connection, transactional sender alignment audit, failover logs).
+  3. *Action Center:* `/dashboard/inspector` (DNS diagnostic inspector with merchant-friendly plain-English translations and 1-click auto-fix modals).
+  4. *Settings & Billing:* `/dashboard/settings` (Tenant configuration, dynamic alert rules, and Stripe customer portal).
+  5. *Template Optimizer:* `/dashboard/content-lab` (AI spam keyword density analysis preserving Shopify Liquid tags).
+- **Consolidated Setup Wizard (`/dashboard/wizard`):** Dedicated route uniting DNS diagnostic scans and Shopify store setup into a 4-step canonical workflow with backward-compatible modal redirects.
+- **Plain-English Diagnostic & Remediation Layer:** Backend and frontend service translating technical DNS anomalies (e.g., `p=none`, missing CNAME records, unaligned SPF) into plain-English explanations of business impact, deliverability risks, and actionable step-by-step remediation.
+- **Lightweight SVG Visualizers:** Replaced continuously animated 3D Canvas visualizers with accessible, high-performance SVG and CSS components (`ScoreGauge3DCanvas`, `InboxWitnessCanvas`, `RadarBeamCanvas`, `Sparkline3DCanvas`).
+- **Health & Readiness Architecture:** Distinct `/health` (liveness probe) and `/ready` / `/api/v1/health` (database and scheduler readiness probe) endpoints.
+
+
 ---
 
 ## 4. Repository Structure Map
@@ -208,5 +221,6 @@ inboundcheck VERSION 1/
 - **Row Level Security (RLS):** Every new table created in Supabase migrations **MUST** enable RLS and specify explicit `WITH CHECK (auth.uid() = user_id)` clauses.
 
 ### 4. Verification Checkpoints Before Passing Off
-1. **Backend Tests:** Run `py -m pytest tests/` in `backend/` -> Ensure **12 of 12 tests pass (100%)**.
-2. **Frontend Build:** Run `npm run build` in `frontend/` -> Ensure **12 of 12 pages compile with 0 TypeScript/Webpack errors**.
+1. **Backend Tests:** Run `py -m pytest tests/...` in `backend/` -> Ensure **all 65 core deliverability, failover, and compliance tests pass (100%)**.
+2. **Frontend Tests:** Run `node --loader ./tests/loader.mjs --test tests/*.test.ts` in `frontend/` -> Ensure **all 107 unit and integration tests pass (100%)**.
+3. **Frontend Build:** Run `npm run build` in `frontend/` -> Ensure **all 27 routes compile with 0 TypeScript/Webpack errors**.
