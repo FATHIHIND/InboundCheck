@@ -23,9 +23,36 @@ from app.services.failover.omnichannel_service import (
 omnichannel_service = telegram_alert_service
 logger = logging.getLogger("FailoverWorker")
 
+from app.core.config import settings
+
 # Strict failover eligibility for Telegram incident alerts:
-# Only permanent delivery failures (hard bounces, drop blocks, rejections) are alerted.
-TELEGRAM_INCIDENT_ELIGIBLE_EVENTS = {"bounce", "dropped", "rejected"}
+# Permanent delivery failures (hard bounces, drop blocks, rejections) are alerted.
+def canonicalize_event_type(event_type: Any) -> str:
+    """
+    Canonicalizes delivery failure event types to standard internal identifiers.
+    Maps: hard_bounce, hardbounce, hard-bounce, hard bounce -> 'hard_bounce'
+          bounce -> 'bounce'
+          dropped -> 'dropped'
+          rejected -> 'rejected'
+          other types -> lowercase with spaces/hyphens replaced by underscores
+    """
+    if not event_type:
+        return "unknown"
+    clean = str(event_type).strip().lower().replace("-", "_").replace(" ", "_")
+    if clean in {"hard_bounce", "hardbounce"}:
+        return "hard_bounce"
+    return clean
+
+
+TELEGRAM_INCIDENT_ELIGIBLE_EVENTS = {
+    "bounce",
+    "hard_bounce",
+    "dropped",
+    "rejected",
+}
+
+ALLOW_DELAYED_RETRY_DEFAULT = getattr(settings, "FAILOVER_ALLOW_DELAYED_RETRY", False)
+DEFAULT_MAX_RETRIES = getattr(settings, "FAILOVER_CORRELATION_MAX_RETRIES", 3)
 
 
 class IncidentFactory:
@@ -33,41 +60,183 @@ class IncidentFactory:
     Derives structured TelegramIncidentContext from delivery failure event
     and correlated transactional_message_registry record.
     Guarantees zero-PII extraction: no phone, customer email, or raw payload dumps.
+    Enforces strict multi-tenant conflict detection: fails closed if independent tenant
+    identities contradict authoritative registry records or each other.
     """
 
     @staticmethod
+    def _create_ambiguous_context(event: Dict[str, Any], esp_provider: str, event_id: str) -> TelegramIncidentContext:
+        """Create a sanitized fail-closed context with zero tenant-owned data merged."""
+        failure_type = canonicalize_event_type(event.get("event_type"))
+        return TelegramIncidentContext(
+            delivery_failure_event_id=event_id,
+            user_id="",
+            order_id=None,
+            domain_name=None,
+            store_name=None,
+            esp_provider=esp_provider,
+            failure_type=failure_type,
+            failure_reason=None,
+            recommended_dns_action="Review SPF, DKIM, DMARC, and the DNS Inspector remediation plan.",
+            occurred_at=datetime.now(timezone.utc),
+            message_type=None,
+            is_ambiguous=True,
+        )
+
+    @staticmethod
     def from_event_and_registry(event: Dict[str, Any]) -> TelegramIncidentContext:
+        event_id = str(event.get("id") or uuid.uuid4())
         esp_provider = event.get("esp_provider", "unknown")
         provider_message_id = event.get("provider_message_id")
-        user_id = event.get("user_id")
+        payload = event.get("event_payload") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        # 1. Collect all explicit tenant identity candidates from event & payload metadata paths
+        metadata = payload.get("metadata") or {}
+        custom_args = payload.get("custom_args") or {}
+        user_vars_hyphen = payload.get("user-variables") or {}
+        user_vars_underscore = payload.get("user_variables") or {}
+
+        candidate_sources = [
+            ("event.user_id", event.get("user_id")),
+            ("payload.user_id", payload.get("user_id")),
+            ("metadata.user_id", metadata.get("user_id") if isinstance(metadata, dict) else None),
+            ("custom_args.user_id", custom_args.get("user_id") if isinstance(custom_args, dict) else None),
+            ("user-variables.user_id", user_vars_hyphen.get("user_id") if isinstance(user_vars_hyphen, dict) else None),
+            ("user_variables.user_id", user_vars_underscore.get("user_id") if isinstance(user_vars_underscore, dict) else None),
+        ]
+
+        extracted_uids = set()
+        for _, val in candidate_sources:
+            if val is not None and str(val).strip():
+                extracted_uids.add(str(val).strip())
+
+        # Check for internal conflict among payload metadata sources
+        if len(extracted_uids) > 1:
+            logger.warning(
+                f"Conflicting tenant IDs detected in event {event_id} metadata sources. Failing closed."
+            )
+            return IncidentFactory._create_ambiguous_context(event, esp_provider, event_id)
+
+        claimed_user_id = extracted_uids.pop() if extracted_uids else None
+
+        user_id = claimed_user_id
         order_id = None
         domain_name = None
         store_name = None
+        message_type = None
 
-        # 1. Correlate with transactional message registry if provider_message_id exists
+        # 2. Correlate with transactional message registry if provider_message_id exists
         if provider_message_id:
             msg = repository.get_transactional_message(esp_provider, provider_message_id)
             if msg:
-                if not user_id:
-                    user_id = msg.get("user_id")
-                order_id = msg.get("order_id")
+                reg_user_id = str(msg.get("user_id") or "").strip() or None
+                if claimed_user_id and reg_user_id and claimed_user_id != reg_user_id:
+                    # CONFLICT between claimed user_id and authoritative registry record!
+                    logger.warning(
+                        f"Authoritative registry tenant conflicts with payload tenant for event {event_id}. Failing closed."
+                    )
+                    return IncidentFactory._create_ambiguous_context(event, esp_provider, event_id)
 
-        # 2. Derive tenant defaults from repository
+                user_id = reg_user_id or claimed_user_id
+                order_id = msg.get("order_id")
+                message_type = msg.get("message_type")
+                domain_name = msg.get("domain_name")
+                store_name = msg.get("store_name")
+
+        # 3. Fallback correlation by order_id + recipient_email_hash (only if not yet correlated)
+        if not user_id:
+            candidate_order_id = (
+                payload.get("order_id")
+                or (metadata.get("order_id") if isinstance(metadata, dict) else None)
+                or event.get("order_id")
+            )
+            recipient_hash = (
+                event.get("recipient_email_hash")
+                or payload.get("recipient_email_hash")
+                or (metadata.get("recipient_email_hash") if isinstance(metadata, dict) else None)
+            )
+            if not recipient_hash:
+                raw_recip = (event.get("recipient_email") or payload.get("recipient_email") or "").strip().lower()
+                if raw_recip:
+                    import hashlib
+                    recipient_hash = hashlib.sha256(raw_recip.encode("utf-8")).hexdigest()
+
+            if candidate_order_id and recipient_hash:
+                msg, is_order_ambiguous = repository.get_transactional_message_by_order_and_recipient(
+                    str(candidate_order_id), str(recipient_hash)
+                )
+                if is_order_ambiguous:
+                    logger.warning(
+                        f"Order/recipient match for event {event_id} is ambiguous across multiple tenants. Failing closed."
+                    )
+                    return IncidentFactory._create_ambiguous_context(event, esp_provider, event_id)
+
+                if msg:
+                    reg_user_id = str(msg.get("user_id") or "").strip() or None
+                    if claimed_user_id and reg_user_id and claimed_user_id != reg_user_id:
+                        logger.warning(
+                            f"Registry tenant from order match conflicts with payload tenant for event {event_id}. Failing closed."
+                        )
+                        return IncidentFactory._create_ambiguous_context(event, esp_provider, event_id)
+
+                    user_id = reg_user_id or claimed_user_id
+                    order_id = msg.get("order_id") or candidate_order_id
+                    message_type = msg.get("message_type")
+                    domain_name = msg.get("domain_name")
+                    store_name = msg.get("store_name")
+
+        # 4. Fallback correlation by unique domain (only if not yet correlated)
+        if not user_id:
+            candidate_domain = domain_name or payload.get("domain_name") or event.get("domain_name")
+            if not candidate_domain:
+                sender = (
+                    payload.get("sender")
+                    or payload.get("from")
+                    or (metadata.get("from") if isinstance(metadata, dict) else None)
+                    or event.get("sender")
+                )
+                if sender and "@" in str(sender):
+                    candidate_domain = str(sender).split("@")[-1].strip().lower().rstrip(">")
+
+            if candidate_domain:
+                candidate_user_ids, ambiguous = repository.get_unique_tenant_for_domain(str(candidate_domain))
+                if ambiguous:
+                    logger.warning(
+                        f"Domain correlation for event {event_id} is ambiguous across multiple tenants. Failing closed."
+                    )
+                    return IncidentFactory._create_ambiguous_context(event, esp_provider, event_id)
+                elif candidate_user_ids and len(candidate_user_ids) == 1:
+                    dom_uid = candidate_user_ids[0]
+                    if claimed_user_id and claimed_user_id != dom_uid:
+                        logger.warning(
+                            f"Domain owner conflicts with payload tenant for event {event_id}. Failing closed."
+                        )
+                        return IncidentFactory._create_ambiguous_context(event, esp_provider, event_id)
+                    user_id = dom_uid
+                    domain_name = candidate_domain
+
+        # 5. Derive tenant defaults from repository
         if user_id:
             defaults = repository.get_tenant_defaults(user_id)
-            domain_name = defaults.get("domain_name")
-            store_name = defaults.get("store_name")
+            if not domain_name:
+                domain_name = defaults.get("domain_name")
+            if not store_name:
+                store_name = defaults.get("store_name")
 
-        # 3. Fallback extraction from event payload metadata
-        payload = event.get("event_payload") or {}
-        if not order_id:
-            order_id = payload.get("order_id")
-        if not domain_name:
-            domain_name = payload.get("domain_name")
-        if not store_name:
-            store_name = payload.get("store_name")
+        # 6. Fallback extraction from event payload metadata ONLY if user_id was verified
+        if user_id:
+            if not order_id:
+                order_id = payload.get("order_id") or (metadata.get("order_id") if isinstance(metadata, dict) else None)
+            if not domain_name:
+                domain_name = payload.get("domain_name")
+            if not store_name:
+                store_name = payload.get("store_name")
+            if not message_type:
+                message_type = payload.get("message_type") or (metadata.get("message_type") if isinstance(metadata, dict) else None)
 
-        failure_type = str(event.get("event_type", "bounce")).lower()
+        failure_type = canonicalize_event_type(event.get("event_type"))
         failure_reason = (
             payload.get("reason")
             or payload.get("details")
@@ -87,7 +256,7 @@ class IncidentFactory:
                 pass
 
         return TelegramIncidentContext(
-            delivery_failure_event_id=str(event.get("id") or uuid.uuid4()),
+            delivery_failure_event_id=event_id,
             user_id=user_id or "",
             order_id=order_id,
             domain_name=domain_name,
@@ -97,6 +266,8 @@ class IncidentFactory:
             failure_reason=str(failure_reason) if failure_reason else None,
             recommended_dns_action="Review SPF, DKIM, DMARC, and the DNS Inspector remediation plan.",
             occurred_at=occurred_at,
+            message_type=message_type,
+            is_ambiguous=False,
         )
 
 
@@ -137,11 +308,10 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
         return False
 
     try:
-        event_type = str(event.get("event_type", "")).strip().lower()
-
-        # 1. Eligibility Check
-        if event_type not in TELEGRAM_INCIDENT_ELIGIBLE_EVENTS:
-            logger.info(f"Event {event_id} type '{event_type}' is not Telegram-incident eligible. Marking ignored.")
+        # 1. Eligibility Check (Event Type Canonicalization)
+        canonical_event = canonicalize_event_type(event.get("event_type"))
+        if canonical_event not in TELEGRAM_INCIDENT_ELIGIBLE_EVENTS:
+            logger.info(f"Event {event_id} type '{event.get('event_type')}' is not Telegram-incident eligible. Marking ignored.")
             repository.mark_event_processed(
                 event_id=event_id,
                 outcome="ignored",
@@ -153,14 +323,81 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
         # 2. Correlate Incident Context
         incident = incident_factory.from_event_and_registry(event)
 
-        if not incident.user_id:
-            logger.warning(f"Unable to correlate delivery failure {event_id} to tenant profile.")
-            repository.mark_event_failed(
+        # Message type eligibility check (e.g. promotional or marketing ignored)
+        if incident.message_type and str(incident.message_type).strip().lower() in {"marketing", "promotional", "newsletter"}:
+            logger.info(f"Event {event_id} message_type '{incident.message_type}' is not Telegram-incident eligible. Marking ignored.")
+            repository.mark_event_processed(
                 event_id=event_id,
-                reason="Unable to correlate delivery failure to tenant",
+                outcome="ignored",
+                reason="Message type is not Telegram-incident eligible",
                 worker_id=worker_id,
             )
             return False
+
+        # Multi-tenant ambiguity guard: strict isolation, fail closed
+        if incident.is_ambiguous:
+            logger.warning(
+                f"Delivery failure {event_id} has ambiguous tenant correlation across multiple candidate profiles. "
+                f"Failing closed for strict tenant isolation."
+            )
+            repository.mark_event_failed(
+                event_id=event_id,
+                reason="Ambiguous tenant correlation: conflicting or multiple candidate profiles",
+                worker_id=worker_id,
+            )
+            return False
+
+        # Uncorrelated tenant resolution & bounded retry policy
+        if not incident.user_id:
+            payload = event.get("event_payload") or {}
+            if not isinstance(payload, dict):
+                payload = {}
+
+            # Server-side bounded retry policy
+            server_max = min(max(int(DEFAULT_MAX_RETRIES), 1), 5)
+            allow_retry = bool(
+                ALLOW_DELAYED_RETRY_DEFAULT
+                or payload.get("allow_delayed_retry")
+                or int(payload.get("max_correlation_attempts", 0)) > 1
+            )
+            max_retries = server_max
+            current_attempts = int(payload.get("correlation_attempts", 0)) + 1
+
+            if allow_retry and current_attempts < max_retries:
+                payload["correlation_attempts"] = current_attempts
+                # Exponential backoff delay
+                backoff_seconds = min(15 * (2 ** (current_attempts - 1)), 180)
+                payload["correlation_next_retry_at"] = datetime.now(timezone.utc).timestamp() + backoff_seconds
+
+                persisted = repository.update_event_payload(event_id, payload)
+                if not persisted:
+                    logger.error(
+                        f"Failed to persist retry attempt {current_attempts} for event {event_id}. Failing closed."
+                    )
+                    repository.mark_event_failed(
+                        event_id=event_id,
+                        reason="Failed to persist retry payload update",
+                        worker_id=worker_id,
+                    )
+                    return False
+
+                logger.warning(
+                    f"Unable to correlate delivery failure {event_id} to tenant profile (attempt {current_attempts}/{max_retries}). "
+                    f"Releasing lease for retry."
+                )
+                repository.release_claimed_delivery_failure_event(event_id, worker_id)
+                return False
+            else:
+                reason = "Unable to correlate delivery failure to tenant"
+                if current_attempts > 1:
+                    reason += " (retries exhausted)"
+                logger.warning(f"{reason} for event {event_id}.")
+                repository.mark_event_failed(
+                    event_id=event_id,
+                    reason=reason,
+                    worker_id=worker_id,
+                )
+                return False
 
         # 3. Dispatch Alert via Telegram Alert Engine
         result: TelegramDispatchResult = await telegram_alert_service.dispatch_alert(
@@ -288,6 +525,19 @@ async def run_failover_worker(
                         break
 
                     evt_id = str(event.get("id"))
+                    payload = event.get("event_payload") or {}
+                    if isinstance(payload, dict):
+                        next_retry_at = payload.get("correlation_next_retry_at")
+                        if next_retry_at:
+                            try:
+                                if datetime.now(timezone.utc).timestamp() < float(next_retry_at):
+                                    # Still within backoff delay cooldown; release lease back to queue
+                                    repository.release_claimed_delivery_failure_event(evt_id, worker_id)
+                                    in_flight_events.pop(evt_id, None)
+                                    continue
+                            except (ValueError, TypeError):
+                                pass
+
                     try:
                         await process_delivery_failure_event(event, worker_id)
                     finally:

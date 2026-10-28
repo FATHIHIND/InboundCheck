@@ -30,6 +30,8 @@ class TelegramIncidentContext(BaseModel):
     failure_reason: Optional[str] = None
     recommended_dns_action: str = "Review SPF, DKIM, DMARC, and the DNS Inspector remediation plan."
     occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    message_type: Optional[str] = None
+    is_ambiguous: bool = False
 
 
 class TelegramDispatchResult(BaseModel):

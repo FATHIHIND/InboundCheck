@@ -233,6 +233,27 @@ class FailoverRepository:
         """Fetch matching transactional message registry entry."""
         return self.supabase.get_transactional_message(esp_provider, provider_message_id)
 
+    def get_transactional_message_by_order_and_recipient(
+        self,
+        order_id: str,
+        recipient_email_hash: str,
+    ) -> Tuple[Optional[Dict[str, Any]], bool]:
+        """Fetch matching transactional message registry entry by order ID and hashed recipient."""
+        res = self.supabase.get_transactional_message_by_order_and_recipient(order_id, recipient_email_hash)
+        if isinstance(res, tuple):
+            return res
+        if res is None:
+            return (None, False)
+        return (res, False)
+
+    def get_unique_tenant_for_domain(self, domain_name: str) -> tuple[List[str], bool]:
+        """Find candidate tenants for a domain name and determine if ambiguous."""
+        return self.supabase.get_unique_tenant_for_domain(domain_name)
+
+    def update_event_payload(self, event_id: str, event_payload: Dict[str, Any]) -> bool:
+        """Update event payload in repository/database."""
+        return self.supabase.update_delivery_failure_event_payload(event_id, event_payload)
+
     def get_tenant_defaults(self, user_id: str) -> Dict[str, Any]:
         """Fetch default domain and store name for a given user_id."""
         defaults = {"domain_name": "store.com", "store_name": "Shopify Store"}

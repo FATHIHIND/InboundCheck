@@ -73,6 +73,7 @@ class SupabaseService:
         self._in_memory_reputation: Dict[str, List[Dict[str, Any]]] = {}
         self._in_memory_transactional_messages: Dict[str, Dict[str, Any]] = {}
         self._in_memory_delivery_failure_events: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_failover_logs: Dict[str, List[Dict[str, Any]]] = {}
         self._in_memory_spf_merge_plans: Dict[str, Dict[str, Any]] = {}
         self._in_memory_asset_audits: Dict[str, Dict[str, Any]] = {}
         self._in_memory_rate_limits: Dict[str, int] = {}
@@ -290,7 +291,8 @@ class SupabaseService:
         self,
         user_id: str,
         domain_name: str,
-        audit_result: Optional[Dict[str, Any]] = None
+        audit_result: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Insert or update a monitored domain."""
         domain_clean = domain_name.strip().lower()
@@ -299,7 +301,7 @@ class SupabaseService:
         record = {
             "user_id": user_id,
             "domain_name": domain_clean,
-            "is_active": True,
+            "is_active": kwargs.get("is_active", True),
             "last_checked_at": now_str,
             "updated_at": now_str,
         }
@@ -1690,9 +1692,19 @@ class SupabaseService:
                     },
                 ).execute()
                 if res.data is True:
+                    for evt in self._in_memory_delivery_failure_events.values():
+                        if str(evt.get("id")) == str(event_id):
+                            evt["processing_status"] = "received"
+                            evt["claimed_by"] = None
+                            evt["claimed_at"] = None
+                            evt["lease_until"] = None
                     return True
+                if not self._allow_in_memory_fallback():
+                    return False
             except Exception as e:
                 logger.warning(f"Could not execute release_claimed_delivery_failure_event RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    return False
 
         # In-memory fallback
         for evt in self._in_memory_delivery_failure_events.values():
@@ -1728,7 +1740,7 @@ class SupabaseService:
         clean_email = recipient_email.strip().lower()
         email_hash = hashlib.sha256(clean_email.encode("utf-8")).hexdigest()
         now_iso = datetime.now(timezone.utc).isoformat()
-        reg_id = str(uuid.uuid4())
+        reg_id = str(kwargs.get("id") or kwargs.get("message_id") or uuid.uuid4())
 
         record = {
             "id": reg_id,
@@ -1767,27 +1779,202 @@ class SupabaseService:
     ) -> Optional[Dict[str, Any]]:
         """
         Lookup transactional message by ESP provider and provider message id.
+        Handles provider casing, RFC angle brackets (<...>), documented SendGrid .filter suffix,
+        and internal UUID id lookups strictly scoped to provider.
         """
-        clean_prov = esp_provider.strip().lower()
-        clean_msg_id = provider_message_id.strip()
+        if not provider_message_id:
+            return None
 
+        clean_prov = esp_provider.strip().lower() if esp_provider else ""
+        clean_msg_id = str(provider_message_id).strip()
+
+        # Build candidate message IDs
+        candidate_ids = [clean_msg_id]
+        if clean_msg_id.startswith("<") and clean_msg_id.endswith(">"):
+            stripped = clean_msg_id[1:-1].strip()
+            if stripped and stripped not in candidate_ids:
+                candidate_ids.append(stripped)
+
+        # Restrict filter-suffix handling to documented SendGrid .filter identifiers only
+        if clean_prov == "sendgrid" and ".filter" in clean_msg_id:
+            prefix = clean_msg_id.split(".filter")[0].strip()
+            if prefix and prefix not in candidate_ids:
+                candidate_ids.append(prefix)
+
+        # 1. Query Supabase
+        if self._client:
+            for c_id in candidate_ids:
+                try:
+                    query = self._client.table("transactional_message_registry").select("*")
+                    if clean_prov:
+                        query = query.eq("esp_provider", clean_prov)
+                    res = query.eq("provider_message_id", c_id).limit(1).execute()
+                    if res.data and len(res.data) > 0:
+                        return res.data[0]
+                except Exception as e:
+                    logger.warning(f"Could not fetch transactional_message from Supabase: {e}")
+
+            # Check if clean_msg_id is a valid UUID matching internal id (strictly scoped to provider)
+            try:
+                uuid.UUID(clean_msg_id)
+                query = self._client.table("transactional_message_registry").select("*").eq("id", clean_msg_id)
+                if clean_prov:
+                    query = query.eq("esp_provider", clean_prov)
+                res = query.limit(1).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+            except (ValueError, Exception):
+                pass
+
+        # 2. In-memory check
+        for c_id in candidate_ids:
+            key = str((clean_prov, c_id))
+            if key in self._in_memory_transactional_messages:
+                return self._in_memory_transactional_messages[key]
+
+        # Scan in-memory for SendGrid prefix or provider-scoped internal ID
+        for msg in self._in_memory_transactional_messages.values():
+            if clean_prov and msg.get("esp_provider") != clean_prov:
+                continue
+            reg_msg_id = msg.get("provider_message_id", "")
+            if reg_msg_id in candidate_ids:
+                return msg
+            if str(msg.get("id")) == clean_msg_id:
+                return msg
+            if clean_prov == "sendgrid":
+                if ".filter" in reg_msg_id and reg_msg_id.split(".filter")[0] in candidate_ids:
+                    return msg
+                if ".filter" in clean_msg_id and clean_msg_id.split(".filter")[0] == reg_msg_id:
+                    return msg
+
+        return None
+
+    def get_transactional_message_by_order_and_recipient(
+        self,
+        order_id: str,
+        recipient_email_hash: str,
+    ) -> Tuple[Optional[Dict[str, Any]], bool]:
+        """
+        Lookup transactional message by order_id and hashed recipient email.
+        Returns:
+            (record, is_ambiguous):
+            - (record, False) if exactly one tenant matched
+            - (None, True) if multiple conflicting tenants matched (ambiguous)
+            - (None, False) if no records matched (normal not-found)
+        """
+        if not order_id or not recipient_email_hash:
+            return (None, False)
+        clean_order = str(order_id).strip()
+        clean_hash = str(recipient_email_hash).strip().lower()
+
+        candidates = []
         if self._client:
             try:
                 res = (
                     self._client.table("transactional_message_registry")
                     .select("*")
-                    .eq("esp_provider", clean_prov)
-                    .eq("provider_message_id", clean_msg_id)
-                    .limit(1)
+                    .eq("order_id", clean_order)
+                    .eq("recipient_email_hash", clean_hash)
+                    .limit(5)
                     .execute()
                 )
-                if res.data and len(res.data) > 0:
-                    return res.data[0]
+                if res.data:
+                    candidates.extend(res.data)
             except Exception as e:
-                logger.warning(f"Could not fetch transactional_message from Supabase: {e}")
+                logger.warning(f"Could not query transactional_message by order+hash: {e}")
 
-        key = str((clean_prov, clean_msg_id))
-        return self._in_memory_transactional_messages.get(key)
+        # In-memory check
+        for msg in self._in_memory_transactional_messages.values():
+            if msg.get("order_id") == clean_order and msg.get("recipient_email_hash") == clean_hash:
+                if msg not in candidates:
+                    candidates.append(msg)
+
+        if not candidates:
+            return (None, False)
+
+        user_ids = {c.get("user_id") for c in candidates if c.get("user_id")}
+        if len(user_ids) == 1:
+            return (candidates[0], False)
+
+        logger.warning(f"Ambiguous order+hash correlation: multiple tenant matches {len(user_ids)}")
+        return (None, True)
+
+    def get_unique_tenant_for_domain(self, domain_name: str) -> Tuple[List[str], bool]:
+        """
+        Identify active tenants monitoring the given domain name.
+        Returns (candidate_user_ids: List[str], is_ambiguous: bool).
+        If more than one tenant monitors the domain, is_ambiguous is True to prevent cross-tenant correlation.
+        """
+        if not domain_name:
+            return ([], False)
+        clean_dom = domain_name.strip().lower()
+        owners = set()
+
+        if self._client:
+            try:
+                res = self._client.table("monitored_domains").select("user_id").eq("domain_name", clean_dom).eq("is_active", True).execute()
+                if res.data:
+                    for row in res.data:
+                        if row.get("user_id"):
+                            owners.add(str(row["user_id"]))
+            except Exception as e:
+                logger.warning(f"Could not query domain owners for {clean_dom}: {e}")
+
+        # In-memory check
+        for uid, dom_list in self._in_memory_domains.items():
+            for d in dom_list:
+                if d.get("domain_name") == clean_dom and d.get("is_active", True):
+                    owners.add(str(uid))
+
+        # Also check shopify_stores
+        store = self.get_store_by_domain(clean_dom)
+        if store and store.get("user_id"):
+            owners.add(str(store["user_id"]))
+
+        owner_list = list(owners)
+        if len(owner_list) > 1:
+            return (owner_list, True)  # Ambiguous!
+        return (owner_list, False)
+
+    def update_delivery_failure_event_payload(
+        self,
+        event_id: str,
+        event_payload: Dict[str, Any],
+    ) -> bool:
+        """
+        Update the event_payload JSONB column of a delivery failure event.
+        Used to record bounded retry attempts and diagnostic correlation metadata.
+        Returns True on confirmed persistence, False on database error.
+        """
+        if self._client:
+            try:
+                res = (
+                    self._client.table("delivery_failure_events")
+                    .update({"event_payload": event_payload})
+                    .eq("id", str(event_id))
+                    .execute()
+                )
+                if hasattr(res, "data") and res.data is None:
+                    return False
+                # Keep in-memory cache in sync
+                for evt in self._in_memory_delivery_failure_events.values():
+                    if str(evt.get("id")) == str(event_id):
+                        evt["event_payload"] = event_payload
+                return True
+            except Exception as e:
+                logger.warning(f"Could not update delivery_failure_events payload: {e}")
+                return False
+
+        # Standalone in-memory fallback (only when no client is configured, e.g. standalone unit test)
+        found = False
+        for evt in self._in_memory_delivery_failure_events.values():
+            if str(evt.get("id")) == str(event_id):
+                evt["event_payload"] = event_payload
+                found = True
+        return found
+
+    record_transactional_message = register_transactional_message
+    create_monitored_domain = create_or_update_domain
 
     def record_delivery_failure_event(
         self,

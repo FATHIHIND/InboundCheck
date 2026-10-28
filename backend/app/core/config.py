@@ -70,6 +70,8 @@ class Settings(BaseSettings):
 
     # Distributed Worker & Scheduler Configuration (Phase 4)
     RUN_IN_PROCESS_SCHEDULER: bool = False
+    FAILOVER_ALLOW_DELAYED_RETRY: bool = False
+    FAILOVER_CORRELATION_MAX_RETRIES: int = 3
 
     # Phase 4 Step 4 - ESP Delivery Failure Webhook Secrets (KMS / Secret Store Backed)
     POSTMARK_WEBHOOK_SECRET: str = ""
