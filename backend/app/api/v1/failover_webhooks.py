@@ -19,7 +19,7 @@ from app.services.failover.event_normalizers import (
     normalize_provider_events,
     NormalizedDeliveryFailure,
 )
-from app.services.supabase_client import supabase_service
+from app.services.supabase_client import supabase_service, DatabaseUnavailableError
 
 logger = logging.getLogger("FailoverWebhooks")
 
@@ -101,8 +101,15 @@ async def ingest_delivery_failure(
         return {"accepted": True, "processed_events": 0}
 
     # 4. Durable insertion with deduplication
-    for event in events:
-        await failure_event_repository.insert_if_absent(event)
+    try:
+        for event in events:
+            await failure_event_repository.insert_if_absent(event)
+    except DatabaseUnavailableError as db_err:
+        logger.error(f"Durable persistence failed during {provider} webhook ingestion: {db_err}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Durable event persistence temporarily unavailable. Provider retry requested.",
+        )
 
     logger.info(f"Successfully ingested {len(events)} delivery failure event(s) from {provider}.")
     return {"accepted": True, "processed_events": len(events)}

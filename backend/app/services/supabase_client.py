@@ -2016,6 +2016,14 @@ class SupabaseService:
                     return existing.data[0]
             except Exception as e:
                 logger.warning(f"Could not check existing delivery_failure_events: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(
+                        f"Database query failed during webhook deduplication check: {e}"
+                    )
+        elif not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError(
+                "Database client is not connected in non-development environment."
+            )
 
         # 3. Insert new record
         evt_id = str(uuid.uuid4())
@@ -2044,8 +2052,22 @@ class SupabaseService:
                 if res.data and len(res.data) > 0:
                     self._in_memory_delivery_failure_events[key] = res.data[0]
                     return res.data[0]
+                elif not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(
+                        "Durable persistence failed: database insert returned empty response."
+                    )
+            except DatabaseUnavailableError:
+                raise
             except Exception as e:
                 logger.warning(f"Could not insert delivery_failure_events: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(
+                        f"Durable persistence failed for delivery failure event: {e}"
+                    )
+        elif not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError(
+                "Database client is not connected in non-development environment."
+            )
 
         self._in_memory_delivery_failure_events[key] = record
         return record

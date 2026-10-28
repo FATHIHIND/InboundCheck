@@ -105,6 +105,43 @@ async def test_postmark_webhook_verification_and_ingestion():
 
 
 @pytest.mark.asyncio
+async def test_webhook_returns_503_when_durable_persistence_fails():
+    """Verify webhook returns HTTP 503 when durable persistence fails, requesting provider retry."""
+    from app.services.supabase_client import DatabaseUnavailableError
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        original_secret = settings.POSTMARK_WEBHOOK_SECRET
+        settings.POSTMARK_WEBHOOK_SECRET = "test_pm_secret_xyz123"
+
+        try:
+            bounce_payload = {
+                "RecordType": "Bounce",
+                "ID": 99999,
+                "Type": "HardBounce",
+                "TypeCode": 1,
+                "Name": "Hard bounce",
+                "Details": "smtp; 550 5.1.1 User unknown",
+                "Email": "customer@shopifybrand.com",
+                "BouncedAt": "2026-09-10T20:00:00Z",
+                "MessageID": f"pm_msg_{uuid.uuid4()}"
+            }
+
+            with patch("app.api.v1.failover_webhooks.failure_event_repository.insert_if_absent", side_effect=DatabaseUnavailableError("Database unreachable")):
+                res = await client.post(
+                    "/api/v1/webhook/delivery-failure/postmark",
+                    json=bounce_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Postmark-Server-Token": "test_pm_secret_xyz123"
+                    }
+                )
+                assert res.status_code == 503
+                assert "Durable event persistence temporarily unavailable" in res.json().get("detail", "")
+        finally:
+            settings.POSTMARK_WEBHOOK_SECRET = original_secret
+
+
+@pytest.mark.asyncio
 async def test_sendgrid_webhook_verification_and_clock_skew():
     """Verify SendGrid HMAC signature check, clock skew tolerance rejection, and event batch parsing."""
     transport = ASGITransport(app=app)
