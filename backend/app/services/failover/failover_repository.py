@@ -5,7 +5,7 @@ Database access layer for claiming delivery failure events, updating state trans
 looking up transactional message registry records, and creating idempotent Telegram incident logs.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import logging
 import uuid
 from datetime import datetime, timezone

@@ -8,7 +8,7 @@ profiles, and store integration metadata.
 import hashlib
 import random
 import threading
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple
 import logging
 import uuid
 import time
