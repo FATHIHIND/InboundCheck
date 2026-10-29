@@ -112,17 +112,13 @@ class FailoverRepository:
         outcome: str = "processed",
         reason: Optional[str] = None,
         worker_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> bool:
-        """Atomically transition event to processed or ignored."""
+        """
+        Atomically transition event to processed or ignored.
+        Protects against stale workers overriding quarantined or newer-worker-owned events.
+        """
         now_iso = datetime.now(timezone.utc).isoformat()
-
-        # Always keep in-memory cache in sync
-        for evt in self.supabase._in_memory_delivery_failure_events.values():
-            if evt.get("id") == event_id:
-                evt["processing_status"] = outcome
-                evt["processed_at"] = now_iso
-                if reason:
-                    evt["processing_error"] = reason
 
         if self.supabase._client and worker_id:
             try:
@@ -132,34 +128,76 @@ class FailoverRepository:
                         "p_event_id": event_id,
                         "p_worker_id": worker_id,
                         "p_outcome": outcome,
-                        "p_reason": reason
-                    }
+                        "p_reason": reason,
+                    },
                 ).execute()
                 if res.data is True:
+                    for evt in self.supabase._in_memory_delivery_failure_events.values():
+                        if str(evt.get("id")) == str(event_id):
+                            evt["processing_status"] = outcome
+                            evt["processed_at"] = now_iso
+                            if reason:
+                                evt["processing_error"] = reason
                     return True
+                if not self.supabase._allow_in_memory_fallback():
+                    return False
             except Exception as e:
                 logger.warning(f"Could not execute mark_delivery_failure_event_processed RPC: {e}")
+                if not self.supabase._allow_in_memory_fallback():
+                    raise
 
-        return self.supabase.update_delivery_failure_event_status(
-            event_id=event_id,
-            processing_status=outcome
-        )
+        # In-memory validation & stale-worker protection
+        target_evt = None
+        for evt in self.supabase._in_memory_delivery_failure_events.values():
+            if str(evt.get("id")) == str(event_id):
+                target_evt = evt
+                break
+
+        if not target_evt:
+            return False
+
+        # Tenant isolation check
+        if user_id and target_evt.get("user_id") and str(target_evt.get("user_id")) != str(user_id):
+            logger.warning(f"Tenant mismatch finalizing event {event_id}: caller {user_id} != owner {target_evt.get('user_id')}")
+            return False
+
+        # Stale-worker check: if worker_id provided, must match claimed_by
+        if worker_id and target_evt.get("claimed_by") and str(target_evt.get("claimed_by")) != str(worker_id):
+            logger.warning(f"Worker mismatch finalizing event {event_id}: worker {worker_id} != claim {target_evt.get('claimed_by')}")
+            return False
+
+        current_status = target_evt.get("processing_status")
+        # Cannot finalize if already processed or failed
+        if current_status in ("processed", "failed", "ignored"):
+            return False
+
+        # If quarantined, can only finalize if a confirmed durable incident log exists!
+        if current_status == "quarantined":
+            existing_log = self.get_telegram_incident_log_by_event(event_id, user_id=target_evt.get("user_id"))
+            if not existing_log or not (
+                existing_log.get("status") in ("delivered", "dispatched")
+                or existing_log.get("provider_status") in ("delivered", "simulated", "sent")
+                or existing_log.get("is_simulated")
+            ):
+                logger.warning(f"Cannot mark quarantined event {event_id} processed: no confirmed incident log exists")
+                return False
+
+        # Normal valid transition
+        target_evt["processing_status"] = outcome
+        target_evt["processed_at"] = now_iso
+        if reason:
+            target_evt["processing_error"] = reason
+        return True
 
     def mark_event_failed(
         self,
         event_id: str,
         reason: Optional[str] = None,
         worker_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> bool:
         """Atomically transition event to failed with error reason."""
         now_iso = datetime.now(timezone.utc).isoformat()
-
-        # Always keep in-memory cache in sync
-        for evt in self.supabase._in_memory_delivery_failure_events.values():
-            if evt.get("id") == event_id:
-                evt["processing_status"] = "failed"
-                evt["processed_at"] = now_iso
-                evt["processing_error"] = reason
 
         if self.supabase._client and worker_id:
             try:
@@ -168,18 +206,50 @@ class FailoverRepository:
                     {
                         "p_event_id": event_id,
                         "p_worker_id": worker_id,
-                        "p_error": reason or "Unknown processing failure"
-                    }
+                        "p_error": reason or "Unknown processing failure",
+                    },
                 ).execute()
                 if res.data is True:
+                    for evt in self.supabase._in_memory_delivery_failure_events.values():
+                        if str(evt.get("id")) == str(event_id):
+                            evt["processing_status"] = "failed"
+                            evt["processed_at"] = now_iso
+                            evt["processing_error"] = reason
                     return True
+                if not self.supabase._allow_in_memory_fallback():
+                    return False
             except Exception as e:
                 logger.warning(f"Could not execute mark_delivery_failure_event_failed RPC: {e}")
+                if not self.supabase._allow_in_memory_fallback():
+                    raise
 
-        return self.supabase.update_delivery_failure_event_status(
-            event_id=event_id,
-            processing_status="failed"
-        )
+        # In-memory validation & stale-worker protection
+        target_evt = None
+        for evt in self.supabase._in_memory_delivery_failure_events.values():
+            if str(evt.get("id")) == str(event_id):
+                target_evt = evt
+                break
+
+        if not target_evt:
+            return False
+
+        # Tenant isolation check
+        if user_id and target_evt.get("user_id") and str(target_evt.get("user_id")) != str(user_id):
+            return False
+
+        # Stale-worker check: if worker_id provided, must match claimed_by
+        if worker_id and target_evt.get("claimed_by") and str(target_evt.get("claimed_by")) != str(worker_id):
+            return False
+
+        current_status = target_evt.get("processing_status")
+        # Cannot mark failed if quarantined or already finalized
+        if current_status not in ("dispatching", "queued"):
+            return False
+
+        target_evt["processing_status"] = "failed"
+        target_evt["processed_at"] = now_iso
+        target_evt["processing_error"] = reason
+        return True
 
     def create_telegram_incident_log(
         self,
@@ -224,6 +294,37 @@ class FailoverRepository:
             dispatch_payload=payload,
             is_simulated=sim,
         )
+
+    def get_telegram_incident_log_by_event(
+        self,
+        event_id: str,
+        user_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Query failover_logs for an existing incident matching delivery_failure_event_id and fallback_channel='telegram'.
+        Enforces deduplication before attempting outbound Telegram dispatch.
+        """
+        return self.supabase.get_telegram_incident_log_by_event(event_id, user_id=user_id)
+
+    def record_delivery_failure_dispatch_intent(
+        self,
+        event_id: str,
+        worker_id: str,
+    ) -> bool:
+        """
+        Durably record worker dispatch intent before calling external Telegram dispatch.
+        Atomically validates lease ownership and transitions processing_status from 'queued' to 'dispatching'.
+        """
+        return self.supabase.record_delivery_failure_dispatch_intent(event_id, worker_id)
+
+    def quarantine_expired_dispatch_intent_events(
+        self,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        Sweep and quarantine delivery failure events whose dispatch intent lease has expired.
+        """
+        return self.supabase.quarantine_expired_dispatch_intent_events(limit)
 
     def get_transactional_message(
         self,

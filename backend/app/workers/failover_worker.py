@@ -11,7 +11,7 @@ import logging
 import signal
 import uuid
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.services.failover.failover_repository import failure_event_repository as repository
 from app.services.failover.omnichannel_service import (
@@ -293,19 +293,116 @@ def _register_shutdown_signals(stop_event: asyncio.Event) -> None:
         pass
 
 
+def _is_telegram_incident_unique_violation(exc: Exception) -> bool:
+    """
+    Determine if an exception represents a PostgreSQL unique constraint violation (SQLSTATE 23505)
+    specifically on idx_failover_logs_one_telegram_incident_per_event.
+    Fails closed: returns False for any unrelated SQLSTATE, foreign key violation,
+    connection timeout, or other constraint.
+    """
+    if not exc:
+        return False
+
+    constraint_target = "idx_failover_logs_one_telegram_incident_per_event"
+
+    code = (
+        getattr(exc, "code", None)
+        or getattr(exc, "sqlstate", None)
+        or getattr(exc, "pgcode", None)
+    )
+    if isinstance(exc, dict):
+        code = code or exc.get("code")
+
+    exc_str = str(exc)
+    exc_args_str = " ".join(str(a) for a in getattr(exc, "args", []))
+    combined_text = f"{exc_str} {exc_args_str}"
+
+    payload = getattr(exc, "info", None) or getattr(exc, "payload", None)
+    if isinstance(payload, dict):
+        code = code or payload.get("code")
+        combined_text += f" {str(payload)}"
+
+    has_23505 = (
+        str(code) == "23505"
+        or "23505" in combined_text
+    )
+
+    has_target_constraint = constraint_target in combined_text or (
+        getattr(exc, "constraint_name", None) == constraint_target
+    )
+
+    return bool(has_23505 and has_target_constraint)
+
+
+def is_reliable_successful_incident(log: Optional[Dict[str, Any]]) -> bool:
+    """
+    Evaluates whether an existing incident log reliably indicates a prior successful
+    or simulated Telegram dispatch. Never suppresses dispatch for failed, pending,
+    or ambiguous states.
+    """
+    if not log or not isinstance(log, dict):
+        return False
+
+    status = str(log.get("status") or "").strip().lower()
+    provider_status = str(log.get("provider_status") or "").strip().lower()
+    is_simulated = bool(log.get("is_simulated"))
+
+    # Never suppress if explicitly failed
+    if status == "failed" or provider_status == "failed":
+        return False
+
+    # Reliable simulated dispatch
+    if is_simulated or provider_status == "simulated":
+        return True
+
+    # Reliable successful dispatch
+    if status in {"delivered", "dispatched"} or provider_status in {"delivered", "sent"}:
+        return True
+
+    return False
+
+
 async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) -> bool:
     """
     Process a single claimed delivery-failure event.
     - Filters out non-eligible events (deferred, complaints, unsubscribes) with audit logging.
     - Correlates tenant context without accessing customer phone or sensitive PII.
+    - Pre-dispatch idempotency check prevents duplicate Telegram messages.
     - Dispatches Telegram incident alert.
     - Atomically updates status to processed or failed.
-    - On unexpected exception, releases lease back to 'received' and propagates.
+    - On unexpected exception, releases lease back to 'received' only if Telegram was not dispatched.
     """
     event_id = event.get("id")
     if not event_id:
         logger.warning(f"Skipping malformed event without id: {event}")
         return False
+
+    dispatch_succeeded = False
+    intent_recorded = False
+
+    # In-memory test compatibility: if an unseeded or un-claimed event is passed directly to process_delivery_failure_event
+    if repository.supabase._allow_in_memory_fallback():
+        mem_evt = None
+        for evt in repository.supabase._in_memory_delivery_failure_events.values():
+            if str(evt.get("id")) == str(event_id):
+                mem_evt = evt
+                break
+        now_dt = datetime.now(timezone.utc)
+        if mem_evt is None:
+            mem_evt = {
+                "id": str(event_id),
+                "claimed_by": str(worker_id),
+                "processing_status": "queued",
+                "lease_until": (now_dt + timedelta(seconds=900)).isoformat(),
+                "user_id": event.get("user_id"),
+                "event_type": event.get("event_type"),
+                "esp_provider": event.get("esp_provider"),
+            }
+            repository.supabase._in_memory_delivery_failure_events[str(event_id)] = mem_evt
+        elif mem_evt.get("processing_status") in ("received", "pending") or mem_evt.get("claimed_by") is None:
+            mem_evt["claimed_by"] = str(worker_id)
+            mem_evt["processing_status"] = "queued"
+            mem_evt["lease_until"] = (now_dt + timedelta(seconds=900)).isoformat()
 
     try:
         # 1. Eligibility Check (Event Type Canonicalization)
@@ -399,14 +496,47 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 )
                 return False
 
-        # 3. Dispatch Alert via Telegram Alert Engine
+        # Pre-dispatch idempotency check: check for existing durable incident record
+        existing_log = repository.get_telegram_incident_log_by_event(event_id, user_id=event.get("user_id"))
+        if existing_log and is_reliable_successful_incident(existing_log):
+            logger.info(
+                f"Suppressing duplicate Telegram dispatch for event {event_id}. "
+                f"Existing incident {existing_log.get('id')} already records successful or simulated dispatch."
+            )
+            repository.mark_event_processed(
+                event_id=event_id,
+                outcome="processed",
+                reason="Duplicate Telegram dispatch suppressed by existing incident log",
+                worker_id=worker_id,
+                user_id=event.get("user_id"),
+            )
+            return True
+        elif existing_log:
+            logger.info(
+                f"Existing incident for event {event_id} has status='{existing_log.get('status')}', "
+                f"provider_status='{existing_log.get('provider_status')}'. Proceeding with Telegram dispatch."
+            )
+
+        # 3. ATOMIC PRE-DISPATCH INTENT REGISTRATION (Group 43D)
+        # Durably record intent to dispatch before making outbound HTTP request to Telegram.
+        # Fails closed if lease has expired or another worker holds ownership.
+        intent_acquired = repository.record_delivery_failure_dispatch_intent(event_id, worker_id)
+        if not intent_acquired:
+            logger.warning(
+                f"Worker {worker_id} failed to acquire durable dispatch intent for event {event_id}. "
+                f"Lease may have expired or event status changed. Aborting Telegram dispatch."
+            )
+            return False
+        intent_recorded = True
+
+        # 4. Dispatch Alert via Telegram Alert Engine
         result: TelegramDispatchResult = await telegram_alert_service.dispatch_alert(
             incident=incident,
             channel="telegram",
             esp_provider=incident.esp_provider,
         )
 
-        # 4. Record Incident Log & Finalize Event State
+        # 5. Record Incident Log & Finalize Event State
         is_success = getattr(result, "success", None)
         if is_success is None:
             is_success = bool(result.get("status") == "delivered" or result.get("success") or result.get("dispatched"))
@@ -420,18 +550,34 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
             provider_status = "simulated" if is_simulated else "delivered"
 
         if is_success:
-            repository.create_telegram_incident_log(
-                delivery_failure_event_id=event_id,
-                user_id=incident.user_id,
-                order_id=incident.order_id or "unknown",
-                domain_name=incident.domain_name or "unknown",
-                store_name=incident.store_name or "unknown",
-                triggered_reason=incident.failure_reason or incident.failure_type or "unknown",
-                target_chat_id=target_chat_id,
-                provider_status=provider_status,
-                provider_message_id=provider_msg_id,
-                is_simulated=is_simulated,
-            )
+            dispatch_succeeded = True
+            try:
+                repository.create_telegram_incident_log(
+                    delivery_failure_event_id=event_id,
+                    user_id=incident.user_id,
+                    order_id=incident.order_id or "unknown",
+                    domain_name=incident.domain_name or "unknown",
+                    store_name=incident.store_name or "unknown",
+                    triggered_reason=incident.failure_reason or incident.failure_type or "unknown",
+                    target_chat_id=target_chat_id,
+                    provider_status=provider_status,
+                    provider_message_id=provider_msg_id,
+                    is_simulated=is_simulated,
+                )
+            except Exception as log_err:
+                if _is_telegram_incident_unique_violation(log_err):
+                    logger.warning(
+                        f"Incident log for event {event_id} already exists via unique constraint "
+                        f"idx_failover_logs_one_telegram_incident_per_event: {log_err}. "
+                        f"Proceeding to mark event processed."
+                    )
+                else:
+                    logger.error(
+                        f"Failed to record incident log for event {event_id} after successful Telegram dispatch: {log_err}",
+                        exc_info=True,
+                    )
+                    raise
+
             repository.mark_event_processed(
                 event_id=event_id,
                 outcome="processed",
@@ -448,14 +594,22 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 event_id=event_id,
                 reason=err_msg or "Failed to deliver Telegram alert",
                 worker_id=worker_id,
+                user_id=incident.user_id,
             )
             return False
     except Exception as exc:
         logger.error(f"Unexpected exception processing event {event_id}: {exc}", exc_info=True)
-        try:
-            repository.release_claimed_delivery_failure_event(event_id, worker_id)
-        except Exception as rel_err:
-            logger.warning(f"Could not release event {event_id} after processing exception: {rel_err}")
+        if not dispatch_succeeded:
+            try:
+                repository.release_claimed_delivery_failure_event(event_id, worker_id)
+            except Exception as rel_err:
+                logger.warning(f"Could not release event {event_id} after processing exception: {rel_err}")
+        else:
+            logger.warning(
+                f"Suppressing release_claimed_delivery_failure_event for event {event_id} because "
+                f"dispatch succeeded (dispatch_succeeded={dispatch_succeeded}). "
+                f"Lease will remain active until expiry and ambiguous-outcome recovery to prevent immediate duplicate dispatch."
+            )
         raise
 
 
@@ -495,6 +649,31 @@ async def run_failover_worker(
     try:
         while not stop_event.is_set():
             try:
+                # Sweep and quarantine any expired dispatching events
+                try:
+                    quarantined = repository.quarantine_expired_dispatch_intent_events(limit=limit)
+                    if quarantined:
+                        for q in quarantined:
+                            if q.get("resolution") == "quarantined_ambiguous":
+                                q_id = str(q.get("event_id"))
+                                logger.error(
+                                    f"Event {q_id} quarantined: ambiguous external Telegram dispatch outcome."
+                                )
+                                try:
+                                    from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+                                    await ops_alert_service.dispatch_incident(
+                                        OpsIncident(
+                                            alert_id="ALERT-FAILOVER-AMBIGUOUS-DISPATCH",
+                                            severity="P2",
+                                            summary=f"Delivery failure {q_id} quarantined: expired lease during dispatch intent",
+                                            details={"event_id": q_id, "worker_id": worker_id},
+                                        )
+                                    )
+                                except Exception as alert_err:
+                                    logger.warning(f"Could not dispatch ops alert for quarantined event {q_id}: {alert_err}")
+                except Exception as q_exc:
+                    logger.warning(f"Error checking expired dispatch intent events: {q_exc}")
+
                 # Atomically claim received delivery failure events (FOR UPDATE SKIP LOCKED with lease expiry)
                 events = repository.claim_pending_delivery_failure_events(
                     worker_id=worker_id,

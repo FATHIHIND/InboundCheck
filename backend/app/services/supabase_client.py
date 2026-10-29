@@ -1564,12 +1564,30 @@ class SupabaseService:
                     record = res.data[0]
             except Exception as e:
                 logger.warning(f"Could not insert failover_log in Supabase: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise
 
         # In-memory storage fallback
         if not hasattr(self, "_in_memory_failover_logs"):
             self._in_memory_failover_logs: Dict[str, List[Dict[str, Any]]] = {}
         if user_id not in self._in_memory_failover_logs:
             self._in_memory_failover_logs[user_id] = []
+
+        # Enforce in-memory unique constraint matching idx_failover_logs_one_telegram_incident_per_event
+        if delivery_failure_event_id and (fallback_channel == "telegram" or channel == "telegram"):
+            for uid, logs in self._in_memory_failover_logs.items():
+                for existing in logs:
+                    if (
+                        str(existing.get("delivery_failure_event_id")) == str(delivery_failure_event_id)
+                        and (existing.get("fallback_channel") == "telegram" or existing.get("channel") == "telegram")
+                    ):
+                        from postgrest.exceptions import APIError
+                        raise APIError({
+                            "message": 'duplicate key value violates unique constraint "idx_failover_logs_one_telegram_incident_per_event"',
+                            "code": "23505",
+                            "details": f"Key (delivery_failure_event_id)=({delivery_failure_event_id}) already exists.",
+                        })
+
         self._in_memory_failover_logs[user_id].insert(0, record)
 
         return record
@@ -1599,6 +1617,253 @@ class SupabaseService:
             self._in_memory_failover_logs = {}
         logs = self._in_memory_failover_logs.get(user_id, [])
         return logs[offset : offset + limit]
+
+    def record_delivery_failure_dispatch_intent(self, event_id: str, worker_id: str) -> bool:
+        """
+        Durably record worker dispatch intent before calling external Telegram dispatch.
+        Atomically validates lease ownership and transitions processing_status from 'queued' to 'dispatching'.
+        Requires:
+        - worker_id matches claimed_by.
+        - processing_status == 'queued'.
+        - lease_until IS NOT NULL and lease_until > now.
+        """
+        is_uuid = False
+        try:
+            uuid.UUID(str(event_id))
+            uuid.UUID(str(worker_id))
+            is_uuid = True
+        except (ValueError, TypeError, AttributeError):
+            is_uuid = False
+
+        if self._client and is_uuid:
+            try:
+                res = self._client.rpc(
+                    "record_delivery_failure_dispatch_intent",
+                    {
+                        "p_event_id": str(event_id),
+                        "p_worker_id": str(worker_id),
+                    },
+                ).execute()
+                if res.data is True:
+                    for evt in self._in_memory_delivery_failure_events.values():
+                        if str(evt.get("id")) == str(event_id):
+                            evt["processing_status"] = "dispatching"
+                            evt["dispatch_intent_at"] = datetime.now(timezone.utc).isoformat()
+                            evt["dispatch_attempt_count"] = int(evt.get("dispatch_attempt_count", 0)) + 1
+                    return True
+                if not self._allow_in_memory_fallback():
+                    return False
+            except Exception as e:
+                logger.warning(f"Could not execute record_delivery_failure_dispatch_intent RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    from app.services.supabase_client import DatabaseUnavailableError
+                    from app.core.env_guard import sanitize_exception
+                    raise DatabaseUnavailableError(
+                        f"Database RPC record_delivery_failure_dispatch_intent failed: {sanitize_exception(e)}"
+                    ) from e
+
+        # In-memory fallback for local development and unit tests
+        now = datetime.now(timezone.utc)
+        for evt in self._in_memory_delivery_failure_events.values():
+            if str(evt.get("id")) == str(event_id):
+                # 1. Verify worker ownership
+                if not evt.get("claimed_by") or str(evt.get("claimed_by")) != str(worker_id):
+                    return False
+
+                # 2. Verify status is strictly 'queued'
+                if evt.get("processing_status") != "queued":
+                    return False
+
+                # 3. Verify lease_until is present and not None
+                lease_until = evt.get("lease_until")
+                if not lease_until:
+                    return False
+
+                # 4. Verify lease is active and not expired (timezone-aware comparison)
+                try:
+                    lease_dt = datetime.fromisoformat(str(lease_until).replace("Z", "+00:00"))
+                    if lease_dt.tzinfo is None:
+                        lease_dt = lease_dt.replace(tzinfo=timezone.utc)
+                    if lease_dt <= now:
+                        return False
+                except Exception:
+                    # If lease format cannot be established as valid, fail closed
+                    return False
+
+                # Intent acquired atomically
+                evt["processing_status"] = "dispatching"
+                evt["dispatch_intent_at"] = now.isoformat()
+                evt["dispatch_attempt_count"] = int(evt.get("dispatch_attempt_count", 0)) + 1
+                return True
+
+        return False
+
+    def quarantine_expired_dispatch_intent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Sweep and quarantine delivery failure events whose dispatch intent lease has expired.
+        If an incident log exists with verified delivery, resolves to 'processed'.
+        Otherwise, quarantines the event with reason 'AMBIGUOUS_EXTERNAL_DISPATCH' to prevent duplicate alert dispatch.
+        Strictly enforces limit across both categories.
+        """
+        if limit is None or int(limit) <= 0:
+            return []
+
+        v_limit = min(int(limit), 500)
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "quarantine_expired_dispatch_intent_events",
+                    {"p_limit": v_limit},
+                ).execute()
+                if res.data is not None:
+                    return res.data
+                return []
+            except Exception as e:
+                logger.warning(f"Could not execute quarantine_expired_dispatch_intent_events RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    from app.services.supabase_client import DatabaseUnavailableError
+                    from app.core.env_guard import sanitize_exception
+                    raise DatabaseUnavailableError(
+                        f"Database RPC quarantine_expired_dispatch_intent_events failed: {sanitize_exception(e)}"
+                    ) from e
+
+        # In-memory fallback
+        now = datetime.now(timezone.utc)
+        quarantined: List[Dict[str, Any]] = []
+        if hasattr(self, "_in_memory_delivery_failure_events"):
+            expired_candidates = []
+            for evt in self._in_memory_delivery_failure_events.values():
+                if evt.get("processing_status") == "dispatching":
+                    lease_until = evt.get("lease_until")
+                    is_expired = False
+                    if lease_until:
+                        try:
+                            lease_dt = datetime.fromisoformat(str(lease_until).replace("Z", "+00:00"))
+                            if lease_dt <= now:
+                                is_expired = True
+                        except Exception:
+                            is_expired = True
+                    else:
+                        is_expired = True
+
+                    if is_expired:
+                        expired_candidates.append(evt)
+
+            # Sort by lease_until ascending for fair FIFO recovery
+            expired_candidates.sort(key=lambda x: str(x.get("lease_until") or ""))
+
+            for evt in expired_candidates[:v_limit]:
+                evt_id = str(evt.get("id"))
+                existing_log = None
+                if hasattr(self, "_in_memory_failover_logs"):
+                    for uid, logs in self._in_memory_failover_logs.items():
+                        for l in logs:
+                            if (
+                                str(l.get("delivery_failure_event_id")) == evt_id
+                                and (l.get("fallback_channel") == "telegram" or l.get("channel") == "telegram")
+                                and l.get("status") in ("delivered", "dispatched")
+                            ):
+                                existing_log = l
+                                break
+
+                if existing_log:
+                    evt["processing_status"] = "processed"
+                    evt["processed_at"] = now.isoformat()
+                    evt["processing_error"] = "Resolved on lease expiry via existing durable incident log"
+                    quarantined.append({"event_id": evt_id, "resolution": "resolved_processed"})
+                else:
+                    evt["processing_status"] = "quarantined"
+                    evt["processed_at"] = now.isoformat()
+                    evt["processing_error"] = "AMBIGUOUS_EXTERNAL_DISPATCH: worker lease expired during dispatch without durable incident confirmation"
+                    quarantined.append({"event_id": evt_id, "resolution": "quarantined_ambiguous"})
+
+        return quarantined
+
+    def get_telegram_incident_log_by_event(
+        self,
+        event_id: str,
+        user_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Query failover_logs for an existing incident matching delivery_failure_event_id and fallback_channel='telegram'.
+        Optionally scopes to user_id for strict tenant isolation.
+        """
+        if not event_id:
+            return None
+
+        # Check in-memory storage first in test / dev mode
+        if self._allow_in_memory_fallback() and hasattr(self, "_in_memory_failover_logs"):
+            for uid, logs in self._in_memory_failover_logs.items():
+                if user_id and str(uid) != str(user_id):
+                    continue
+                for log in logs:
+                    if (
+                        str(log.get("delivery_failure_event_id")) == str(event_id)
+                        and (log.get("fallback_channel") == "telegram" or log.get("channel") == "telegram")
+                    ):
+                        if user_id and str(log.get("user_id")) != str(user_id):
+                            continue
+                        return log
+
+        if self._client:
+            try:
+                query = (
+                    self._client.table("failover_logs")
+                    .select("*")
+                    .eq("delivery_failure_event_id", str(event_id))
+                    .eq("fallback_channel", "telegram")
+                )
+                if user_id:
+                    query = query.eq("user_id", str(user_id))
+                res = query.limit(1).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                return None
+            except Exception as e:
+                logger.warning(f"Could not retrieve telegram incident log from Supabase for event {event_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    from app.services.supabase_client import DatabaseUnavailableError
+                    from app.core.env_guard import sanitize_exception
+                    raise DatabaseUnavailableError(
+                        f"Database query failed for event {event_id} incident log: {sanitize_exception(e)}"
+                    ) from e
+
+        return None
+
+        # Check in-memory storage first in test / dev mode
+        if self._allow_in_memory_fallback() and hasattr(self, "_in_memory_failover_logs"):
+            for uid, logs in self._in_memory_failover_logs.items():
+                for log in logs:
+                    if (
+                        str(log.get("delivery_failure_event_id")) == str(event_id)
+                        and (log.get("fallback_channel") == "telegram" or log.get("channel") == "telegram")
+                    ):
+                        return log
+
+        if self._client:
+            try:
+                res = (
+                    self._client.table("failover_logs")
+                    .select("*")
+                    .eq("delivery_failure_event_id", str(event_id))
+                    .eq("fallback_channel", "telegram")
+                    .limit(1)
+                    .execute()
+                )
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                return None
+            except Exception as e:
+                logger.warning(f"Could not retrieve telegram incident log from Supabase for event {event_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    from app.services.supabase_client import DatabaseUnavailableError
+                    from app.core.env_guard import sanitize_exception
+                    raise DatabaseUnavailableError(
+                        f"Database query failed for event {event_id} incident log: {sanitize_exception(e)}"
+                    ) from e
+
+        return None
 
     def claim_pending_delivery_failure_events(
         self,
@@ -1648,6 +1913,9 @@ class SupabaseService:
             raise DatabaseUnavailableError("Database client is not connected in production")
 
         # In-memory lease claiming & stale recovery fallback
+        # First sweep & quarantine any expired dispatching events
+        self.quarantine_expired_dispatch_intent_events(limit=limit)
+
         claimed: List[Dict[str, Any]] = []
         for event in self._in_memory_delivery_failure_events.values():
             status = event.get("processing_status")
@@ -2084,7 +2352,7 @@ class SupabaseService:
         now_iso = datetime.now(timezone.utc).isoformat()
         payload: Dict[str, Any] = {
             "processing_status": processing_status,
-            "processed_at": now_iso if processing_status in ("processed", "failed", "ignored") else None,
+            "processed_at": now_iso if processing_status in ("processed", "failed", "ignored", "quarantined") else None,
         }
         if user_id:
             payload["user_id"] = user_id
