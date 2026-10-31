@@ -32,8 +32,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Canonical 28 Standardized Migration Definitions (version, name)
-CANONICAL_28_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
+# Canonical Standardized Migration Definitions (version, name)
+# Dynamically derived manifest representing the approved local migration sequence.
+CANONICAL_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
     ("20260903000001", "complete_production_schema"),
     ("20260904000001", "fix_handle_new_user_trigger"),
     ("20260908000001", "add_stripe_billing_fields"),
@@ -62,7 +63,11 @@ CANONICAL_28_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
     ("20260930000003", "ai_concurrency_leases"),
     ("20261001000001", "ai_generation_telemetry"),
     ("20261012000001", "harden_rate_limit_windows_security"),
+    ("20261029000001", "durable_failover_dispatch_intent_and_quarantine"),
+    ("20261031000001", "harden_worker_rpc_acls_and_overloads"),
 )
+# Backward-compatible alias for existing test imports
+CANONICAL_28_MIGRATIONS = CANONICAL_MIGRATIONS
 
 PRODUCTION_REF = "tbjcldcoozvuvyipeonh"
 STAGING_REF = "wymgyqnqwlliotkxamtd"
@@ -94,11 +99,12 @@ def scan_local_migrations(migrations_dir: Path) -> List[LocalMigration]:
         v, name = m.groups()
         migrations.append(LocalMigration(version=v, name=name, filename=f.name, filepath=f))
 
-    if len(migrations) != 28:
-        raise ValueError(f"Expected exactly 28 migrations, found {len(migrations)}")
+    expected_count = len(CANONICAL_MIGRATIONS)
+    if len(migrations) != expected_count:
+        raise ValueError(f"Expected exactly {expected_count} migrations, found {len(migrations)}")
 
-    # Verify exact match against canonical 28 list
-    for idx, (m, (exp_v, exp_name)) in enumerate(zip(migrations, CANONICAL_28_MIGRATIONS)):
+    # Verify exact match against canonical list
+    for idx, (m, (exp_v, exp_name)) in enumerate(zip(migrations, CANONICAL_MIGRATIONS)):
         if m.version != exp_v or m.name != exp_name:
             raise ValueError(
                 f"Migration #{idx+1} mismatch: found ({m.version}, {m.name}), expected ({exp_v}, {exp_name})"
@@ -119,8 +125,8 @@ def validate_ledger_baseline(rows: List[Dict[str, Any]]) -> Tuple[bool, List[str
 
     row_map = {r.get("version"): r for r in rows}
 
-    # Check collisions with target 28 versions
-    target_versions = {v for v, _ in CANONICAL_28_MIGRATIONS}
+    # Check collisions with target canonical versions
+    target_versions = {v for v, _ in CANONICAL_MIGRATIONS}
     existing_targets = target_versions.intersection(row_map.keys())
     if existing_targets:
         errors.append(f"Target versions collision detected: {sorted(list(existing_targets))}")
@@ -166,13 +172,14 @@ def generate_forward_reconciliation_sql(
     statement_timeout_sec: int = 10,
     provenance: str = RECONCILIATION_PROVENANCE,
 ) -> str:
-    """Generate the fully hardened atomic forward reconciliation SQL transaction (Option A: 28 Canonical Rows)."""
-    values_clause = ",\n    ".join([f"('{v}', '{n}', '{provenance}')" for v, n in CANONICAL_28_MIGRATIONS])
-    target_in_clause = ",\n        ".join([f"'{v}'" for v, _ in CANONICAL_28_MIGRATIONS])
+    """Generate the fully hardened atomic forward reconciliation SQL transaction."""
+    total_canonical = len(CANONICAL_MIGRATIONS)
+    values_clause = ",\n    ".join([f"('{v}', '{n}', '{provenance}')" for v, n in CANONICAL_MIGRATIONS])
+    target_in_clause = ",\n        ".join([f"'{v}'" for v, _ in CANONICAL_MIGRATIONS])
 
     sql = f"""-- ============================================================================
 -- INBOUNDCHECK — MIGRATION LEDGER RECONCILIATION TRANSACTION
--- Option A: Canonical 28-Row Architecture (Universal Parity & Zero Drift)
+-- Option A: Canonical {total_canonical}-Row Architecture (Universal Parity & Zero Drift)
 -- Target Project Ref: tbjcldcoozvuvyipeonh
 -- Provenance Marker: {provenance}
 -- ============================================================================
@@ -206,7 +213,7 @@ BEGIN
     );
 
     IF v_collision_count <> 0 THEN
-        RAISE EXCEPTION 'PRECONDITION FAILED [P-02]: % of 28 target versions already exist in ledger', v_collision_count;
+        RAISE EXCEPTION 'PRECONDITION FAILED [P-02]: % of {total_canonical} target versions already exist in ledger', v_collision_count;
     END IF;
 
     -- Precondition 3: Verify Legacy Row 1 (20260910165935)
@@ -271,7 +278,7 @@ BEGIN
     END IF;
 END $$;
 
--- 4. FAIL-CLOSED INGESTION: Insert 28 Standardized Target Versions with Positive Provenance
+-- 4. FAIL-CLOSED INGESTION: Insert {total_canonical} Standardized Target Versions with Positive Provenance
 INSERT INTO supabase_migrations.schema_migrations (version, name, created_by)
 VALUES
     {values_clause};
@@ -284,15 +291,15 @@ DECLARE
     v_unexpected_rows INT;
     v_legacy_residual INT;
 BEGIN
-    -- Postcondition 1: Total rows MUST equal exactly 28
+    -- Postcondition 1: Total rows MUST equal exactly {total_canonical}
     SELECT count(*) INTO v_final_count 
     FROM supabase_migrations.schema_migrations;
 
-    IF v_final_count <> 28 THEN
-        RAISE EXCEPTION 'POSTCONDITION FAILED [Q-01]: Expected exactly 28 rows, found %', v_final_count;
+    IF v_final_count <> {total_canonical} THEN
+        RAISE EXCEPTION 'POSTCONDITION FAILED [Q-01]: Expected exactly {total_canonical} rows, found %', v_final_count;
     END IF;
 
-    -- Postcondition 2: Exact matching of all 28 (version, name, created_by) tuples
+    -- Postcondition 2: Exact matching of all {total_canonical} (version, name, created_by) tuples
     WITH expected_pairs(version, name, created_by) AS (
         VALUES
             {values_clause}
@@ -312,7 +319,7 @@ BEGIN
         RAISE EXCEPTION 'POSTCONDITION FAILED [Q-02]: % expected (version, name, created_by) tuples missing or mismatched', v_missing_pairs;
     END IF;
 
-    -- Postcondition 3: Ensure zero rogue rows outside the 28 approved canonical versions
+    -- Postcondition 3: Ensure zero rogue rows outside the {total_canonical} approved canonical versions
     WITH approved_versions(version) AS (
         VALUES
             {values_clause}
@@ -347,8 +354,9 @@ def generate_defensive_rollback_sql(
     provenance: str = RECONCILIATION_PROVENANCE,
 ) -> str:
     """Generate the targeted defensive rollback SQL transaction restoring complete original legacy statements."""
-    target_in_clause = ",\n        ".join([f"'{v}'" for v, _ in CANONICAL_28_MIGRATIONS])
-    values_clause = ",\n            ".join([f"('{v}', '{n}', '{provenance}')" for v, n in CANONICAL_28_MIGRATIONS])
+    total_canonical = len(CANONICAL_MIGRATIONS)
+    target_in_clause = ",\n        ".join([f"'{v}'" for v, _ in CANONICAL_MIGRATIONS])
+    values_clause = ",\n            ".join([f"('{v}', '{n}', '{provenance}')" for v, n in CANONICAL_MIGRATIONS])
 
     # Extract exact legacy statements for full recovery
     r1 = CANONICAL_3_LEGACY_ROWS["20260910165935"]
@@ -370,7 +378,7 @@ def generate_defensive_rollback_sql(
 -- deployment tools (e.g. `supabase db push`) to attempt redundant re-execution,
 -- triggering relation collision errors.
 --
--- Once any subsequent migration (e.g., version > 20261012000001) has been applied,
+-- Once any subsequent migration has been applied,
 -- rollback is STRICTLY FORBIDDEN and will fail-closed. In all post-maintenance
 -- scenarios, use reviewed FORWARD RECOVERY instead.
 -- ============================================================================
@@ -380,21 +388,21 @@ SET LOCAL lock_timeout = '{lock_timeout_sec}s';
 SET LOCAL statement_timeout = '{statement_timeout_sec}s';
 LOCK TABLE supabase_migrations.schema_migrations IN ACCESS EXCLUSIVE MODE;
 
--- Rollback Preconditions: Verify Exact 28-Row Canonical State & Positive Provenance
+-- Rollback Preconditions: Verify Exact {total_canonical}-Row Canonical State & Positive Provenance
 DO $$
 DECLARE
     v_cnt INT;
     v_missing_or_modified_targets INT;
     v_unexpected_rows INT;
 BEGIN
-    -- Precondition 1: Total rows MUST equal exactly 28.
-    -- If any subsequent migration has been applied (v_cnt > 28), rollback fails immediately.
+    -- Precondition 1: Total rows MUST equal exactly {total_canonical}.
+    -- If any subsequent migration has been applied (v_cnt > {total_canonical}), rollback fails immediately.
     SELECT count(*) INTO v_cnt FROM supabase_migrations.schema_migrations;
-    IF v_cnt <> 28 THEN
-        RAISE EXCEPTION 'ROLLBACK PRECONDITION FAILED [R-01]: Expected exactly 28 rows in ledger, found %. Rollback is refused because ledger state has evolved.', v_cnt;
+    IF v_cnt <> {total_canonical} THEN
+        RAISE EXCEPTION 'ROLLBACK PRECONDITION FAILED [R-01]: Expected exactly {total_canonical} rows in ledger, found %. Rollback is refused because ledger state has evolved.', v_cnt;
     END IF;
 
-    -- Precondition 2: All 28 target rows MUST exist with exact names AND positive provenance
+    -- Precondition 2: All {total_canonical} target rows MUST exist with exact names AND positive provenance
     WITH expected_targets(version, name, created_by) AS (
         VALUES
             {values_clause}
@@ -429,7 +437,7 @@ BEGIN
     END IF;
 END $$;
 
--- Execution Step 1: Delete ONLY the 28 standardized versions bearing positive provenance
+-- Execution Step 1: Delete ONLY the {total_canonical} standardized versions bearing positive provenance
 DO $$
 DECLARE
     v_deleted_count INT;
@@ -446,8 +454,8 @@ BEGIN
 
     GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
 
-    IF v_deleted_count <> 28 THEN
-        RAISE EXCEPTION 'ROLLBACK EXECUTION FAILED: Expected to delete exactly 28 rows with provenance %, deleted %', '{provenance}', v_deleted_count;
+    IF v_deleted_count <> {total_canonical} THEN
+        RAISE EXCEPTION 'ROLLBACK EXECUTION FAILED: Expected to delete exactly {total_canonical} rows with provenance %, deleted %', '{provenance}', v_deleted_count;
     END IF;
 END $$;
 
@@ -526,13 +534,14 @@ COMMIT;
 def generate_post_reconciliation_verification_sql(
     provenance: str = RECONCILIATION_PROVENANCE,
 ) -> str:
-    """Generate the exact CTE-based post-reconciliation verification query (Option A: 28 Target Rows)."""
-    values_clause = ",\n        ".join([f"('{v}', '{n}')" for v, n in CANONICAL_28_MIGRATIONS])
+    """Generate the exact CTE-based post-reconciliation verification query (Option A: Target Rows)."""
+    total_canonical = len(CANONICAL_MIGRATIONS)
+    values_clause = ",\n        ".join([f"('{v}', '{n}')" for v, n in CANONICAL_MIGRATIONS])
 
     sql = f"""-- ============================================================================
 -- INBOUNDCHECK — POST-RECONCILIATION VERIFICATION QUERY (READ-ONLY)
--- Option A: Exact 28-Pair Validation, Universal Parity & Zero Drift
--- Expected Total Rows: 28 Canonical Standardized Records (0 Legacy Residuals)
+-- Option A: Exact {total_canonical}-Pair Validation, Universal Parity & Zero Drift
+-- Expected Total Rows: {total_canonical} Canonical Standardized Records (0 Legacy Residuals)
 -- Required Provenance: {provenance}
 -- ============================================================================
 WITH expected_canonical_pairs(version, name) AS (
@@ -544,38 +553,38 @@ verification_metrics AS (
         (SELECT count(*) FROM supabase_migrations.schema_migrations) AS total_actual_rows,
         -- Check canonical pairs exact match
         (SELECT count(*) 
-         FROM expected_canonical_pairs e
-         LEFT JOIN supabase_migrations.schema_migrations s 
-           ON s.version = e.version AND s.name = e.name
-         WHERE s.version IS NULL) AS missing_or_mismatched_canonical_count,
+          FROM expected_canonical_pairs e
+          LEFT JOIN supabase_migrations.schema_migrations s 
+            ON s.version = e.version AND s.name = e.name
+          WHERE s.version IS NULL) AS missing_or_mismatched_canonical_count,
         -- Check canonical provenance
         (SELECT count(*) 
-         FROM expected_canonical_pairs e
-         JOIN supabase_migrations.schema_migrations s 
-           ON s.version = e.version
-         WHERE s.created_by <> '{provenance}') AS invalid_provenance_count,
+          FROM expected_canonical_pairs e
+          JOIN supabase_migrations.schema_migrations s 
+            ON s.version = e.version
+          WHERE s.created_by <> '{provenance}') AS invalid_provenance_count,
         -- Check legacy rows absence
         (SELECT count(*)
-         FROM supabase_migrations.schema_migrations s
-         WHERE s.version IN ('20260910165935', '20260910195242', '20260910203910')) AS legacy_residuals_count,
-        -- Check for any rogue rows outside the 28 approved canonical versions
+          FROM supabase_migrations.schema_migrations s
+          WHERE s.version IN ('20260910165935', '20260910195242', '20260910203910')) AS legacy_residuals_count,
+        -- Check for any rogue rows outside the {total_canonical} approved canonical versions
         (SELECT count(*)
-         FROM supabase_migrations.schema_migrations s
-         LEFT JOIN expected_canonical_pairs a ON s.version = a.version
-         WHERE a.version IS NULL) AS unexpected_rogue_rows_count
+          FROM supabase_migrations.schema_migrations s
+          LEFT JOIN expected_canonical_pairs a ON s.version = a.version
+          WHERE a.version IS NULL) AS unexpected_rogue_rows_count
 )
 SELECT 
-    CASE WHEN total_actual_rows = 28 THEN 'PASSED: Total ledger count is exactly 28'
-         ELSE 'FAILED [COUNT_MISMATCH]: Expected exactly 28 rows, found ' || total_actual_rows
+    CASE WHEN total_actual_rows = {total_canonical} THEN 'PASSED: Total ledger count is exactly {total_canonical}'
+         ELSE 'FAILED [COUNT_MISMATCH]: Expected exactly {total_canonical} rows, found ' || total_actual_rows
     END AS check_total_count,
 
     CASE WHEN missing_or_mismatched_canonical_count = 0 
-         THEN 'PASSED: All 28 canonical (version, name) pairs verified exactly'
+         THEN 'PASSED: All {total_canonical} canonical (version, name) pairs verified exactly'
          ELSE 'FAILED [CANONICAL_MISMATCH]: ' || missing_or_mismatched_canonical_count || ' canonical pairs missing or mismatched'
     END AS check_canonical_pairs,
 
     CASE WHEN invalid_provenance_count = 0
-         THEN 'PASSED: All 28 canonical records bear explicit provenance {provenance}'
+         THEN 'PASSED: All {total_canonical} canonical records bear explicit provenance {provenance}'
          ELSE 'FAILED [PROVENANCE_MISMATCH]: ' || invalid_provenance_count || ' canonical records have missing/wrong provenance'
     END AS check_canonical_provenance,
 
@@ -599,22 +608,23 @@ def verify_post_reconciliation_ledger(
 ) -> Tuple[bool, List[str]]:
     """
     Deterministically verify that a post-reconciliation ledger contains:
-    1. Exactly 28 total rows.
-    2. All 28 canonical (version, name) pairs, each with positive provenance.
+    1. Exactly total_canonical rows.
+    2. All canonical (version, name) pairs, each with positive provenance.
     3. Exactly 0 legacy rows residual.
-    4. Zero unexpected or rogue rows outside the 28 approved versions.
+    4. Zero unexpected or rogue rows outside the approved versions.
     Returns (is_valid, error_messages).
     """
     errors: List[str] = []
+    total_canonical = len(CANONICAL_MIGRATIONS)
 
-    if len(rows) != 28:
-        errors.append(f"Row count mismatch: expected exactly 28 rows, found {len(rows)}")
+    if len(rows) != total_canonical:
+        errors.append(f"Row count mismatch: expected exactly {total_canonical} rows, found {len(rows)}")
 
     row_map = {r.get("version"): r for r in rows}
 
     # Verify each canonical target row
     target_versions = set()
-    for exp_v, exp_name in CANONICAL_28_MIGRATIONS:
+    for exp_v, exp_name in CANONICAL_MIGRATIONS:
         target_versions.add(exp_v)
         if exp_v not in row_map:
             errors.append(f"Missing canonical migration: {exp_v} ({exp_name})")
@@ -652,7 +662,7 @@ def plan_reconciliation(existing_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     existing_versions = {r.get("version"): r for r in existing_rows}
     rows_to_insert = [
         {"version": v, "name": n}
-        for v, n in CANONICAL_28_MIGRATIONS
+        for v, n in CANONICAL_MIGRATIONS
         if v not in existing_versions
     ]
     legacy_rows_to_remove = [
@@ -660,7 +670,7 @@ def plan_reconciliation(existing_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         if r.get("version") in CANONICAL_3_LEGACY_ROWS
     ]
     collisions = [
-        v for v, _ in CANONICAL_28_MIGRATIONS
+        v for v, _ in CANONICAL_MIGRATIONS
         if v in existing_versions
     ]
 

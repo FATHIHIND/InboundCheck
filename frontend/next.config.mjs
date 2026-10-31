@@ -1,13 +1,12 @@
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://images.unsplash.com https://avatars.githubusercontent.com",
   "font-src 'self' data:",
   "media-src 'self' https://cdn.sceneai.art data: blob:",
   "connect-src 'self' http://localhost:8000 https://api.inboundcheck.com https://inboundcheck-production.up.railway.app https://*.supabase.co wss://*.supabase.co",
   "frame-src 'self' https://accounts.google.com",
-  "frame-ancestors 'self'",
   "form-action 'self' https://accounts.google.com",
   "base-uri 'self'",
   "object-src 'none'",
@@ -17,6 +16,7 @@ const permissionsPolicy = "camera=(), microphone=(), geolocation=(), browsing-to
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: true,
   images: {
     unoptimized: true,
@@ -67,10 +67,6 @@ const nextConfig = {
           {
             key: "X-Content-Type-Options",
             value: "nosniff",
-          },
-          {
-            key: "X-Frame-Options",
-            value: "SAMEORIGIN",
           },
           {
             key: "Referrer-Policy",

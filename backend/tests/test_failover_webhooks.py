@@ -143,11 +143,17 @@ async def test_webhook_returns_503_when_durable_persistence_fails():
 
 @pytest.mark.asyncio
 async def test_sendgrid_webhook_verification_and_clock_skew():
-    """Verify SendGrid HMAC signature check, clock skew tolerance rejection, and event batch parsing."""
+    """Verify SendGrid ECDSA P-256 + SHA-256 signature check, clock skew tolerance rejection, and event batch parsing."""
+    from app.services.failover.esp_webhook_service import (
+        generate_sendgrid_ecdsa_keypair,
+        sign_sendgrid_ecdsa_webhook,
+    )
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         original_key = settings.SENDGRID_WEBHOOK_VERIFICATION_KEY
-        settings.SENDGRID_WEBHOOK_VERIFICATION_KEY = "sg_signing_key_secret"
+        priv_scalar, pub_b64_spki, _ = generate_sendgrid_ecdsa_keypair()
+        settings.SENDGRID_WEBHOOK_VERIFICATION_KEY = pub_b64_spki
 
         try:
             now = int(time.time())
@@ -166,11 +172,7 @@ async def test_sendgrid_webhook_verification_and_clock_skew():
 
             # 1. Stale timestamp (outside 300s clock skew window) -> 403 Forbidden
             old_ts = str(now - 400)
-            old_sig = hmac.new(
-                settings.SENDGRID_WEBHOOK_VERIFICATION_KEY.encode("utf-8"),
-                old_ts.encode("utf-8") + raw_payload,
-                hashlib.sha256
-            ).hexdigest()
+            old_sig = sign_sendgrid_ecdsa_webhook(priv_scalar, old_ts, raw_payload)
 
             res = await client.post(
                 "/api/v1/webhook/delivery-failure/sendgrid",
@@ -184,13 +186,9 @@ async def test_sendgrid_webhook_verification_and_clock_skew():
             assert res.status_code == 403
             assert "clock skew exceeded" in res.json().get("detail", "")
 
-            # 2. Valid signature and fresh timestamp -> 200 OK
+            # 2. Valid ECDSA P-256 signature and fresh timestamp -> 200 OK
             valid_ts = str(now)
-            valid_sig = hmac.new(
-                settings.SENDGRID_WEBHOOK_VERIFICATION_KEY.encode("utf-8"),
-                valid_ts.encode("utf-8") + raw_payload,
-                hashlib.sha256
-            ).hexdigest()
+            valid_sig = sign_sendgrid_ecdsa_webhook(priv_scalar, valid_ts, raw_payload)
 
             res = await client.post(
                 "/api/v1/webhook/delivery-failure/sendgrid",
@@ -465,3 +463,284 @@ async def test_webhook_ingestion_does_not_dispatch_telegram_directly():
             assert res.status_code == 200
             # Verification: Telegram was NOT dispatched during webhook HTTP request
             mock_tg.assert_not_called()
+
+
+# ==============================================================================
+# Group 44: P0-01 ESP Webhook Security Remediation Tests
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_p0_01_all_five_providers_reject_test_tokens_in_production_and_persist_nothing(monkeypatch):
+    """
+    Prove that in ENVIRONMENT='production', all 5 providers (Postmark, SendGrid, Mailgun, SES, Klaviyo)
+    reject 'test_secret_token' and 'valid_test_signature' both when secrets are unconfigured (500)
+    and when secrets ARE configured (403), and zero events are persisted.
+    """
+    from app.services.failover.esp_webhook_service import generate_sendgrid_ecdsa_keypair
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    _, sg_pub_b64, _ = generate_sendgrid_ecdsa_keypair()
+
+    now = int(time.time())
+    pm_evt_id = f"pm_forged_{uuid.uuid4()}"
+    sg_evt_id = f"sg_forged_{uuid.uuid4()}"
+    mg_evt_id = f"mg_forged_{uuid.uuid4()}"
+    ses_evt_id = f"ses_forged_{uuid.uuid4()}"
+    kl_evt_id = f"kl_forged_{uuid.uuid4()}"
+
+    pm_body = {"RecordType": "Bounce", "ID": pm_evt_id, "Type": "HardBounce", "Email": "a@b.com", "MessageID": "m1"}
+    sg_body = [{"sg_event_id": sg_evt_id, "event": "bounce", "type": "blocked", "status": "5.1.1", "timestamp": now, "email": "a@b.com"}]
+    mg_body = {
+        "signature": {"timestamp": str(now), "token": "tok1", "signature": "valid_test_signature"},
+        "event-data": {"id": mg_evt_id, "event": "failed", "severity": "permanent", "recipient": "a@b.com", "timestamp": now},
+    }
+    ses_body = {
+        "notificationType": "Bounce",
+        "mail": {"messageId": "ses_m1", "timestamp": "2026-10-31T12:00:00Z"},
+        "bounce": {"bounceType": "Permanent", "feedbackId": ses_evt_id, "bouncedRecipients": [{"emailAddress": "a@b.com"}]},
+    }
+    kl_body = [{"id": kl_evt_id, "type": "Dropped Email", "attributes": {"metric_name": "Dropped Email", "email": "a@b.com", "timestamp": now}}]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Phase A: Production secrets UNCONFIGURED -> Must fail closed with HTTP 500 even when test tokens are sent
+        monkeypatch.setattr(settings, "POSTMARK_WEBHOOK_SECRET", "")
+        monkeypatch.setattr(settings, "SENDGRID_WEBHOOK_VERIFICATION_KEY", "")
+        monkeypatch.setattr(settings, "MAILGUN_WEBHOOK_SIGNING_KEY", "")
+        monkeypatch.setattr(settings, "SES_WEBHOOK_SECRET", "")
+        monkeypatch.setattr(settings, "KLAVIYO_WEBHOOK_SECRET", "")
+
+        r_pm = await client.post("/api/v1/webhook/delivery-failure/postmark", json=pm_body, headers={"X-Postmark-Server-Token": "test_secret_token"})
+        assert r_pm.status_code == 500
+
+        r_sg = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            json=sg_body,
+            headers={"X-Twilio-Email-Event-Webhook-Signature": "valid_test_signature", "X-Twilio-Email-Event-Webhook-Timestamp": str(now)},
+        )
+        assert r_sg.status_code == 500
+
+        r_mg = await client.post("/api/v1/webhook/delivery-failure/mailgun", json=mg_body)
+        assert r_mg.status_code == 500
+
+        r_ses = await client.post("/api/v1/webhook/delivery-failure/ses", json=ses_body, headers={"X-SES-Webhook-Secret": "valid_test_signature"})
+        assert r_ses.status_code == 500
+
+        r_kl = await client.post("/api/v1/webhook/delivery-failure/klaviyo", json=kl_body, headers={"X-Klaviyo-Signature": "valid_test_signature"})
+        assert r_kl.status_code == 500
+
+        # Phase B: Production secrets CONFIGURED -> Must reject test tokens with HTTP 403
+        monkeypatch.setattr(settings, "POSTMARK_WEBHOOK_SECRET", "prod_pm_secret_999")
+        monkeypatch.setattr(settings, "SENDGRID_WEBHOOK_VERIFICATION_KEY", sg_pub_b64)
+        monkeypatch.setattr(settings, "MAILGUN_WEBHOOK_SIGNING_KEY", "prod_mg_key_999")
+        monkeypatch.setattr(settings, "SES_WEBHOOK_SECRET", "prod_ses_secret_999")
+        monkeypatch.setattr(settings, "KLAVIYO_WEBHOOK_SECRET", "prod_kl_secret_999")
+
+        r_pm2 = await client.post("/api/v1/webhook/delivery-failure/postmark", json=pm_body, headers={"X-Postmark-Server-Token": "test_secret_token"})
+        assert r_pm2.status_code == 403
+
+        r_sg2 = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            json=sg_body,
+            headers={"X-Twilio-Email-Event-Webhook-Signature": "valid_test_signature", "X-Twilio-Email-Event-Webhook-Timestamp": str(now)},
+        )
+        assert r_sg2.status_code == 403
+
+        r_mg2 = await client.post("/api/v1/webhook/delivery-failure/mailgun", json=mg_body)
+        assert r_mg2.status_code == 403
+
+        r_ses2 = await client.post("/api/v1/webhook/delivery-failure/ses", json=ses_body, headers={"X-SES-Webhook-Secret": "valid_test_signature"})
+        assert r_ses2.status_code == 403
+
+        r_kl2 = await client.post("/api/v1/webhook/delivery-failure/klaviyo", json=kl_body, headers={"X-Klaviyo-Signature": "valid_test_signature"})
+        assert r_kl2.status_code == 403
+
+        # Verify zero forged events were persisted
+        stored_ids = {e.get("provider_event_id") for e in supabase_service._in_memory_delivery_failure_events.values()}
+        assert pm_evt_id not in stored_ids
+        assert sg_evt_id not in stored_ids
+        assert mg_evt_id not in stored_ids
+        assert ses_evt_id not in stored_ids
+        assert kl_evt_id not in stored_ids
+
+
+@pytest.mark.asyncio
+async def test_p0_01_sendgrid_ecdsa_p256_valid_and_invalid_signatures(monkeypatch):
+    """
+    Verify SendGrid ECDSA P-256 + SHA-256 verification:
+    - Rejects 'valid_test_signature' when public key is configured (even in development/test).
+    - Rejects invalid ECDSA signatures (wrong keypair, tampered body, tampered timestamp, symmetric HMAC).
+    - Accepts valid ECDSA P-256 signatures with both raw Base64 SPKI and PEM public keys.
+    - Fails closed (500) if SENDGRID_WEBHOOK_VERIFICATION_KEY is malformed.
+    """
+    from app.services.failover.esp_webhook_service import (
+        generate_sendgrid_ecdsa_keypair,
+        sign_sendgrid_ecdsa_webhook,
+    )
+
+    priv_1, pub_1_b64, pub_1_pem = generate_sendgrid_ecdsa_keypair()
+    priv_2, _, _ = generate_sendgrid_ecdsa_keypair()
+
+    now = int(time.time())
+    ts_str = str(now)
+    evt_id = f"sg_ecdsa_{uuid.uuid4()}"
+    raw_body = json.dumps([{
+        "sg_event_id": evt_id,
+        "sg_message_id": "sg_msg_ecdsa.filter01",
+        "event": "bounce",
+        "type": "blocked",
+        "status": "5.1.1",
+        "reason": "550 User unknown",
+        "timestamp": now,
+        "email": "ecdsa@example.com",
+    }]).encode("utf-8")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Configure valid Base64 SPKI public key in development mode
+        monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+        monkeypatch.setattr(settings, "SENDGRID_WEBHOOK_VERIFICATION_KEY", pub_1_b64)
+
+        # 1a. Reject 'valid_test_signature' even in development when public key is configured
+        res_test_sig = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            content=raw_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Twilio-Email-Event-Webhook-Signature": "valid_test_signature",
+                "X-Twilio-Email-Event-Webhook-Timestamp": ts_str,
+            },
+        )
+        assert res_test_sig.status_code == 403
+
+        # 1b. Reject signature generated by a different ECDSA P-256 private key
+        wrong_key_sig = sign_sendgrid_ecdsa_webhook(priv_2, ts_str, raw_body)
+        res_wrong_key = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            content=raw_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Twilio-Email-Event-Webhook-Signature": wrong_key_sig,
+                "X-Twilio-Email-Event-Webhook-Timestamp": ts_str,
+            },
+        )
+        assert res_wrong_key.status_code == 403
+
+        # 1c. Reject valid signature when payload is tampered by 1 byte
+        valid_sig = sign_sendgrid_ecdsa_webhook(priv_1, ts_str, raw_body)
+        res_tampered = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            content=raw_body + b" ",
+            headers={
+                "Content-Type": "application/json",
+                "X-Twilio-Email-Event-Webhook-Signature": valid_sig,
+                "X-Twilio-Email-Event-Webhook-Timestamp": ts_str,
+            },
+        )
+        assert res_tampered.status_code == 403
+
+        # 1d. Reject legacy symmetric HMAC digest string
+        legacy_hmac = hmac.new(pub_1_b64.encode("utf-8"), ts_str.encode("utf-8") + raw_body, hashlib.sha256).hexdigest()
+        res_hmac = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            content=raw_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Twilio-Email-Event-Webhook-Signature": legacy_hmac,
+                "X-Twilio-Email-Event-Webhook-Timestamp": ts_str,
+            },
+        )
+        assert res_hmac.status_code == 403
+
+        # 1e. Confirm event was NOT persisted after all failed verification attempts
+        assert not any(
+            e.get("provider_event_id") == evt_id
+            for e in supabase_service._in_memory_delivery_failure_events.values()
+        )
+
+        # 2. Accept valid ECDSA P-256 signature with Base64 SPKI key
+        res_ok_b64 = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            content=raw_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Twilio-Email-Event-Webhook-Signature": valid_sig,
+                "X-Twilio-Email-Event-Webhook-Timestamp": ts_str,
+            },
+        )
+        assert res_ok_b64.status_code == 200
+        assert res_ok_b64.json()["accepted"] is True
+
+        # 3. Accept valid ECDSA P-256 signature with PEM-wrapped public key
+        monkeypatch.setattr(settings, "SENDGRID_WEBHOOK_VERIFICATION_KEY", pub_1_pem)
+        res_ok_pem = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            content=raw_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Twilio-Email-Event-Webhook-Signature": valid_sig,
+                "X-Twilio-Email-Event-Webhook-Timestamp": ts_str,
+            },
+        )
+        assert res_ok_pem.status_code == 200
+
+        # 4. Malformed SENDGRID_WEBHOOK_VERIFICATION_KEY fails closed with HTTP 500
+        monkeypatch.setattr(settings, "SENDGRID_WEBHOOK_VERIFICATION_KEY", "not_a_valid_ecdsa_public_key")
+        res_bad_key = await client.post(
+            "/api/v1/webhook/delivery-failure/sendgrid",
+            content=raw_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Twilio-Email-Event-Webhook-Signature": valid_sig,
+                "X-Twilio-Email-Event-Webhook-Timestamp": ts_str,
+            },
+        )
+        assert res_bad_key.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_p0_01_dev_test_bypass_blocked_when_staging_mode_enabled(monkeypatch):
+    """
+    Verify that test-only bypasses work ONLY when ENVIRONMENT in ('development', 'test')
+    AND STAGING_MODE is false, and are blocked when STAGING_MODE is true or ENVIRONMENT='staging'.
+    """
+    monkeypatch.setattr(settings, "POSTMARK_WEBHOOK_SECRET", "")
+    payload = {
+        "RecordType": "Bounce",
+        "ID": f"pm_staging_{uuid.uuid4()}",
+        "Type": "HardBounce",
+        "Email": "staging@brand.com",
+        "MessageID": "msg_stg",
+    }
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. ENVIRONMENT='staging' -> test token rejected with 500 (unconfigured secret)
+        monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
+        res_stg_env = await client.post(
+            "/api/v1/webhook/delivery-failure/postmark",
+            json=payload,
+            headers={"X-Postmark-Server-Token": "test_secret_token"},
+        )
+        assert res_stg_env.status_code == 500
+
+        # 2. ENVIRONMENT='development' + STAGING_MODE='true' -> test token rejected with 500
+        monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+        monkeypatch.setenv("STAGING_MODE", "true")
+        res_stg_flag = await client.post(
+            "/api/v1/webhook/delivery-failure/postmark",
+            json=payload,
+            headers={"X-Postmark-Server-Token": "test_secret_token"},
+        )
+        assert res_stg_flag.status_code == 500
+
+        # 3. ENVIRONMENT='test' + STAGING_MODE='false' -> test token allowed when secret unconfigured
+        monkeypatch.setenv("STAGING_MODE", "false")
+        monkeypatch.setattr(settings, "ENVIRONMENT", "test")
+        res_test_ok = await client.post(
+            "/api/v1/webhook/delivery-failure/postmark",
+            json=payload,
+            headers={"X-Postmark-Server-Token": "test_secret_token"},
+        )
+        assert res_test_ok.status_code == 200
+

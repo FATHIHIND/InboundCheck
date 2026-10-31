@@ -1,0 +1,5 @@
+{
+  "name": "InboundCheck",
+  "description": "Shopify Email Deliverability & DNS Governance Platform for continuous SPF, DKIM, DMARC compliance and blacklist monitoring.",
+  "requestFramePermissions": []
+}

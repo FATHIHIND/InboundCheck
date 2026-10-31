@@ -7,16 +7,45 @@ customer creation/retrieval, and webhook lifecycle reconciliation.
 
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
+import os
 import hmac
 import hashlib
 import time
 import logging
 import httpx
 
+try:
+    import stripe
+except ImportError:
+    stripe = None
+
 from app.core.config import settings
+from app.core.env_guard import check_is_placeholder
 from app.services.supabase_client import supabase_service
 
 logger = logging.getLogger("StripeService")
+
+
+def is_test_bypass_allowed() -> bool:
+    """
+    Return True ONLY when:
+    1. settings.ENVIRONMENT is strictly 'development' or 'test'
+    2. STAGING_MODE is False (checked on both settings and os.environ)
+    """
+    env = (getattr(settings, "ENVIRONMENT", "") or "").strip().lower()
+    if env not in ("development", "test"):
+        return False
+
+    staging_attr = getattr(settings, "STAGING_MODE", False)
+    staging_env = (os.getenv("STAGING_MODE") or "").strip().lower()
+    if (
+        staging_attr is True
+        or str(staging_attr).strip().lower() in ("true", "1", "yes")
+        or staging_env in ("true", "1", "yes")
+    ):
+        return False
+
+    return True
 
 TIER_LIMITS = {
     "starter": 1,
@@ -434,14 +463,35 @@ class StripeService:
         return []
 
     def verify_webhook_signature(self, payload: bytes, sig_header: str, tolerance_seconds: int = 300) -> bool:
-        """Verify Stripe webhook signature header using timestamped HMAC-SHA256."""
-        if not sig_header:
-            if settings.ENVIRONMENT in ("development", "test") or not self.webhook_secret:
+        """
+        Verify Stripe webhook signature header using timestamped HMAC-SHA256.
+        Enforces fail-closed security for production and staging environments:
+        - If STRIPE_WEBHOOK_SECRET is missing, empty, or placeholder, rejects verification.
+        - If Stripe-Signature header is missing or empty, rejects verification.
+        - Replay attacks outside ±tolerance_seconds (default 300s) are rejected.
+        - Mock/test signatures are strictly rejected in production and staging.
+        - Test bypasses are ONLY permitted when ENVIRONMENT is development/test AND STAGING_MODE is False.
+        """
+        test_bypass = is_test_bypass_allowed()
+
+        # Step 1: In production or staging, secret MUST be configured and not a placeholder
+        webhook_secret = (self.webhook_secret or "").strip()
+        if not test_bypass:
+            if not webhook_secret or check_is_placeholder(webhook_secret):
+                logger.error("Stripe webhook rejected: STRIPE_WEBHOOK_SECRET is missing or empty in non-development environment.")
+                return False
+
+        # Step 2: Signature header MUST be provided
+        if not sig_header or not str(sig_header).strip():
+            if test_bypass and not webhook_secret:
+                # Local development/testing without configured webhook secret
                 return True
+            logger.warning("Stripe webhook rejected: Stripe-Signature header is missing.")
             return False
 
         try:
-            sig_dict = {}
+            # Step 3: Parse Stripe-Signature header (format: t=timestamp,v1=signature[,v0=signature])
+            sig_dict: Dict[str, str] = {}
             for item in sig_header.split(","):
                 if "=" in item:
                     k, v = item.split("=", 1)
@@ -451,29 +501,59 @@ class StripeService:
             v1 = sig_dict.get("v1")
 
             if not t or not v1:
+                logger.warning("Stripe webhook rejected: Malformed signature header (missing t or v1).")
                 return False
 
+            # Step 4: Verify timestamp tolerance (anti-replay guard)
             timestamp = int(t)
             current_time = int(time.time())
             if abs(current_time - timestamp) > tolerance_seconds:
                 logger.warning(
-                    f"Stripe webhook timestamp {timestamp} outside ±{tolerance_seconds}s tolerance"
+                    f"Stripe webhook timestamp {timestamp} outside ±{tolerance_seconds}s tolerance (delta: {abs(current_time - timestamp)}s)"
                 )
                 return False
 
-            if not self.webhook_secret:
-                if settings.ENVIRONMENT in ("development", "test"):
+            # Step 5: Test bypass validation
+            if test_bypass:
+                # If signature is a mock/dummy signature in development/test
+                if v1.startswith("mock_") or v1.startswith("dummy_"):
                     return True
+                # If no webhook secret is configured in development/test
+                if not webhook_secret or check_is_placeholder(webhook_secret):
+                    return True
+
+            # In production or staging, or when real verification is required in test:
+            # Reject any mock or dummy signature tokens immediately
+            if v1.startswith("mock_") or v1.startswith("dummy_"):
+                logger.warning("Stripe webhook rejected: Mock signature disallowed in non-test mode.")
                 return False
 
-            if settings.ENVIRONMENT in ("development", "test") and (v1.startswith("mock_") or v1.startswith("dummy_")):
-                return True
+            if not webhook_secret:
+                logger.error("Stripe webhook rejected: Cannot verify signature without STRIPE_WEBHOOK_SECRET.")
+                return False
 
-            signed_payload = f"{t}.".encode("utf-8") + payload
-            computed = hmac.new(self.webhook_secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+            # Step 6: Official Stripe SDK verification if available
+            if stripe is not None:
+                try:
+                    payload_str = payload.decode("utf-8") if isinstance(payload, bytes) else str(payload)
+                    stripe.WebhookSignature.verify_header(
+                        payload_str,
+                        sig_header,
+                        webhook_secret,
+                        tolerance=tolerance_seconds,
+                    )
+                    return True
+                except Exception as e:
+                    logger.warning(f"Stripe SDK signature verification failed: {e}")
+                    return False
+
+            # Step 7: Cryptographic HMAC-SHA256 verification (standard Stripe protocol)
+            signed_payload = f"{t}.".encode("utf-8") + (payload if isinstance(payload, bytes) else str(payload).encode("utf-8"))
+            computed = hmac.new(webhook_secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
             return hmac.compare_digest(v1, computed)
+
         except Exception as e:
-            logger.error(f"Stripe signature verification failed: {e}")
+            logger.error(f"Stripe signature verification failed with error: {e}")
             return False
 
     def process_webhook_event(self, event: Dict[str, Any]) -> Dict[str, Any]:

@@ -1,14 +1,18 @@
 import copy
 import hashlib
 from pathlib import Path
-import pytest
-
+try:
+    import pytest
+except ImportError:
+    pytest = None
 import sys
+
 # Add scripts directory to sys.path so we can import reconcile_migration_ledger
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from reconcile_migration_ledger import (
+    CANONICAL_MIGRATIONS,
     CANONICAL_28_MIGRATIONS,
     CANONICAL_3_LEGACY_ROWS,
     RECONCILIATION_PROVENANCE,
@@ -22,11 +26,12 @@ from reconcile_migration_ledger import (
 )
 
 
-def test_scan_local_migrations_matches_canonical_28():
+def test_scan_local_migrations_matches_canonical_sequence():
     migrations_dir = REPO_ROOT / "supabase" / "migrations"
     migrations = scan_local_migrations(migrations_dir)
-    assert len(migrations) == 28
-    for idx, (m, (exp_v, exp_name)) in enumerate(zip(migrations, CANONICAL_28_MIGRATIONS)):
+    assert len(migrations) == len(CANONICAL_MIGRATIONS)
+    assert len(migrations) == 30
+    for idx, (m, (exp_v, exp_name)) in enumerate(zip(migrations, CANONICAL_MIGRATIONS)):
         assert m.version == exp_v
         assert m.name == exp_name
         assert m.filename == f"{exp_v}_{exp_name}.sql"
@@ -81,7 +86,7 @@ def test_validate_ledger_baseline_fails_on_wrong_count():
 
 
 def test_validate_ledger_baseline_fails_on_target_collision():
-    # Simulate a collision where one of the 28 target versions already exists in ledger
+    # Simulate a collision where one of the target versions already exists in ledger
     rows = [
         {"version": "20260910165935", "name": "a"},
         {"version": "20260910195242", "name": "b"},
@@ -115,9 +120,9 @@ def test_plan_reconciliation_detects_rows_to_insert_and_legacy_to_remove():
     plan = plan_reconciliation(mock_rows)
     assert plan["initial_count"] == 3
     assert plan["legacy_rows_to_remove_count"] == 3
-    assert plan["target_insert_count"] == 28
-    assert len(plan["rows_to_insert"]) == 28
-    assert plan["projected_final_count"] == 28
+    assert plan["target_insert_count"] == 30
+    assert len(plan["rows_to_insert"]) == 30
+    assert plan["projected_final_count"] == 30
     assert plan["collisions_count"] == 0
 
 
@@ -150,14 +155,14 @@ def test_forward_sql_concurrency_and_fail_closed_properties():
 
     # 5. Postcondition assertions present
     assert "POSTCONDITION FAILED [Q-01]" in sql
-    assert "Expected exactly 28 rows" in sql
+    assert "Expected exactly 30 rows" in sql
     assert "POSTCONDITION FAILED [Q-02]" in sql
     assert "POSTCONDITION FAILED [Q-03]" in sql
     assert "POSTCONDITION FAILED [Q-04]" in sql
     assert "legacy rows still exist in schema_migrations" in sql
 
-    # 6. All 28 versions present in SQL with positive provenance
-    for v, name in CANONICAL_28_MIGRATIONS:
+    # 6. All 30 versions present in SQL with positive provenance
+    for v, name in CANONICAL_MIGRATIONS:
         assert f"('{v}', '{name}', '{RECONCILIATION_PROVENANCE}')" in sql
     assert f"Provenance Marker: {RECONCILIATION_PROVENANCE}" in sql
 
@@ -177,7 +182,7 @@ def test_rollback_sql_properties():
 
     # 3. Preconditions and postconditions
     assert "ROLLBACK PRECONDITION FAILED [R-01]" in sql
-    assert "Expected exactly 28 rows in ledger" in sql
+    assert "Expected exactly 30 rows in ledger" in sql
     assert "ROLLBACK PRECONDITION FAILED [R-02]" in sql
     assert "ROLLBACK PRECONDITION FAILED [R-03]" in sql
     assert "ROLLBACK EXECUTION FAILED" in sql
@@ -230,8 +235,8 @@ def test_cli_dry_run_execution(tmp_path):
     ]
     res = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT))
     assert res.returncode == 0
-    assert "[+] Successfully verified 28 local migrations matching canonical sequence." in res.stdout
-    assert "Projected Final Count:      28 (Exact Universal Parity)" in res.stdout
+    assert "[+] Successfully verified 30 local migrations matching canonical sequence." in res.stdout
+    assert "Projected Final Count:      30 (Exact Universal Parity)" in res.stdout
     assert "[+] Dry-run simulation complete. ZERO database writes executed." in res.stdout
     assert out_sql.exists()
     assert out_rb.exists()
@@ -241,10 +246,10 @@ def test_cli_dry_run_execution(tmp_path):
     assert "POST-RECONCILIATION VERIFICATION QUERY (READ-ONLY)" in out_v.read_text(encoding="utf-8")
 
 
-def _setup_mock_28_rows():
-    """Helper to build 28 valid post-reconciliation canonical ledger rows."""
+def _setup_mock_canonical_rows():
+    """Helper to build 30 valid post-reconciliation canonical ledger rows."""
     rows = []
-    for v, n in CANONICAL_28_MIGRATIONS:
+    for v, n in CANONICAL_MIGRATIONS:
         rows.append({
             "version": v,
             "name": n,
@@ -256,25 +261,25 @@ def _setup_mock_28_rows():
     return rows
 
 
-def test_post_reconciliation_verification_success_on_valid_28_rows():
-    rows = _setup_mock_28_rows()
+def test_post_reconciliation_verification_success_on_valid_canonical_rows():
+    rows = _setup_mock_canonical_rows()
     is_valid, errors = verify_post_reconciliation_ledger(rows)
     assert is_valid, f"Expected validation to succeed, got errors: {errors}"
     assert len(errors) == 0
 
 
 def test_post_reconciliation_verification_fails_on_missing_canonical_pair():
-    rows = _setup_mock_28_rows()
+    rows = _setup_mock_canonical_rows()
     # Remove one canonical target row (e.g. 20261012000001)
     rows = [r for r in rows if r["version"] != "20261012000001"]
     is_valid, errors = verify_post_reconciliation_ledger(rows)
     assert not is_valid
-    assert any("Row count mismatch: expected exactly 28 rows" in e for e in errors)
+    assert any("Row count mismatch: expected exactly 30 rows" in e for e in errors)
     assert any("Missing canonical migration: 20261012000001" in e for e in errors)
 
 
 def test_post_reconciliation_verification_fails_on_incorrect_canonical_name():
-    rows = _setup_mock_28_rows()
+    rows = _setup_mock_canonical_rows()
     for r in rows:
         if r["version"] == "20260903000001":
             r["name"] = "wrong_tampered_name"
@@ -284,8 +289,8 @@ def test_post_reconciliation_verification_fails_on_incorrect_canonical_name():
 
 
 def test_post_reconciliation_verification_fails_on_unexpected_rogue_row():
-    rows = _setup_mock_28_rows()
-    # Add an unexpected 29th row
+    rows = _setup_mock_canonical_rows()
+    # Add an unexpected 31st row
     rows.append({
         "version": "20261101000001",
         "name": "unauthorized_migration",
@@ -296,13 +301,13 @@ def test_post_reconciliation_verification_fails_on_unexpected_rogue_row():
     })
     is_valid, errors = verify_post_reconciliation_ledger(rows)
     assert not is_valid
-    assert any("Row count mismatch: expected exactly 28 rows" in e for e in errors)
+    assert any("Row count mismatch: expected exactly 30 rows" in e for e in errors)
     assert any("Unexpected rogue versions found in ledger: ['20261101000001']" in e for e in errors)
 
 
 def test_post_reconciliation_verification_fails_on_legacy_residual_row():
-    rows = _setup_mock_28_rows()
-    # Replace one canonical row with a legacy row or append it
+    rows = _setup_mock_canonical_rows()
+    # Append a legacy row
     rows.append({
         "version": "20260910165935",
         "name": "add_delivery_failure_ingestion_and_idempotency",
@@ -317,7 +322,7 @@ def test_post_reconciliation_verification_fails_on_legacy_residual_row():
 
 
 def test_post_reconciliation_verification_fails_on_invalid_provenance():
-    rows = _setup_mock_28_rows()
+    rows = _setup_mock_canonical_rows()
     for r in rows:
         if r["version"] == "20260928000001":
             r["created_by"] = "wrong:provenance:tag"
@@ -328,8 +333,8 @@ def test_post_reconciliation_verification_fails_on_invalid_provenance():
 
 def test_rollback_refuses_when_subsequent_migration_exists():
     sql = generate_defensive_rollback_sql()
-    # Check that precondition R-01 strictly enforces count = 28 and refuses if evolved
-    assert "Expected exactly 28 rows in ledger, found %" in sql
+    # Check that precondition R-01 strictly enforces count = 30 and refuses if evolved
+    assert "Expected exactly 30 rows in ledger, found %" in sql
     assert "Rollback is refused because ledger state has evolved." in sql
 
 
@@ -344,6 +349,45 @@ def test_post_reconciliation_verification_sql_query_structure():
     assert "check_legacy_absence" in sql
     assert "check_rogue_rows" in sql
 
-    # Verify all 28 canonical migrations are referenced in SQL
-    for v, name in CANONICAL_28_MIGRATIONS:
+    # Verify all 30 canonical migrations are referenced in SQL
+    for v, name in CANONICAL_MIGRATIONS:
         assert f"('{v}', '{name}')" in sql
+
+
+def test_migration_30_rpc_acl_hardening_and_overload_cleanup():
+    """Verify that migration #30 drops the obsolete overloads and hardens all 12 worker RPCs."""
+    mig_path = REPO_ROOT / "supabase" / "migrations" / "20261031000001_harden_worker_rpc_acls_and_overloads.sql"
+    assert mig_path.exists(), "Migration 20261031000001 must exist"
+    content = mig_path.read_text(encoding="utf-8")
+
+    # 1. Overload cleanup: drop obsolete 3-arg fail_domain_audit and 2-arg claim_pending_delivery_failure_events
+    assert "DROP FUNCTION IF EXISTS public.fail_domain_audit(UUID, UUID, TEXT);" in content
+    assert "DROP FUNCTION IF EXISTS public.claim_pending_delivery_failure_events(UUID, INTEGER);" in content
+
+    # 2. Canonical active signatures defined
+    expected_signatures = [
+        "record_delivery_failure_dispatch_intent(UUID, UUID)",
+        "quarantine_expired_dispatch_intent_events(INTEGER)",
+        "mark_delivery_failure_event_processed(UUID, UUID, TEXT, TEXT)",
+        "mark_delivery_failure_event_failed(UUID, UUID, TEXT)",
+        "claim_received_delivery_failure_events(UUID, INTEGER, INTERVAL)",
+        "claim_pending_delivery_failure_events(UUID, INTEGER, INTERVAL)",
+        "release_claimed_delivery_failure_event(UUID, UUID)",
+        "claim_due_domain_audits(UUID, INTEGER, INTERVAL, INTERVAL)",
+        "complete_domain_audit(UUID, UUID)",
+        "fail_domain_audit(UUID, UUID, TEXT, INTEGER, INTEGER)",
+        "extend_domain_audit_lease(UUID, UUID, INTERVAL)",
+        "cleanup_stale_webhook_events()",
+    ]
+
+    for sig in expected_signatures:
+        # Check REVOKE FROM PUBLIC, anon, authenticated
+        assert f"REVOKE ALL ON FUNCTION public.{sig} FROM PUBLIC;" in content
+        assert f"REVOKE ALL ON FUNCTION public.{sig} FROM anon;" in content
+        assert f"REVOKE ALL ON FUNCTION public.{sig} FROM authenticated;" in content
+        # Check GRANT TO postgres, service_role
+        assert f"GRANT EXECUTE ON FUNCTION public.{sig} TO postgres, service_role;" in content
+        # Check OWNER TO postgres
+        assert f"ALTER FUNCTION public.{sig} OWNER TO postgres;" in content
+        # Check search_path = public, pg_temp
+        assert f"ALTER FUNCTION public.{sig} SET search_path = public, pg_temp;" in content
