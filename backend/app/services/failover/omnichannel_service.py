@@ -5,8 +5,11 @@ Handles instant Telegram Bot alerts and incident dispatches when email deliverab
 flags spam folder routing, hard bounces, RBL blacklists, or broken DMARC policies.
 """
 
+import os
 import re
 import uuid
+import random
+import asyncio
 from typing import Dict, Any, List, Optional, Literal, Union
 from urllib.parse import quote_plus
 import httpx
@@ -15,8 +18,23 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.env_guard import check_is_placeholder
+from app.core.encryption import (
+    encrypt_credential,
+    mask_credential,
+    safe_decrypt_credential,
+)
 
 logger = logging.getLogger("TelegramAlertEngine")
+
+# Retry & rate limiting configuration for Telegram Bot API outbound dispatches (Group 45B.3A)
+MAX_TELEGRAM_ATTEMPTS: int = 3
+PER_REQUEST_TIMEOUT_SECONDS: float = 6.0
+MAX_SYNCHRONOUS_RETRY_DELAY_SECONDS: float = 5.0
+MAX_TOTAL_RETRY_BUDGET_SECONDS: float = 10.0
+BASE_BACKOFF_SECONDS: float = 0.5
+MAX_BACKOFF_SECONDS: float = 4.0
+TRANSIENT_HTTP_STATUS_CODES: set = {500, 502, 503, 504}
 
 
 class TelegramIncidentContext(BaseModel):
@@ -74,17 +92,8 @@ def sanitize_log_message(message: str, token: Optional[str] = None) -> str:
 
 
 # In-memory storage fallbacks
-_mock_failover_configs: Dict[str, Dict[str, Any]] = {
-    "demo-user-123": {
-        "is_enabled": True,
-        "primary_channel": "telegram",
-        "provider": "telegram",
-        "telegram_bot_token": "",
-        "telegram_chat_id": "",
-        "trigger_events": ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"],
-        "store_name": "BrandShop DTC"
-    }
-}
+_mock_failover_configs: Dict[str, Dict[str, Any]] = {}
+
 
 class TelegramAlertService:
     """
@@ -115,43 +124,160 @@ class TelegramAlertService:
         return self._mock_mode
 
     def get_config(self, user_id: str) -> Dict[str, Any]:
-        """Fetch user Telegram alert configuration without multi-tenant bleed."""
+        """
+        Fetch user Telegram alert configuration without multi-tenant bleed.
+        Never falls back to global TELEGRAM_BOT_TOKEN for tenant-specific configs.
+        In production/staging, fails closed if database is unavailable.
+        """
+        from app.services.supabase_client import supabase_service, DatabaseUnavailableError
+
+        # 1. Check database if available
+        db_alert = None
+        db_failover = None
+        try:
+            db_alert = supabase_service.get_alert_config(user_id)
+            db_failover = supabase_service.get_failover_config(user_id)
+        except DatabaseUnavailableError:
+            raise
+        except Exception as e:
+            logger.error(f"Error querying configuration from database for user {user_id}: {e}")
+            if not supabase_service._allow_in_memory_fallback():
+                raise DatabaseUnavailableError(f"Database error fetching config for {user_id}: {e}")
+
+        # 2. If records exist in DB, synthesize tenant config
+        if db_alert or db_failover:
+            res_config = {
+                "is_enabled": (db_failover.get("is_enabled") if db_failover else True),
+                "primary_channel": (db_failover.get("primary_channel") if db_failover else "telegram"),
+                "provider": (db_failover.get("provider") if db_failover else "telegram_bot_api"),
+                "telegram_bot_token": (db_alert.get("telegram_bot_token") if db_alert else None),
+                "telegram_chat_id": (db_alert.get("telegram_chat_id") if db_alert else None),
+                "trigger_events": (db_failover.get("trigger_events") if db_failover else ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"]),
+                "store_name": "BrandShop DTC",
+            }
+            _mock_failover_configs[user_id] = res_config
+            return res_config
+
+        if not supabase_service._allow_in_memory_fallback():
+            # In production or staging, default clean unconfigured config for this tenant (NO global credential bleed)
+            return {
+                "is_enabled": True,
+                "primary_channel": "telegram",
+                "provider": "telegram",
+                "telegram_bot_token": None,
+                "telegram_chat_id": None,
+                "trigger_events": ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"],
+                "store_name": "BrandShop DTC",
+            }
+
+        # Development / test in-memory fallback
         if user_id in _mock_failover_configs:
             return _mock_failover_configs[user_id]
-        return {
+
+        default_dev = {
             "is_enabled": True,
             "primary_channel": "telegram",
             "provider": "telegram",
-            "telegram_bot_token": settings.TELEGRAM_BOT_TOKEN or "",
-            "telegram_chat_id": settings.TELEGRAM_CHAT_ID or "",
+            "telegram_bot_token": None,
+            "telegram_chat_id": None,
             "trigger_events": ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"],
-            "store_name": "BrandShop DTC"
+            "store_name": "BrandShop DTC",
         }
+        _mock_failover_configs[user_id] = default_dev
+        return default_dev
+
+    def get_decrypted_token(self, user_id: str) -> Optional[str]:
+        """Retrieve and decrypt user's Telegram bot token in transient memory."""
+        config = self.get_config(user_id)
+        raw_token = config.get("telegram_bot_token")
+        if not raw_token:
+            return None
+        return safe_decrypt_credential(raw_token)
+
+    def format_config_for_client(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Format failover/alert configuration for client API responses.
+        Ensures sensitive tokens are masked and never exposed in plaintext.
+        """
+        client_config = dict(config)
+        raw_token = client_config.get("telegram_bot_token")
+        if raw_token:
+            decrypted = safe_decrypt_credential(raw_token)
+            if decrypted:
+                client_config["telegram_bot_token"] = mask_credential(decrypted)
+                client_config["telegram_bot_token_configured"] = True
+            else:
+                client_config["telegram_bot_token"] = "••••••••••••"
+                client_config["telegram_bot_token_configured"] = True
+        else:
+            client_config["telegram_bot_token"] = None
+            client_config["telegram_bot_token_configured"] = False
+        return client_config
 
     def update_config(self, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Save or update Telegram alert configuration."""
+        """Save or update Telegram alert configuration with credential preservation and encryption."""
+        from app.services.supabase_client import supabase_service, DatabaseUnavailableError
+
+        # Load existing config to preserve credentials if omitted or masked
+        existing = {}
+        try:
+            existing = self.get_config(user_id) or {}
+        except Exception:
+            existing = _mock_failover_configs.get(user_id, {})
+
+        data = dict(payload)
+        new_token = data.get("telegram_bot_token")
+        if new_token is not None and str(new_token).strip() != "" and not str(new_token).strip().startswith("•"):
+            # Plaintext token provided - encrypt before persisting
+            data["telegram_bot_token"] = encrypt_credential(str(new_token).strip())
+        else:
+            # Preserve existing token
+            data["telegram_bot_token"] = existing.get("telegram_bot_token")
+
+        data["primary_channel"] = "telegram"
+        data["provider"] = "telegram"
+
+        # Persist to database if connected or required in non-development environments
+        if not supabase_service._allow_in_memory_fallback() or supabase_service.is_connected:
+            try:
+                # Update failover config
+                supabase_service.save_failover_config(user_id, {
+                    "is_enabled": data.get("is_enabled", True),
+                    "primary_channel": "telegram",
+                    "provider": "telegram_bot_api",
+                    "trigger_events": data.get("trigger_events", ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"]),
+                })
+                # If bot token or chat ID is present, update alert_configs
+                if data.get("telegram_bot_token") or data.get("telegram_chat_id"):
+                    existing_alert = supabase_service.get_alert_config(user_id) or {}
+                    alert_update = dict(existing_alert)
+                    alert_update["telegram_bot_token"] = data.get("telegram_bot_token")
+                    alert_update["telegram_chat_id"] = data.get("telegram_chat_id")
+                    supabase_service.save_alert_config(user_id, alert_update)
+            except DatabaseUnavailableError:
+                raise
+            except Exception as e:
+                logger.error(f"Error persisting failover config for user {user_id}: {e}")
+                if not supabase_service._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error saving failover config: {e}")
+
         if user_id not in _mock_failover_configs:
             _mock_failover_configs[user_id] = {}
-        _mock_failover_configs[user_id].update(payload)
-        _mock_failover_configs[user_id]["primary_channel"] = "telegram"
-        _mock_failover_configs[user_id]["provider"] = "telegram"
+        _mock_failover_configs[user_id].update(data)
         return _mock_failover_configs[user_id]
 
     async def send_telegram_alert(
         self,
-        bot_token: str,
-        chat_id: str,
-        text: str
+        bot_token: Optional[str] = None,
+        chat_id: Optional[str] = None,
+        text: str = ""
     ) -> Dict[str, Any]:
         """
-        Directly post message payload to Telegram Bot API.
+        Directly post message payload to Telegram Bot API with bounded retries and rate limiting.
         Fails closed: returns {"success": False, "error": ...} on HTTP errors or network exceptions.
+        Guarantees strict tenant credential isolation: NEVER falls back to global platform credentials.
         Sanitizes all sensitive bot tokens from logs and error messages.
         """
-        import os
-        import asyncio
-        from app.core.env_guard import check_is_placeholder
-
         # Mock / Simulation mode handling (strictly rejected in Production)
         if self._mock_mode:
             env = os.environ.get("ENVIRONMENT", settings.ENVIRONMENT or "").strip().lower()
@@ -175,8 +301,9 @@ class TelegramAlertService:
                 }
             }
 
-        clean_token = (bot_token or settings.TELEGRAM_BOT_TOKEN or "").strip()
-        clean_chat_id = (chat_id or settings.TELEGRAM_CHAT_ID or "").strip()
+        # Strict Tenant Credential Isolation: Require explicit tenant credentials, fail closed.
+        clean_token = (bot_token or "").strip()
+        clean_chat_id = (chat_id or "").strip()
 
         if (
             not clean_token
@@ -188,30 +315,159 @@ class TelegramAlertService:
             return {
                 "success": False,
                 "simulated": False,
-                "error": "Telegram Bot Token and Chat ID must be configured and cannot be placeholder values."
+                "error": "Telegram Bot Token and Chat ID must be explicitly configured and cannot be placeholder values."
             }
 
-        try:
-            url = f"https://api.telegram.org/bot{clean_token}/sendMessage"
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                res = await client.post(
-                    url,
-                    json={
-                        "chat_id": clean_chat_id,
-                        "text": text,
-                        "parse_mode": "Markdown"
-                    }
-                )
+        url = f"https://api.telegram.org/bot{clean_token}/sendMessage"
+        total_slept: float = 0.0
+        last_error: Optional[str] = None
+        last_status_code: Optional[int] = None
+
+        for attempt in range(1, MAX_TELEGRAM_ATTEMPTS + 1):
+            try:
+                async with httpx.AsyncClient(timeout=PER_REQUEST_TIMEOUT_SECONDS) as client:
+                    res = await client.post(
+                        url,
+                        json={
+                            "chat_id": clean_chat_id,
+                            "text": text,
+                            "parse_mode": "Markdown",
+                        },
+                    )
+
                 if res.status_code == 200:
-                    return {"success": True, "simulated": False, "data": res.json()}
-                else:
-                    safe_res_text = sanitize_log_message(res.text, clean_token)
-                    logger.warning(f"Telegram API responded with {res.status_code}: {safe_res_text}")
-                    return {"success": False, "simulated": False, "error": f"Telegram API error ({res.status_code}): {safe_res_text}"}
-        except Exception as e:
-            safe_err = sanitize_log_message(str(e), clean_token)
-            logger.error(f"Error calling Telegram API: {safe_err}")
-            return {"success": False, "simulated": False, "error": safe_err}
+                    try:
+                        resp_json = res.json()
+                    except Exception:
+                        resp_json = {}
+                    return {"success": True, "simulated": False, "data": resp_json}
+
+                # Handle HTTP 429 Too Many Requests
+                if res.status_code == 429:
+                    last_status_code = 429
+                    retry_after_val: Optional[int] = None
+                    try:
+                        err_payload = res.json()
+                        params = err_payload.get("parameters") if isinstance(err_payload, dict) else {}
+                        if isinstance(params, dict) and "retry_after" in params:
+                            raw_ra = params["retry_after"]
+                            if isinstance(raw_ra, (int, float)) and raw_ra >= 0:
+                                retry_after_val = int(raw_ra)
+                    except Exception:
+                        pass
+
+                    delay = float(retry_after_val) if retry_after_val is not None else BASE_BACKOFF_SECONDS
+                    safe_delay_int = int(delay)
+
+                    # Bounded synchronous budget check
+                    if delay > MAX_SYNCHRONOUS_RETRY_DELAY_SECONDS or (total_slept + delay) > MAX_TOTAL_RETRY_BUDGET_SECONDS:
+                        logger.warning(
+                            f"Telegram rate limit (HTTP 429) retry_after={safe_delay_int}s exceeds synchronous budget "
+                            f"(delay={delay:.1f}s, budget={MAX_SYNCHRONOUS_RETRY_DELAY_SECONDS}s)."
+                        )
+                        return {
+                            "success": False,
+                            "simulated": False,
+                            "status_code": 429,
+                            "error": f"Telegram rate limit exceeded (HTTP 429). Retry after {safe_delay_int}s exceeds synchronous retry budget.",
+                            "retry_after": safe_delay_int,
+                            "retryable": True,
+                        }
+
+                    if attempt < MAX_TELEGRAM_ATTEMPTS:
+                        logger.info(
+                            f"Telegram HTTP 429 rate limit received. Retrying in {delay:.2f}s "
+                            f"(attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS})."
+                        )
+                        total_slept += delay
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        return {
+                            "success": False,
+                            "simulated": False,
+                            "status_code": 429,
+                            "error": f"Telegram rate limit exceeded (HTTP 429) after {MAX_TELEGRAM_ATTEMPTS} attempts.",
+                            "retry_after": safe_delay_int,
+                            "retryable": True,
+                        }
+
+                # Handle Transient Server Errors (500, 502, 503, 504)
+                if res.status_code in TRANSIENT_HTTP_STATUS_CODES:
+                    last_status_code = res.status_code
+                    safe_text = sanitize_log_message(res.text[:300], clean_token)
+                    last_error = f"Telegram server error ({res.status_code}): {safe_text}"
+                    logger.warning(
+                        f"Telegram API transient error {res.status_code} (attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS}): {safe_text}"
+                    )
+                    if attempt < MAX_TELEGRAM_ATTEMPTS:
+                        exp_delay = min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+                        jitter = random.uniform(0.0, 0.25 * exp_delay)
+                        backoff_delay = min(MAX_BACKOFF_SECONDS, exp_delay + jitter)
+                        if (total_slept + backoff_delay) <= MAX_TOTAL_RETRY_BUDGET_SECONDS:
+                            total_slept += backoff_delay
+                            await asyncio.sleep(backoff_delay)
+                            continue
+                    return {
+                        "success": False,
+                        "simulated": False,
+                        "status_code": res.status_code,
+                        "error": last_error,
+                        "retryable": True,
+                    }
+
+                # Permanent Client Errors (400, 401, 403, 404, etc.) - DO NOT RETRY
+                safe_text = sanitize_log_message(res.text[:300], clean_token)
+                logger.warning(f"Telegram API permanent client error ({res.status_code}): {safe_text}")
+                return {
+                    "success": False,
+                    "simulated": False,
+                    "status_code": res.status_code,
+                    "error": f"Telegram API error ({res.status_code}): {safe_text}",
+                    "retryable": False,
+                }
+
+            except asyncio.CancelledError:
+                logger.info("Telegram dispatch cancelled by caller or runtime.")
+                raise
+            except (httpx.TimeoutException, httpx.NetworkError) as net_err:
+                safe_net_err = sanitize_log_message(str(net_err), clean_token)
+                last_error = f"Telegram network error ({type(net_err).__name__}): {safe_net_err}"
+                logger.warning(
+                    f"Telegram network failure on attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS}: {last_error}"
+                )
+                if attempt < MAX_TELEGRAM_ATTEMPTS:
+                    exp_delay = min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+                    jitter = random.uniform(0.0, 0.25 * exp_delay)
+                    backoff_delay = min(MAX_BACKOFF_SECONDS, exp_delay + jitter)
+                    if (total_slept + backoff_delay) <= MAX_TOTAL_RETRY_BUDGET_SECONDS:
+                        total_slept += backoff_delay
+                        await asyncio.sleep(backoff_delay)
+                        continue
+                return {
+                    "success": False,
+                    "simulated": False,
+                    "error": last_error,
+                    "retryable": True,
+                }
+            except Exception as e:
+                safe_err = sanitize_log_message(str(e), clean_token)
+                logger.error(f"Unexpected error calling Telegram API: {safe_err}")
+                return {
+                    "success": False,
+                    "simulated": False,
+                    "error": safe_err,
+                    "retryable": False,
+                }
+
+        # If loop exhausts
+        return {
+            "success": False,
+            "simulated": False,
+            "status_code": last_status_code,
+            "error": last_error or "Telegram dispatch exhausted retry budget",
+            "retryable": True,
+        }
 
     async def trigger_failover_dispatch(
         self,
@@ -225,6 +481,8 @@ class TelegramAlertService:
     ) -> Dict[str, Any]:
         """
         Trigger instant rich Telegram alert when email delivery or spam routing occurs.
+        Enforces Zero-PII: customer email and phone are completely omitted from the alert text
+        and never persisted in failover logs.
         """
         config = self.get_config(user_id)
         if not config.get("is_enabled", True):
@@ -233,19 +491,63 @@ class TelegramAlertService:
                 "reason": "Telegram alert engine is disabled in user settings"
             }
 
-        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN
-        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID
+        bot_token = (self.get_decrypted_token(user_id) or "").strip()
+        chat_id = (config.get("telegram_chat_id") or "").strip()
 
-        # Build Rich Actionable Telegram Alert Message
+        if self._mock_mode:
+            bot_token = bot_token or "mock_bot_token"
+            chat_id = chat_id or "@mock_chat"
+        elif (
+            not bot_token
+            or check_is_placeholder(bot_token)
+            or not chat_id
+            or check_is_placeholder(chat_id)
+        ):
+            err_msg = "Telegram Bot Token and Chat ID must be explicitly configured and cannot be placeholder values."
+            logger.warning(f"Telegram dispatch rejected for user {user_id}: {err_msg}")
+            from app.services.supabase_client import supabase_service
+            log_record = supabase_service.persist_failover_log(
+                user_id=user_id,
+                order_id=order_id or "unknown",
+                channel="telegram",
+                provider="telegram",
+                status="failed",
+                provider_status="failed",
+                domain_name=domain_name or "unknown",
+                store_name=store_name or "unknown",
+                triggered_reason=trigger_reason or "unknown",
+                target_chat_id=chat_id or None,
+                customer_email=None,
+                customer_phone=None,
+                dispatch_payload={"success": False, "simulated": False, "error": err_msg},
+                error_message=err_msg,
+                is_simulated=False,
+            )
+            return {
+                "dispatched": False,
+                "channel": "telegram",
+                "target_chat_id": chat_id or None,
+                "error": err_msg,
+                "dispatch_res": {"success": False, "simulated": False, "error": err_msg},
+                "log": log_record,
+            }
+
+        # Build Rich Actionable Telegram Alert Message (Strict Zero-PII)
+        clean_store = sanitize_log_message(str(store_name or "Shopify Store").strip())
+        clean_domain = sanitize_log_message(str(domain_name or "store.com").strip().lower())
+        clean_order = sanitize_log_message(str(order_id or "N/A").strip())
+        clean_reason = sanitize_log_message(str(trigger_reason or "email_spam_detected").strip())
+        encoded_domain = quote_plus(clean_domain)
+
         alert_text = (
             f"🚨 *INBOUNDCHECK INCIDENT ALERT*\n\n"
-            f"🏬 *Store:* {store_name} (`{domain_name}`)\n"
-            f"📦 *Order Ref:* `{order_id}`\n"
-            f"⚠️ *Incident Type:* `{trigger_reason}`\n"
-            f"📬 *Customer Email:* `{customer_email or 'N/A'}`\n"
-            f"⏰ *Timestamp:* `{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}`\n\n"
+            f"🏬 *Store:* {clean_store}\n"
+            f"🌐 *Domain:* `{clean_domain}`\n"
+            f"📦 *Order Ref:* `{clean_order}`\n"
+            f"⚠️ *Incident Type:* `{clean_reason}`\n"
+            f"⏰ *Timestamp:* `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`\n\n"
             f"🔍 *Action Required:* Inspect diagnostic records & RBL posture\n"
-            f"👉 [Open InboundCheck Inspector](http://localhost:3000/dashboard/inspector?domain={domain_name})"
+            f"👉 [Open InboundCheck Inspector]({settings.FRONTEND_URL}/dashboard/inspector?domain={encoded_domain})"
         )
 
         dispatch_res = await self.send_telegram_alert(
@@ -255,31 +557,32 @@ class TelegramAlertService:
         )
 
         is_sim = bool(dispatch_res.get("simulated", False))
-        dispatch_status = "dispatched" if is_sim else ("delivered" if dispatch_res.get("success") else "failed")
+        is_success = bool(dispatch_res.get("success", False))
+        dispatch_status = "dispatched" if is_sim else ("delivered" if is_success else "failed")
         p_status = "simulated" if is_sim else dispatch_status
 
-        # Persist to database via repository
+        # Persist to database via repository (Strict Zero-PII: customer_email & customer_phone are None)
         from app.services.supabase_client import supabase_service
         log_record = supabase_service.persist_failover_log(
             user_id=user_id,
-            order_id=order_id,
+            order_id=clean_order,
             channel="telegram",
             provider="telegram",
             status=dispatch_status,
             provider_status=p_status,
-            domain_name=domain_name,
-            store_name=store_name,
-            triggered_reason=trigger_reason,
+            domain_name=clean_domain,
+            store_name=clean_store,
+            triggered_reason=clean_reason,
             target_chat_id=chat_id,
-            customer_email=customer_email,
-            customer_phone=customer_phone,
+            customer_email=None,
+            customer_phone=None,
             dispatch_payload=dispatch_res,
-            error_message=dispatch_res.get("error") if not dispatch_res.get("success") else None,
+            error_message=dispatch_res.get("error") if not is_success else None,
             is_simulated=is_sim,
         )
 
         return {
-            "dispatched": True,
+            "dispatched": is_success or is_sim,
             "channel": "telegram",
             "target_chat_id": chat_id,
             "dispatch_res": dispatch_res,
@@ -328,13 +631,28 @@ class TelegramAlertService:
                 error_message="Telegram alert engine is disabled in user settings",
             )
 
-        bot_token = (config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN or "").strip()
-        chat_id = (config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID or "").strip()
+        bot_token = (self.get_decrypted_token(ctx.user_id) or "").strip()
+        chat_id = (config.get("telegram_chat_id") or "").strip()
 
         # In mock mode, allow synthetic identifiers if unconfigured
         if self._mock_mode:
             bot_token = bot_token or "mock_bot_token"
             chat_id = chat_id or "@mock_chat"
+        elif (
+            not bot_token
+            or check_is_placeholder(bot_token)
+            or not chat_id
+            or check_is_placeholder(chat_id)
+        ):
+            logger.warning(f"Telegram alert skipped for user {ctx.user_id}: credentials not configured or placeholder.")
+            return TelegramDispatchResult(
+                success=False,
+                provider="telegram",
+                provider_status="failed",
+                telegram_message_id=None,
+                target_chat_id=chat_id or None,
+                error_message="Telegram Bot Token and Chat ID must be explicitly configured and cannot be placeholder values.",
+            )
 
         store_str = ctx.store_name or "Shopify Store"
         domain_str = ctx.domain_name or "store.com"
@@ -385,6 +703,7 @@ class TelegramAlertService:
                 error_message=send_res.get("error") or "Failed to deliver Telegram alert",
                 simulated=is_sim,
             )
+
 
     async def send_test_ping(
         self,

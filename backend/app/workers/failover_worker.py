@@ -24,6 +24,7 @@ omnichannel_service = telegram_alert_service
 logger = logging.getLogger("FailoverWorker")
 
 from app.core.config import settings
+from app.core.env_guard import sanitize_log_message
 
 # Strict failover eligibility for Telegram incident alerts:
 # Permanent delivery failures (hard bounces, drop blocks, rejections) are alerted.
@@ -590,13 +591,52 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
             return True
         else:
             logger.warning(f"Telegram dispatch failed for event {event_id}: {err_msg}")
-            repository.mark_event_failed(
-                event_id=event_id,
-                reason=err_msg or "Failed to deliver Telegram alert",
-                worker_id=worker_id,
-                user_id=incident.user_id,
-            )
-            return False
+            is_retryable = getattr(result, "retryable", None)
+            if is_retryable is None and isinstance(result, dict):
+                is_retryable = result.get("retryable", False)
+            is_retryable = bool(is_retryable)
+
+            current_attempts = int(event.get("dispatch_attempt_count") or 1)
+            max_attempts = 5
+
+            if is_retryable and current_attempts < max_attempts:
+                retry_after_val = getattr(result, "retry_after", None)
+                if retry_after_val is None and isinstance(result, dict):
+                    retry_after_val = result.get("retry_after")
+
+                if retry_after_val is not None:
+                    try:
+                        delay_seconds = min(max(int(retry_after_val), 5), 900)
+                    except (ValueError, TypeError):
+                        delay_seconds = 30
+                else:
+                    delay_seconds = min(int(30 * (2 ** (current_attempts - 1))), 900)
+
+                next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+                logger.info(
+                    f"Scheduling retry for event {event_id} (attempt {current_attempts}/{max_attempts}) "
+                    f"in {delay_seconds}s at {next_attempt_at.isoformat()}: {err_msg}"
+                )
+                repository.schedule_delivery_failure_retry(
+                    event_id=event_id,
+                    worker_id=worker_id,
+                    error=err_msg or "Transient Telegram dispatch failure",
+                    next_attempt_at=next_attempt_at,
+                    max_attempts=max_attempts,
+                )
+                return False
+            else:
+                logger.warning(
+                    f"Terminal failure for event {event_id} (retryable={is_retryable}, "
+                    f"attempts={current_attempts}/{max_attempts}): {err_msg}"
+                )
+                repository.mark_event_failed(
+                    event_id=event_id,
+                    reason=err_msg or "Failed to deliver Telegram alert",
+                    worker_id=worker_id,
+                    user_id=incident.user_id,
+                )
+                return False
     except Exception as exc:
         logger.error(f"Unexpected exception processing event {event_id}: {exc}", exc_info=True)
         if not dispatch_succeeded:
@@ -617,6 +657,149 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
 process_failover_event = process_delivery_failure_event
 
 
+async def process_notification_outbox_item(
+    item: Dict[str, Any],
+    worker_id: str,
+) -> bool:
+    """
+    Process a single claimed notification outbox item:
+    1. Extracts payload & tenant credentials.
+    2. Builds zero-PII Telegram message.
+    3. Calls omnichannel_service.send_telegram_alert.
+    4. On success: completes outbox item and creates failover_log.
+    5. On failure: checks retryability, schedules backoff or marks dead_letter.
+    """
+    outbox_id = str(item.get("id"))
+    user_id = str(item.get("user_id"))
+    payload = item.get("payload") or {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    order_id = payload.get("order_id", "unknown")
+    domain_name = payload.get("domain_name", "brandshop.com")
+    store_name = payload.get("store_name", "BrandShop DTC")
+    trigger_reason = payload.get("trigger_reason", "email_spam_detected")
+
+    # Fetch tenant configuration
+    cfg = omnichannel_service.get_config(user_id)
+    if not cfg or not cfg.get("is_enabled", True):
+        err = f"Tenant {user_id} notifications disabled or unconfigured."
+        logger.warning(f"Outbox {outbox_id}: {err}")
+        repository.fail_or_retry_notification_outbox(
+            outbox_id=outbox_id,
+            worker_id=worker_id,
+            error=err,
+            retryable=False,
+            next_attempt_at=datetime.now(timezone.utc),
+            max_attempts=5,
+        )
+        return False
+
+    bot_token = omnichannel_service.get_decrypted_token(user_id)
+    chat_id = cfg.get("telegram_chat_id")
+
+    if not bot_token or not chat_id:
+        err = "Telegram Bot Token and Chat ID must be configured for tenant."
+        logger.warning(f"Outbox {outbox_id}: {err}")
+        repository.fail_or_retry_notification_outbox(
+            outbox_id=outbox_id,
+            worker_id=worker_id,
+            error=err,
+            retryable=False,
+            next_attempt_at=datetime.now(timezone.utc),
+            max_attempts=5,
+        )
+        return False
+
+    # Format text (Zero-PII)
+    from urllib.parse import quote_plus
+    clean_store = sanitize_log_message(str(store_name or "Shopify Store").strip())
+    clean_domain = sanitize_log_message(str(domain_name or "store.com").strip().lower())
+    clean_order = sanitize_log_message(str(order_id or "N/A").strip())
+    clean_reason = sanitize_log_message(str(trigger_reason or "email_spam_detected").strip())
+    encoded_domain = quote_plus(clean_domain)
+
+    alert_text = (
+        f"🚨 *INBOUNDCHECK INCIDENT ALERT*\n\n"
+        f"🏬 *Store:* {clean_store}\n"
+        f"🌐 *Domain:* `{clean_domain}`\n"
+        f"📦 *Order Ref:* `{clean_order}`\n"
+        f"⚠️ *Incident Type:* `{clean_reason}`\n"
+        f"⏰ *Timestamp:* `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`\n\n"
+        f"🔍 *Action Required:* Inspect diagnostic records & RBL posture\n"
+        f"👉 [Open InboundCheck Inspector]({settings.FRONTEND_URL}/dashboard/inspector?domain={encoded_domain})"
+    )
+
+    dispatch_res = await omnichannel_service.send_telegram_alert(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        text=alert_text,
+    )
+
+    is_success = bool(dispatch_res.get("success", False))
+    is_sim = bool(dispatch_res.get("simulated", False))
+
+    if is_success or is_sim:
+        repository.complete_notification_outbox(outbox_id=outbox_id, worker_id=worker_id)
+        try:
+            repository.supabase.persist_failover_log(
+                user_id=user_id,
+                order_id=clean_order,
+                channel="telegram",
+                provider="telegram",
+                status="dispatched" if is_sim else "delivered",
+                provider_status="simulated" if is_sim else "delivered",
+                domain_name=clean_domain,
+                store_name=clean_store,
+                triggered_reason=clean_reason,
+                target_chat_id=chat_id,
+                customer_email=None,
+                customer_phone=None,
+                dispatch_payload=dispatch_res,
+                is_simulated=is_sim,
+            )
+        except Exception as log_err:
+            logger.warning(f"Outbox {outbox_id}: completed but log recording had warning: {log_err}")
+        return True
+    else:
+        err_msg = dispatch_res.get("error") or "Outbox Telegram dispatch failed"
+        is_retryable = bool(dispatch_res.get("retryable", False))
+        attempt_count = int(item.get("attempt_count") or 1)
+        max_attempts = int(item.get("max_attempts") or 5)
+
+        if is_retryable and attempt_count < max_attempts:
+            ra = dispatch_res.get("retry_after")
+            if ra is not None:
+                try:
+                    delay_sec = min(max(int(ra), 5), 900)
+                except (ValueError, TypeError):
+                    delay_sec = 30
+            else:
+                delay_sec = min(int(30 * (2 ** (attempt_count - 1))), 900)
+
+            next_att = datetime.now(timezone.utc) + timedelta(seconds=delay_sec)
+            logger.info(f"Outbox {outbox_id}: scheduling retry {attempt_count}/{max_attempts} in {delay_sec}s")
+            repository.fail_or_retry_notification_outbox(
+                outbox_id=outbox_id,
+                worker_id=worker_id,
+                error=err_msg,
+                retryable=True,
+                next_attempt_at=next_att,
+                max_attempts=max_attempts,
+            )
+        else:
+            logger.warning(f"Outbox {outbox_id}: terminal failure (retryable={is_retryable}, attempts={attempt_count}/{max_attempts}): {err_msg}")
+            repository.fail_or_retry_notification_outbox(
+                outbox_id=outbox_id,
+                worker_id=worker_id,
+                error=err_msg,
+                retryable=False,
+                next_attempt_at=datetime.now(timezone.utc),
+                max_attempts=max_attempts,
+            )
+        return False
+
+
 async def run_failover_worker(
     stop_event: Optional[asyncio.Event] = None,
     poll_idle_seconds: int = 15,
@@ -625,8 +808,7 @@ async def run_failover_worker(
     once: bool = False,
 ) -> None:
     """
-    Worker loop polling and claiming delivery failure events atomically.
-    Transitions events: received -> queued -> processed / failed / ignored.
+    Worker loop polling and claiming delivery failure events and notification outbox atomically.
     Supports continuous daemon operation and single-cycle bounded execution via once=True.
     Recovers stale leases if prior workers crashed, and gracefully releases in-flight events on SIGTERM/SIGINT.
     """
@@ -681,9 +863,16 @@ async def run_failover_worker(
                     lease_seconds=lease_seconds,
                 )
 
-                if not events:
+                # Atomically claim notification outbox items (FOR UPDATE SKIP LOCKED with lease expiry)
+                outbox_items = repository.claim_notification_outbox(
+                    worker_id=worker_id,
+                    limit=limit,
+                    lease_seconds=300,
+                )
+
+                if not events and not outbox_items:
                     if once:
-                        logger.info("Single-cycle failover mode: zero events claimed. Exiting.")
+                        logger.info("Single-cycle failover mode: zero events and outbox items claimed. Exiting.")
                         break
                     # Interruptible sleep
                     for _ in range(poll_idle_seconds):
@@ -692,38 +881,46 @@ async def run_failover_worker(
                         await asyncio.sleep(1)
                     continue
 
-                for e in events:
-                    e_id = e.get("id")
-                    if e_id:
-                        in_flight_events[str(e_id)] = e
+                if events:
+                    for e in events:
+                        e_id = e.get("id")
+                        if e_id:
+                            in_flight_events[str(e_id)] = e
 
-                logger.info(f"Worker {worker_id} claimed {len(events)} delivery failure event(s). Processing...")
-                for event in events:
-                    if stop_event.is_set():
-                        logger.info(f"Worker {worker_id} received stop signal; aborting batch.")
-                        break
+                    logger.info(f"Worker {worker_id} claimed {len(events)} delivery failure event(s). Processing...")
+                    for event in events:
+                        if stop_event.is_set():
+                            logger.info(f"Worker {worker_id} received stop signal; aborting batch.")
+                            break
 
-                    evt_id = str(event.get("id"))
-                    payload = event.get("event_payload") or {}
-                    if isinstance(payload, dict):
-                        next_retry_at = payload.get("correlation_next_retry_at")
-                        if next_retry_at:
-                            try:
-                                if datetime.now(timezone.utc).timestamp() < float(next_retry_at):
-                                    # Still within backoff delay cooldown; release lease back to queue
-                                    repository.release_claimed_delivery_failure_event(evt_id, worker_id)
-                                    in_flight_events.pop(evt_id, None)
-                                    continue
-                            except (ValueError, TypeError):
-                                pass
+                        evt_id = str(event.get("id"))
+                        payload = event.get("event_payload") or {}
+                        if isinstance(payload, dict):
+                            next_retry_at = payload.get("correlation_next_retry_at")
+                            if next_retry_at:
+                                try:
+                                    if datetime.now(timezone.utc).timestamp() < float(next_retry_at):
+                                        repository.release_claimed_delivery_failure_event(evt_id, worker_id)
+                                        in_flight_events.pop(evt_id, None)
+                                        continue
+                                except (ValueError, TypeError):
+                                    pass
 
-                    try:
-                        await process_delivery_failure_event(event, worker_id)
-                    finally:
-                        in_flight_events.pop(evt_id, None)
+                        try:
+                            await process_delivery_failure_event(event, worker_id)
+                        finally:
+                            in_flight_events.pop(evt_id, None)
+
+                if outbox_items:
+                    logger.info(f"Worker {worker_id} claimed {len(outbox_items)} notification outbox item(s). Processing...")
+                    for item in outbox_items:
+                        if stop_event.is_set():
+                            logger.info(f"Worker {worker_id} received stop signal; aborting outbox batch.")
+                            break
+                        await process_notification_outbox_item(item, worker_id)
 
                 if once:
-                    logger.info(f"Single-cycle failover mode: batch of {len(events)} event(s) processed. Exiting cleanly.")
+                    logger.info("Single-cycle failover mode: batch completed. Exiting cleanly.")
                     break
 
             except Exception as exc:

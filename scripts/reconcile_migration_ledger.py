@@ -65,6 +65,7 @@ CANONICAL_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
     ("20261012000001", "harden_rate_limit_windows_security"),
     ("20261029000001", "durable_failover_dispatch_intent_and_quarantine"),
     ("20261031000001", "harden_worker_rpc_acls_and_overloads"),
+    ("20261031000002", "durable_notification_outbox_and_retry_scheduling"),
 )
 # Backward-compatible alias for existing test imports
 CANONICAL_28_MIGRATIONS = CANONICAL_MIGRATIONS

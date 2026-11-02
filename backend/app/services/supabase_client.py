@@ -84,6 +84,9 @@ class SupabaseService:
         self._in_memory_ai_concurrency_leases: Dict[str, List[Dict[str, Any]]] = {}
         self._has_concurrency_rpc: Optional[bool] = None
         self._in_memory_ai_telemetry: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_alert_configs: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_failover_configs: Dict[str, Dict[str, Any]] = {}
+        self._in_memory_notification_outbox: Dict[str, Dict[str, Any]] = {}
         self._in_memory_lock = threading.Lock()
 
         env_lower = (getattr(settings, "ENVIRONMENT", "") or "").lower()
@@ -134,7 +137,11 @@ class SupabaseService:
 
     def _allow_in_memory_fallback(self) -> bool:
         """Allow in-memory fallback strictly in local development or automated test environments."""
+        import os
         env = (getattr(settings, "ENVIRONMENT", "development") or "development").lower()
+        staging_mode = getattr(settings, "STAGING_MODE", False) or (os.getenv("STAGING_MODE", "").lower() in ("true", "1"))
+        if staging_mode or env in ["production", "prod", "staging"]:
+            return False
         return env in ["development", "test", "local"]
 
     def check_db_health(self) -> bool:
@@ -173,6 +180,7 @@ class SupabaseService:
                     if not profile.get("subscription_tier"):
                         profile["subscription_tier"] = profile.get("tier", "starter")
                     return profile
+                return None
             except Exception as e:
                 logger.error(f"Failed to query user profile {user_id}: {e}")
                 if not self._allow_in_memory_fallback():
@@ -1933,6 +1941,16 @@ class SupabaseService:
                 is_stale = True
 
             if status == "received" or is_stale:
+                next_attempt = event.get("next_attempt_at")
+                if next_attempt:
+                    try:
+                        next_dt = datetime.fromisoformat(str(next_attempt).replace("Z", "+00:00"))
+                        if next_dt.tzinfo is None:
+                            next_dt = next_dt.replace(tzinfo=timezone.utc)
+                        if next_dt > now:
+                            continue
+                    except Exception:
+                        pass
                 lease_expiry = datetime.fromtimestamp(now.timestamp() + lease_seconds, tz=timezone.utc).isoformat()
                 event["processing_status"] = "queued"
                 event["claimed_by"] = worker_id
@@ -3272,6 +3290,621 @@ class SupabaseService:
             return dt
         except Exception:
             return datetime.min.replace(tzinfo=timezone.utc)
+
+    # =====================================================================
+    # ALERT CONFIGURATIONS & FAILOVER CONFIGURATIONS (GROUP 45B.2)
+    # =====================================================================
+
+    def get_alert_config(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch alert configuration for user from Supabase or in-memory store.
+        Fails closed with DatabaseUnavailableError in production or staging if DB is down.
+        """
+        if self._client:
+            try:
+                res = self._client.table("alert_configs").select("*").eq("user_id", user_id).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                return None
+            except Exception as e:
+                logger.error(f"Failed to query alert_configs for user {user_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database query failed for alert configs {user_id}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in non-development environment")
+
+        return self._in_memory_alert_configs.get(user_id)
+
+    def save_alert_config(self, user_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Save or update alert configuration for user.
+        Fails closed with DatabaseUnavailableError in production or staging if DB is down.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload = dict(config)
+        payload["user_id"] = user_id
+        payload["updated_at"] = now_iso
+
+        if self._client:
+            try:
+                res = self._client.table("alert_configs").upsert(payload, on_conflict="user_id").execute()
+                if res.data and len(res.data) > 0:
+                    self._in_memory_alert_configs[user_id] = res.data[0]
+                    return res.data[0]
+            except Exception as e:
+                logger.error(f"Failed to save alert_configs for user {user_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database save failed for alert configs {user_id}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in non-development environment")
+
+        self._in_memory_alert_configs[user_id] = payload
+        return payload
+
+    def get_failover_config(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch failover configuration for user from Supabase or in-memory store.
+        Fails closed with DatabaseUnavailableError in production or staging if DB is down.
+        """
+        if self._client:
+            try:
+                res = self._client.table("failover_configs").select("*").eq("user_id", user_id).execute()
+                if res.data and len(res.data) > 0:
+                    return res.data[0]
+                return None
+            except Exception as e:
+                logger.error(f"Failed to query failover_configs for user {user_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database query failed for failover configs {user_id}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in non-development environment")
+
+        return self._in_memory_failover_configs.get(user_id)
+
+    def save_failover_config(self, user_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Save or update failover configuration for user.
+        Fails closed with DatabaseUnavailableError in production or staging if DB is down.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload = dict(config)
+        payload["user_id"] = user_id
+        payload["updated_at"] = now_iso
+
+        if self._client:
+            try:
+                res = self._client.table("failover_configs").upsert(payload, on_conflict="user_id").execute()
+                if res.data and len(res.data) > 0:
+                    self._in_memory_failover_configs[user_id] = res.data[0]
+                    return res.data[0]
+            except Exception as e:
+                logger.error(f"Failed to save failover_configs for user {user_id}: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database save failed for failover configs {user_id}: {e}")
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in non-development environment")
+
+        self._in_memory_failover_configs[user_id] = payload
+        return payload
+
+    # =====================================================================
+    # DURABLE NOTIFICATION OUTBOX & RETRY SCHEDULING (GROUP 45B.3B)
+    # =====================================================================
+
+    def schedule_delivery_failure_retry(
+        self,
+        event_id: str,
+        worker_id: str,
+        error: str,
+        next_attempt_at: Any,
+        max_attempts: int = 5,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Atomically schedule a retry or terminal failure for a delivery failure event.
+        Calls schedule_delivery_failure_retry RPC.
+        """
+        now = datetime.now(timezone.utc)
+        next_iso = (
+            next_attempt_at.isoformat()
+            if isinstance(next_attempt_at, datetime)
+            else str(next_attempt_at)
+        )
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "schedule_delivery_failure_retry",
+                    {
+                        "p_event_id": str(event_id),
+                        "p_worker_id": str(worker_id),
+                        "p_error": str(error or "Delivery failure retry scheduled"),
+                        "p_next_attempt_at": next_iso,
+                        "p_max_attempts": int(max_attempts),
+                    },
+                ).execute()
+                if res.data and len(res.data) > 0:
+                    row = res.data[0]
+                    # Keep in-memory cache synchronized
+                    for evt in self._in_memory_delivery_failure_events.values():
+                        if str(evt.get("id")) == str(event_id):
+                            evt["processing_status"] = row.get("new_status")
+                            evt["claimed_by"] = None
+                            evt["lease_until"] = None
+                            evt["next_attempt_at"] = row.get("scheduled_for")
+                            evt["last_retry_at"] = now.isoformat()
+                    return row
+            except Exception as e:
+                logger.warning(f"Could not execute schedule_delivery_failure_retry RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"schedule_delivery_failure_retry RPC failed: {e}") from e
+
+        # In-memory fallback
+        for evt in self._in_memory_delivery_failure_events.values():
+            if str(evt.get("id")) == str(event_id):
+                if evt.get("claimed_by") and str(evt.get("claimed_by")) != str(worker_id):
+                    return None
+                if evt.get("processing_status") not in ("dispatching", "queued"):
+                    return None
+
+                curr_attempts = int(evt.get("dispatch_attempt_count") or 1)
+                if curr_attempts >= max_attempts:
+                    evt["processing_status"] = "failed"
+                    evt["processed_at"] = now.isoformat()
+                    evt["processing_error"] = f"MAX_RETRIES_EXCEEDED ({curr_attempts}/{max_attempts}): {error}"
+                    evt["claimed_by"] = None
+                    evt["lease_until"] = None
+                    return {
+                        "event_id": str(event_id),
+                        "new_status": "failed",
+                        "attempt_count": curr_attempts,
+                        "scheduled_for": None,
+                    }
+                else:
+                    evt["processing_status"] = "received"
+                    evt["claimed_by"] = None
+                    evt["lease_until"] = None
+                    evt["processing_error"] = error
+                    evt["next_attempt_at"] = next_iso
+                    evt["last_retry_at"] = now.isoformat()
+                    return {
+                        "event_id": str(event_id),
+                        "new_status": "received",
+                        "attempt_count": curr_attempts,
+                        "scheduled_for": next_iso,
+                    }
+        return None
+
+    def enqueue_notification_outbox(
+        self,
+        user_id: str,
+        channel: str,
+        idempotency_key: str,
+        payload: Dict[str, Any],
+        max_attempts: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Durable outbox persistence for notification dispatch.
+        Guarantees idempotency on (user_id, idempotency_key).
+        Returns dict with record and idempotent boolean.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        mem_key = f"{user_id}:{idempotency_key}"
+
+        record = {
+            "id": str(uuid.uuid4()),
+            "user_id": str(user_id),
+            "channel": str(channel or "telegram"),
+            "idempotency_key": str(idempotency_key),
+            "payload": payload or {},
+            "status": "queued",
+            "attempt_count": 0,
+            "max_attempts": max_attempts,
+            "next_attempt_at": now_iso,
+            "claimed_by": None,
+            "claimed_at": None,
+            "lease_until": None,
+            "last_error": None,
+            "created_at": now_iso,
+            "processed_at": None,
+        }
+
+        if self._client:
+            try:
+                res = self._client.table("notification_outbox").insert(record).execute()
+                if res.data and len(res.data) > 0:
+                    created = dict(res.data[0])
+                    created["idempotent"] = False
+                    self._in_memory_notification_outbox[mem_key] = created
+                    return created
+            except Exception as e:
+                err_str = str(e).lower()
+                if "duplicate" in err_str or "unique" in err_str or "23505" in err_str:
+                    # Idempotent deduplication hit
+                    try:
+                        existing = (
+                            self._client.table("notification_outbox")
+                            .select("*")
+                            .eq("user_id", str(user_id))
+                            .eq("idempotency_key", str(idempotency_key))
+                            .limit(1)
+                            .execute()
+                        )
+                        if existing.data and len(existing.data) > 0:
+                            ret = dict(existing.data[0])
+                            ret["idempotent"] = True
+                            self._in_memory_notification_outbox[mem_key] = ret
+                            return ret
+                    except Exception as query_err:
+                        logger.warning(f"Failed to query existing outbox item on conflict: {query_err}")
+                logger.warning(f"Could not insert into notification_outbox: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error enqueuing notification outbox: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        # In-memory storage with idempotency deduplication
+        with self._in_memory_lock:
+            if mem_key in self._in_memory_notification_outbox:
+                existing = dict(self._in_memory_notification_outbox[mem_key])
+                existing["idempotent"] = True
+                return existing
+
+            record["idempotent"] = False
+            self._in_memory_notification_outbox[mem_key] = record
+            return dict(record)
+
+    def claim_notification_outbox(
+        self,
+        worker_id: str,
+        limit: int = 20,
+        lease_seconds: int = 300,
+    ) -> List[Dict[str, Any]]:
+        """
+        Atomically claim pending outbox items via claim_notification_outbox RPC.
+        Supports stale lease recovery and bounded batch limit.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        lease_str = f"{lease_seconds} seconds"
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "claim_notification_outbox",
+                    {
+                        "p_worker_id": str(worker_id),
+                        "p_limit": int(limit),
+                        "p_lease_timeout": lease_str,
+                    },
+                ).execute()
+                if res.data is not None:
+                    # Sync in-memory items if present
+                    for row in res.data:
+                        for k, v in self._in_memory_notification_outbox.items():
+                            if str(v.get("id")) == str(row.get("id")):
+                                v.update(row)
+                    return res.data
+            except Exception as e:
+                logger.warning(f"Could not execute claim_notification_outbox RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error claiming outbox: {e}") from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client unavailable in production environment.")
+
+        with self._in_memory_lock:
+            claimed: List[Dict[str, Any]] = []
+            candidates: List[Dict[str, Any]] = []
+
+            for item in self._in_memory_notification_outbox.values():
+                st = item.get("status")
+                next_att = item.get("next_attempt_at")
+                lease_until = item.get("lease_until")
+
+                is_ready = False
+                if st == "queued":
+                    if not next_att:
+                        is_ready = True
+                    else:
+                        try:
+                            dt = datetime.fromisoformat(str(next_att).replace("Z", "+00:00"))
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=timezone.utc)
+                            if dt <= now:
+                                is_ready = True
+                        except Exception:
+                            is_ready = True
+                elif st == "dispatching" and lease_until:
+                    try:
+                        dt = datetime.fromisoformat(str(lease_until).replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        if dt < now:
+                            is_ready = True
+                    except Exception:
+                        is_ready = True
+
+                if is_ready:
+                    candidates.append(item)
+
+            candidates.sort(key=lambda x: str(x.get("created_at", "")))
+            lease_expiry = datetime.fromtimestamp(now.timestamp() + lease_seconds, tz=timezone.utc).isoformat()
+
+            for item in candidates[:limit]:
+                item["status"] = "dispatching"
+                item["attempt_count"] = int(item.get("attempt_count", 0)) + 1
+                item["claimed_by"] = str(worker_id)
+                item["claimed_at"] = now_iso
+                item["lease_until"] = lease_expiry
+                claimed.append(dict(item))
+
+            return claimed
+
+    def complete_notification_outbox(
+        self,
+        outbox_id: str,
+        worker_id: str,
+    ) -> bool:
+        """
+        Mark notification outbox item as processed after successful external dispatch.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "complete_notification_outbox",
+                    {
+                        "p_outbox_id": str(outbox_id),
+                        "p_worker_id": str(worker_id),
+                    },
+                ).execute()
+                if res.data is True:
+                    for v in self._in_memory_notification_outbox.values():
+                        if str(v.get("id")) == str(outbox_id):
+                            v["status"] = "processed"
+                            v["processed_at"] = now_iso
+                            v["claimed_by"] = None
+                            v["lease_until"] = None
+                            v["last_error"] = None
+                    return True
+                if not self._allow_in_memory_fallback():
+                    return False
+            except Exception as e:
+                logger.warning(f"Could not execute complete_notification_outbox RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error completing outbox item: {e}") from e
+
+        with self._in_memory_lock:
+            for v in self._in_memory_notification_outbox.values():
+                if str(v.get("id")) == str(outbox_id) and str(v.get("claimed_by")) == str(worker_id):
+                    if v.get("status") == "dispatching":
+                        v["status"] = "processed"
+                        v["processed_at"] = now_iso
+                        v["claimed_by"] = None
+                        v["lease_until"] = None
+                        v["last_error"] = None
+                        return True
+            return False
+
+    def fail_or_retry_notification_outbox(
+        self,
+        outbox_id: str,
+        worker_id: str,
+        error: str,
+        retryable: bool,
+        next_attempt_at: Any,
+        max_attempts: int = 5,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Transition outbox item to dead_letter or back to queued with scheduled retry.
+        """
+        now = datetime.now(timezone.utc)
+        next_iso = (
+            next_attempt_at.isoformat()
+            if isinstance(next_attempt_at, datetime)
+            else str(next_attempt_at)
+        )
+
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "fail_or_retry_notification_outbox",
+                    {
+                        "p_outbox_id": str(outbox_id),
+                        "p_worker_id": str(worker_id),
+                        "p_error": str(error or "Dispatch error"),
+                        "p_retryable": bool(retryable),
+                        "p_next_attempt_at": next_iso,
+                        "p_max_attempts": int(max_attempts),
+                    },
+                ).execute()
+                if res.data and len(res.data) > 0:
+                    row = res.data[0]
+                    for v in self._in_memory_notification_outbox.values():
+                        if str(v.get("id")) == str(outbox_id):
+                            v["status"] = row.get("new_status")
+                            v["next_attempt_at"] = row.get("next_attempt_at")
+                            v["claimed_by"] = None
+                            v["lease_until"] = None
+                            v["last_error"] = str(error)
+                    return row
+            except Exception as e:
+                logger.warning(f"Could not execute fail_or_retry_notification_outbox RPC: {e}")
+                if not self._allow_in_memory_fallback():
+                    raise DatabaseUnavailableError(f"Database error in fail_or_retry_notification_outbox: {e}") from e
+
+        with self._in_memory_lock:
+            for v in self._in_memory_notification_outbox.values():
+                if str(v.get("id")) == str(outbox_id) and str(v.get("claimed_by")) == str(worker_id):
+                    attempts = int(v.get("attempt_count") or 1)
+                    v_max = int(v.get("max_attempts") or max_attempts)
+
+                    if (not retryable) or (attempts >= v_max):
+                        v["status"] = "dead_letter"
+                        v["processed_at"] = now.isoformat()
+                        v["last_error"] = str(error)
+                        v["claimed_by"] = None
+                        v["lease_until"] = None
+                        return {
+                            "id": str(outbox_id),
+                            "new_status": "dead_letter",
+                            "attempt_count": attempts,
+                            "next_attempt_at": None,
+                        }
+                    else:
+                        v["status"] = "queued"
+                        v["next_attempt_at"] = next_iso
+                        v["last_error"] = str(error)
+                        v["claimed_by"] = None
+                        v["lease_until"] = None
+                        return {
+                            "id": str(outbox_id),
+                            "new_status": "queued",
+                            "attempt_count": attempts,
+                            "next_attempt_at": next_iso,
+                        }
+            return None
+
+    def get_notification_health_metrics(self) -> Dict[str, Any]:
+        """
+        Diagnostic observability helper reporting queue depths, active leases,
+        expired leases, retrying counts, dead letter counts, and oldest pending ages.
+        """
+        now = datetime.now(timezone.utc)
+
+        # Delivery failure events metrics
+        events = list(self._in_memory_delivery_failure_events.values())
+        dfe_received = sum(1 for e in events if e.get("processing_status") == "received")
+        dfe_queued = sum(1 for e in events if e.get("processing_status") == "queued")
+        dfe_dispatching = sum(1 for e in events if e.get("processing_status") == "dispatching")
+        dfe_quarantined = sum(1 for e in events if e.get("processing_status") == "quarantined")
+        dfe_processed = sum(1 for e in events if e.get("processing_status") == "processed")
+        dfe_failed = sum(1 for e in events if e.get("processing_status") == "failed")
+
+        dfe_retrying = 0
+        dfe_expired_leases = 0
+        oldest_dfe_pending_age: Optional[float] = None
+
+        for e in events:
+            st = e.get("processing_status")
+            if st in ("received", "queued"):
+                rcv = e.get("received_at")
+                if rcv:
+                    try:
+                        dt = datetime.fromisoformat(str(rcv).replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        age = max(0.0, (now - dt).total_seconds())
+                        if oldest_dfe_pending_age is None or age > oldest_dfe_pending_age:
+                            oldest_dfe_pending_age = age
+                    except Exception:
+                        pass
+
+            next_att = e.get("next_attempt_at")
+            if next_att:
+                try:
+                    dt = datetime.fromisoformat(str(next_att).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt > now:
+                        dfe_retrying += 1
+                except Exception:
+                    pass
+
+            lease = e.get("lease_until")
+            if lease and st in ("queued", "dispatching"):
+                try:
+                    dt = datetime.fromisoformat(str(lease).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt < now:
+                        dfe_expired_leases += 1
+                except Exception:
+                    pass
+
+        # Notification outbox metrics
+        outbox_items = list(self._in_memory_notification_outbox.values())
+        ob_queued = sum(1 for o in outbox_items if o.get("status") == "queued")
+        ob_dispatching = sum(1 for o in outbox_items if o.get("status") == "dispatching")
+        ob_processed = sum(1 for o in outbox_items if o.get("status") == "processed")
+        ob_dead_letter = sum(1 for o in outbox_items if o.get("status") == "dead_letter")
+        ob_failed = sum(1 for o in outbox_items if o.get("status") == "failed")
+
+        ob_retrying = 0
+        ob_expired_leases = 0
+        oldest_ob_pending_age: Optional[float] = None
+
+        for o in outbox_items:
+            st = o.get("status")
+            if st == "queued":
+                crt = o.get("created_at")
+                if crt:
+                    try:
+                        dt = datetime.fromisoformat(str(crt).replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        age = max(0.0, (now - dt).total_seconds())
+                        if oldest_ob_pending_age is None or age > oldest_ob_pending_age:
+                            oldest_ob_pending_age = age
+                    except Exception:
+                        pass
+
+            next_att = o.get("next_attempt_at")
+            if next_att:
+                try:
+                    dt = datetime.fromisoformat(str(next_att).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt > now:
+                        ob_retrying += 1
+                except Exception:
+                    pass
+
+            lease = o.get("lease_until")
+            if lease and st == "dispatching":
+                try:
+                    dt = datetime.fromisoformat(str(lease).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt < now:
+                        ob_expired_leases += 1
+                except Exception:
+                    pass
+
+        return {
+            "timestamp": now.isoformat(),
+            "delivery_failure_events": {
+                "total": len(events),
+                "received": dfe_received,
+                "queued": dfe_queued,
+                "dispatching": dfe_dispatching,
+                "quarantined": dfe_quarantined,
+                "processed": dfe_processed,
+                "failed": dfe_failed,
+                "retrying": dfe_retrying,
+                "expired_leases": dfe_expired_leases,
+                "oldest_pending_age_seconds": oldest_dfe_pending_age,
+            },
+            "notification_outbox": {
+                "total": len(outbox_items),
+                "queued": ob_queued,
+                "dispatching": ob_dispatching,
+                "processed": ob_processed,
+                "dead_letter": ob_dead_letter,
+                "failed": ob_failed,
+                "retrying": ob_retrying,
+                "expired_leases": ob_expired_leases,
+                "oldest_pending_age_seconds": oldest_ob_pending_age,
+            },
+        }
 
 
 supabase_service = SupabaseService()

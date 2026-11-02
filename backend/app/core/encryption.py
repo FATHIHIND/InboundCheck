@@ -143,3 +143,27 @@ def mask_credential(raw_secret: Optional[str]) -> str:
     if len(clean) <= 4:
         return "••••"
     return f"••••••••••••{clean[-4:]}"
+
+
+def safe_decrypt_credential(value: Optional[str]) -> Optional[str]:
+    """
+    Safely decrypt stored credential, handling legacy plaintext and invalid ciphertexts.
+    - If value starts with CIPHERTEXT_PREFIX ('v1:'), calls decrypt_credential.
+      Catches DecryptionError and returns None without exposing errors or tokens.
+    - If value does not start with CIPHERTEXT_PREFIX (legacy plaintext record), returns value.
+    - Returns None if input is None or empty.
+    """
+    if not value:
+        return None
+    clean = str(value).strip()
+    if clean.startswith(CIPHERTEXT_PREFIX):
+        try:
+            return decrypt_credential(clean)
+        except DecryptionError:
+            logger.warning("Decryption error while reading stored credential (invalid or corrupted token).")
+            return None
+        except Exception as e:
+            logger.warning(f"Unexpected error decrypting credential: {e}")
+            return None
+    # Legacy plaintext credential
+    return clean

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "InboundCheck API"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
+    STAGING_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:3000"
 
     # Security & CORS Settings

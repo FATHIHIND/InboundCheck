@@ -371,6 +371,87 @@ class FailoverRepository:
 
         return defaults
 
+    def schedule_delivery_failure_retry(
+        self,
+        event_id: str,
+        worker_id: str,
+        error: str,
+        next_attempt_at: Any,
+        max_attempts: int = 5,
+    ) -> Optional[Dict[str, Any]]:
+        """Atomically schedule retry or terminal failure for delivery failure event."""
+        return self.supabase.schedule_delivery_failure_retry(
+            event_id=event_id,
+            worker_id=worker_id,
+            error=error,
+            next_attempt_at=next_attempt_at,
+            max_attempts=max_attempts,
+        )
+
+    def enqueue_notification_outbox(
+        self,
+        user_id: str,
+        channel: str,
+        idempotency_key: str,
+        payload: Dict[str, Any],
+        max_attempts: int = 5,
+    ) -> Dict[str, Any]:
+        """Persist notification to durable outbox before outbound dispatch."""
+        return self.supabase.enqueue_notification_outbox(
+            user_id=user_id,
+            channel=channel,
+            idempotency_key=idempotency_key,
+            payload=payload,
+            max_attempts=max_attempts,
+        )
+
+    def claim_notification_outbox(
+        self,
+        worker_id: str,
+        limit: int = 20,
+        lease_seconds: int = 300,
+    ) -> List[Dict[str, Any]]:
+        """Claim pending notification outbox items."""
+        return self.supabase.claim_notification_outbox(
+            worker_id=worker_id,
+            limit=limit,
+            lease_seconds=lease_seconds,
+        )
+
+    def complete_notification_outbox(
+        self,
+        outbox_id: str,
+        worker_id: str,
+    ) -> bool:
+        """Mark notification outbox item processed."""
+        return self.supabase.complete_notification_outbox(
+            outbox_id=outbox_id,
+            worker_id=worker_id,
+        )
+
+    def fail_or_retry_notification_outbox(
+        self,
+        outbox_id: str,
+        worker_id: str,
+        error: str,
+        retryable: bool,
+        next_attempt_at: Any,
+        max_attempts: int = 5,
+    ) -> Optional[Dict[str, Any]]:
+        """Transition outbox item to dead_letter or back to queued."""
+        return self.supabase.fail_or_retry_notification_outbox(
+            outbox_id=outbox_id,
+            worker_id=worker_id,
+            error=error,
+            retryable=retryable,
+            next_attempt_at=next_attempt_at,
+            max_attempts=max_attempts,
+        )
+
+    def get_notification_health_metrics(self) -> Dict[str, Any]:
+        """Fetch real-time delivery and outbox health telemetry."""
+        return self.supabase.get_notification_health_metrics()
+
 
 failure_event_repository = FailoverRepository()
 failover_repository = failure_event_repository

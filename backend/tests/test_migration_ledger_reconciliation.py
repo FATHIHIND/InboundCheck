@@ -30,7 +30,7 @@ def test_scan_local_migrations_matches_canonical_sequence():
     migrations_dir = REPO_ROOT / "supabase" / "migrations"
     migrations = scan_local_migrations(migrations_dir)
     assert len(migrations) == len(CANONICAL_MIGRATIONS)
-    assert len(migrations) == 30
+    assert len(migrations) == 31
     for idx, (m, (exp_v, exp_name)) in enumerate(zip(migrations, CANONICAL_MIGRATIONS)):
         assert m.version == exp_v
         assert m.name == exp_name
@@ -120,9 +120,9 @@ def test_plan_reconciliation_detects_rows_to_insert_and_legacy_to_remove():
     plan = plan_reconciliation(mock_rows)
     assert plan["initial_count"] == 3
     assert plan["legacy_rows_to_remove_count"] == 3
-    assert plan["target_insert_count"] == 30
-    assert len(plan["rows_to_insert"]) == 30
-    assert plan["projected_final_count"] == 30
+    assert plan["target_insert_count"] == 31
+    assert len(plan["rows_to_insert"]) == 31
+    assert plan["projected_final_count"] == 31
     assert plan["collisions_count"] == 0
 
 
@@ -155,13 +155,13 @@ def test_forward_sql_concurrency_and_fail_closed_properties():
 
     # 5. Postcondition assertions present
     assert "POSTCONDITION FAILED [Q-01]" in sql
-    assert "Expected exactly 30 rows" in sql
+    assert "Expected exactly 31 rows" in sql
     assert "POSTCONDITION FAILED [Q-02]" in sql
     assert "POSTCONDITION FAILED [Q-03]" in sql
     assert "POSTCONDITION FAILED [Q-04]" in sql
     assert "legacy rows still exist in schema_migrations" in sql
 
-    # 6. All 30 versions present in SQL with positive provenance
+    # 6. All 31 versions present in SQL with positive provenance
     for v, name in CANONICAL_MIGRATIONS:
         assert f"('{v}', '{name}', '{RECONCILIATION_PROVENANCE}')" in sql
     assert f"Provenance Marker: {RECONCILIATION_PROVENANCE}" in sql
@@ -182,7 +182,7 @@ def test_rollback_sql_properties():
 
     # 3. Preconditions and postconditions
     assert "ROLLBACK PRECONDITION FAILED [R-01]" in sql
-    assert "Expected exactly 30 rows in ledger" in sql
+    assert "Expected exactly 31 rows in ledger" in sql
     assert "ROLLBACK PRECONDITION FAILED [R-02]" in sql
     assert "ROLLBACK PRECONDITION FAILED [R-03]" in sql
     assert "ROLLBACK EXECUTION FAILED" in sql
@@ -235,8 +235,8 @@ def test_cli_dry_run_execution(tmp_path):
     ]
     res = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT))
     assert res.returncode == 0
-    assert "[+] Successfully verified 30 local migrations matching canonical sequence." in res.stdout
-    assert "Projected Final Count:      30 (Exact Universal Parity)" in res.stdout
+    assert "[+] Successfully verified 31 local migrations matching canonical sequence." in res.stdout
+    assert "Projected Final Count:      31 (Exact Universal Parity)" in res.stdout
     assert "[+] Dry-run simulation complete. ZERO database writes executed." in res.stdout
     assert out_sql.exists()
     assert out_rb.exists()
@@ -274,7 +274,7 @@ def test_post_reconciliation_verification_fails_on_missing_canonical_pair():
     rows = [r for r in rows if r["version"] != "20261012000001"]
     is_valid, errors = verify_post_reconciliation_ledger(rows)
     assert not is_valid
-    assert any("Row count mismatch: expected exactly 30 rows" in e for e in errors)
+    assert any("Row count mismatch: expected exactly 31 rows" in e for e in errors)
     assert any("Missing canonical migration: 20261012000001" in e for e in errors)
 
 
@@ -290,7 +290,7 @@ def test_post_reconciliation_verification_fails_on_incorrect_canonical_name():
 
 def test_post_reconciliation_verification_fails_on_unexpected_rogue_row():
     rows = _setup_mock_canonical_rows()
-    # Add an unexpected 31st row
+    # Add an unexpected 32nd row
     rows.append({
         "version": "20261101000001",
         "name": "unauthorized_migration",
@@ -301,7 +301,7 @@ def test_post_reconciliation_verification_fails_on_unexpected_rogue_row():
     })
     is_valid, errors = verify_post_reconciliation_ledger(rows)
     assert not is_valid
-    assert any("Row count mismatch: expected exactly 30 rows" in e for e in errors)
+    assert any("Row count mismatch: expected exactly 31 rows" in e for e in errors)
     assert any("Unexpected rogue versions found in ledger: ['20261101000001']" in e for e in errors)
 
 
@@ -333,8 +333,8 @@ def test_post_reconciliation_verification_fails_on_invalid_provenance():
 
 def test_rollback_refuses_when_subsequent_migration_exists():
     sql = generate_defensive_rollback_sql()
-    # Check that precondition R-01 strictly enforces count = 30 and refuses if evolved
-    assert "Expected exactly 30 rows in ledger, found %" in sql
+    # Check that precondition R-01 strictly enforces count = 31 and refuses if evolved
+    assert "Expected exactly 31 rows in ledger, found %" in sql
     assert "Rollback is refused because ledger state has evolved." in sql
 
 
@@ -391,3 +391,41 @@ def test_migration_30_rpc_acl_hardening_and_overload_cleanup():
         assert f"ALTER FUNCTION public.{sig} OWNER TO postgres;" in content
         # Check search_path = public, pg_temp
         assert f"ALTER FUNCTION public.{sig} SET search_path = public, pg_temp;" in content
+
+
+def test_migration_31_outbox_and_retry_definitions():
+    """Verify that migration #31 creates notification_outbox and hardens retry/outbox RPCs."""
+    mig_path = REPO_ROOT / "supabase" / "migrations" / "20261031000002_durable_notification_outbox_and_retry_scheduling.sql"
+    assert mig_path.exists(), "Migration 20261031000002 must exist"
+    content = mig_path.read_text(encoding="utf-8")
+
+    # 1. Delivery failure events retry extensions
+    assert "ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ" in content
+    assert "ADD COLUMN IF NOT EXISTS last_retry_at TIMESTAMPTZ" in content
+    assert "CREATE INDEX IF NOT EXISTS idx_delivery_failure_events_retry" in content
+
+    # 2. Notification outbox table & indexes
+    assert "CREATE TABLE IF NOT EXISTS public.notification_outbox" in content
+    assert "CONSTRAINT uq_notification_outbox_tenant_idempotency UNIQUE (user_id, idempotency_key)" in content
+    assert "idx_notification_outbox_claim" in content
+    assert "idx_notification_outbox_tenant" in content
+    assert "ALTER TABLE public.notification_outbox ENABLE ROW LEVEL SECURITY;" in content
+
+    # 3. RPC definitions & strict ACLs
+    expected_m31_signatures = [
+        "claim_received_delivery_failure_events(UUID, INTEGER, INTERVAL)",
+        "claim_pending_delivery_failure_events(UUID, INTEGER, INTERVAL)",
+        "schedule_delivery_failure_retry(UUID, UUID, TEXT, TIMESTAMPTZ, INTEGER)",
+        "claim_notification_outbox(UUID, INTEGER, INTERVAL)",
+        "complete_notification_outbox(UUID, UUID)",
+        "fail_or_retry_notification_outbox(UUID, UUID, TEXT, BOOLEAN, TIMESTAMPTZ, INTEGER)",
+    ]
+
+    for sig in expected_m31_signatures:
+        assert f"REVOKE ALL ON FUNCTION public.{sig} FROM PUBLIC;" in content
+        assert f"REVOKE ALL ON FUNCTION public.{sig} FROM anon;" in content
+        assert f"REVOKE ALL ON FUNCTION public.{sig} FROM authenticated;" in content
+        assert f"GRANT EXECUTE ON FUNCTION public.{sig} TO postgres, service_role;" in content
+        assert f"ALTER FUNCTION public.{sig} OWNER TO postgres;" in content
+        assert f"ALTER FUNCTION public.{sig} SET search_path = public, pg_temp;" in content
+
