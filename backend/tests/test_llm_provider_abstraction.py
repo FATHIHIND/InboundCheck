@@ -303,13 +303,15 @@ def test_api_endpoint_backward_compatibility():
 # 8. Provider-Routing Invariant Regression Tests (Phase 2.4B Step 9D)
 # =============================================================================
 
-def test_content_optimizer_resolves_agent_router_when_enabled():
+def test_content_optimizer_resolves_agent_router_when_enabled(monkeypatch):
     """
     TEST 1 — AGENT_ROUTER_ENABLED=true with no explicit provider
     => provider property must resolve to AgentRouterLLMProvider.
     """
     from app.services.ai.provider import AgentRouterLLMProvider
 
+    # Enabled routing still requires server credentials; never bypass that guard.
+    monkeypatch.setattr(settings, "AGENT_ROUTER_API_KEY", "test-only-agent-router-key")
     # Temporarily override AGENT_ROUTER_ENABLED on settings object
     original = settings.AGENT_ROUTER_ENABLED
     try:

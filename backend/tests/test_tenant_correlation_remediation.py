@@ -456,6 +456,9 @@ async def test_uncorrelated_delayed_registration_retry():
     evt["processing_status"] = "queued"
     evt["claimed_by"] = worker_id
     supabase_service._in_memory_delivery_failure_events[evt_id] = dict(evt)
+    # Use the actual claim transition to establish a valid fresh lease.
+    claimed = repository.claim_pending_delivery_failure_events(worker_id=worker_id, limit=10)
+    evt = next(row for row in claimed if row["id"] == evt_id)
     processed_2 = await process_delivery_failure_event(evt, worker_id)
     assert processed_2 is True
 

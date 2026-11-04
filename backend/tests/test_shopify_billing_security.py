@@ -233,6 +233,11 @@ async def test_client_cannot_select_enterprise_tier(seeded_merchant):
             "id": "gid://shopify/AppSubscription/554433",
             "status": "ACTIVE",
             "name": "InboundCheck Growth Plan",
+            "lineItems": [{"plan": {"pricingDetails": {
+                "__typename": "AppRecurringPricing",
+                "interval": "EVERY_30_DAYS",
+                "price": {"amount": "29.00", "currencyCode": "USD"},
+            }}}],
         }
     ):
         transport = ASGITransport(app=app)
@@ -289,6 +294,11 @@ async def test_successful_verified_billing_activates_correct_plan(seeded_merchan
             "id": "gid://shopify/AppSubscription/778899",
             "status": "ACTIVE",
             "name": "InboundCheck Agency Plan",
+            "lineItems": [{"plan": {"pricingDetails": {
+                "__typename": "AppRecurringPricing",
+                "interval": "EVERY_30_DAYS",
+                "price": {"amount": "79.00", "currencyCode": "USD"},
+            }}}],
         }
     ):
         transport = ASGITransport(app=app)
@@ -320,6 +330,11 @@ async def test_legacy_shopify_enterprise_subscription_resolves_to_agency(seeded_
             "id": "gid://shopify/AppSubscription/778890",
             "status": "ACTIVE",
             "name": "InboundCheck Enterprise Plan",
+            "lineItems": [{"plan": {"pricingDetails": {
+                "__typename": "AppRecurringPricing",
+                "interval": "EVERY_30_DAYS",
+                "price": {"amount": "79.00", "currencyCode": "USD"},
+            }}}],
         }
     ):
         transport = ASGITransport(app=app)

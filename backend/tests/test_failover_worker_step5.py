@@ -156,8 +156,15 @@ async def test_telegram_incident_dispatch_lifecycle_and_zero_pii():
         event_type="bounce",
         user_id=user_id,
         event_payload={"reason": "550 5.1.1 Recipient mailbox not found", "order_id": order_id},
-        processing_status="queued"
+        processing_status="received"
     )
+
+    # Persisting an event does not grant a lease: use the real atomic claim.
+    claimed = repository.claim_pending_delivery_failure_events(worker_id=worker_id, limit=500)
+    evt = next(row for row in claimed if row["id"] == evt["id"])
+    assert evt["processing_status"] == "queued"
+    assert evt["claimed_by"] == worker_id
+    assert datetime.fromisoformat(evt["lease_until"].replace("Z", "+00:00")) > datetime.now(timezone.utc)
 
     telegram_alert_service.update_config(
         user_id,

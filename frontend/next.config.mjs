@@ -1,11 +1,36 @@
+import { fileURLToPath } from "node:url";
+// Public build configuration can add exact connection origins, never CSP syntax.
+export function getConfiguredConnectSources(env = process.env) {
+  const sources = [];
+  for (const key of ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_SUPABASE_URL"]) {
+    if (!env[key]) continue;
+    try {
+      const url = new URL(env[key]);
+      const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+      if (url.username || url.password) continue;
+      if (!/^[a-z0-9.\[\]:-]+$/i.test(url.hostname)) continue;
+      if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) continue;
+      sources.push(url.origin);
+      if (key === "NEXT_PUBLIC_SUPABASE_URL") {
+        sources.push((url.protocol === "https:" ? "wss://" : "ws://") + url.host);
+      }
+    } catch {
+      // Invalid public configuration must never weaken the policy.
+    }
+  }
+  return [...new Set(sources)];
+}
+
+// Static App Router pages require inline hydration scripts. See SECURITY.md.
+const isDevelopment = process.env.NODE_ENV === "development";
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://images.unsplash.com https://avatars.githubusercontent.com",
   "font-src 'self' data:",
   "media-src 'self' https://cdn.sceneai.art data: blob:",
-  "connect-src 'self' http://localhost:8000 https://api.inboundcheck.com https://inboundcheck-production.up.railway.app https://*.supabase.co wss://*.supabase.co",
+  ["connect-src 'self' https://api.inboundcheck.com https://inboundcheck-production.up.railway.app", ...(isDevelopment ? ["http://localhost:8000"] : []), ...getConfiguredConnectSources()].join(" "),
   "frame-src 'self' https://accounts.google.com",
   "form-action 'self' https://accounts.google.com",
   "base-uri 'self'",
@@ -23,6 +48,9 @@ const nextConfig = {
   },
   transpilePackages: ["@designcodeio/threeui", "three"],
   experimental: {
+    cpus: 1, // Bound build workers on local machines and CI.
+    webpackBuildWorker: false, // Compile in-process in restricted local/CI environments.
+    outputFileTracingRoot: fileURLToPath(new URL("..", import.meta.url)),
     optimizePackageImports: ["lucide-react"],
   },
   async redirects() {

@@ -25,10 +25,12 @@ from app.api.v1 import api_v1_router
 from app.api.v1.failover_webhooks import router as failover_webhooks_router
 from app.services.scheduler.background_auditor import background_auditor
 from app.core.env_guard import validate_runtime_environment
+from app.core.trusted_hosts import get_allowed_hosts
+from app.core.webhook_body_budget import WebhookBodyBudgetMiddleware
 
 logger = logging.getLogger("AppServer")
 
-is_production = settings.ENVIRONMENT.lower() in ["production", "prod"]
+is_production = (settings.ENVIRONMENT or "").strip().lower() in ["production", "prod"]
 
 
 @asynccontextmanager
@@ -150,10 +152,10 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
         return response
 
-# 1. Trusted Host Middleware (Railway, localhost, and all subdomains)
+# 1. Exact trusted API hosts; never trust every tenant on a hosting domain.
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*.up.railway.app", "localhost", "127.0.0.1", "*"]
+    allowed_hosts=get_allowed_hosts(settings),
 )
 
 # 2. Rate Limiting Middleware (Sliding Window Per Client IP with Memory Eviction)
@@ -210,6 +212,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added last so disconnect listeners cannot drain rejected chunked uploads.
+app.add_middleware(WebhookBodyBudgetMiddleware, api_prefix=settings.API_V1_STR)
 
 # 3. Global Exception Handlers
 @app.exception_handler(StarletteHTTPException)

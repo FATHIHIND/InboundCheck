@@ -97,7 +97,7 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
     from app.core.config import settings
 
     issues: List[str] = []
-    is_prod = settings.ENVIRONMENT.lower() in ["production", "prod"]
+    is_prod = (settings.ENVIRONMENT or "").strip().lower() in ["production", "prod"]
 
     # 1. Supabase Backend Persistence Checks
     url_valid, url_issues, _ = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
@@ -119,7 +119,7 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
         elif stripe_key.startswith("sk_test_"):
             logger.info("💳 [STRIPE_STARTUP] Stripe Billing Engine: LIVE_TEST_MODE (Stripe Test Suite Active)")
         else:
-            logger.warning(f"💳 [STRIPE_STARTUP] Stripe Billing Engine: UNKNOWN_KEY_PREFIX ({stripe_key[:7]}...)")
+            logger.warning("[STRIPE_STARTUP] Stripe Billing Engine: UNKNOWN_KEY_PREFIX (value redacted)")
     else:
         logger.warning("💳 [STRIPE_STARTUP] Stripe Billing Engine: OFFLINE_FALLBACK (No Stripe Secret Key Detected - Simulation Active)")
 
@@ -167,7 +167,7 @@ def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
     from app.core.config import settings
 
     issues: List[str] = []
-    env_clean = (settings.ENVIRONMENT or "").lower()
+    env_clean = (settings.ENVIRONMENT or "").strip().lower()
     is_prod = env_clean in ["production", "prod"]
     is_staging = env_clean == "staging"
     is_enforced = is_prod or is_staging

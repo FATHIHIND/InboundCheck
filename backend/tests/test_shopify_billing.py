@@ -222,7 +222,14 @@ async def test_shopify_billing_callback_activates_subscription():
         shopify_billing_service,
         "verify_and_activate_subscription",
         new_callable=AsyncMock,
-        return_value={"status": "ACTIVE"}
+        return_value={
+            "status": "ACTIVE",
+            "lineItems": [{"plan": {"pricingDetails": {
+                "__typename": "AppRecurringPricing",
+                "interval": "EVERY_30_DAYS",
+                "price": {"amount": "79.00", "currencyCode": "USD"},
+            }}}],
+        }
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as ac:

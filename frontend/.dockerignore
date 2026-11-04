@@ -9,3 +9,13 @@ yarn-error.log*
 .DS_Store
 *.pem
 tsconfig.tsbuildinfo
+
+# Never bake local environment files into an image (including nested files).
+.env
+.env.*
+**/.env
+**/.env.*
+
+.phase5-verification
+
+**/.phase5-verification

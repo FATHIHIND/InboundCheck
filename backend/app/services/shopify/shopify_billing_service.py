@@ -9,6 +9,7 @@ and charge activation verification for Shopify App Store compliance.
 import httpx
 import logging
 from typing import Dict, Any, Optional
+from decimal import Decimal, InvalidOperation
 from app.core.config import settings
 
 logger = logging.getLogger("ShopifyBillingService")
@@ -20,6 +21,9 @@ SHOPIFY_PLAN_PRICING = {
     "agency": 79.0,
 }
 
+SHOPIFY_BILLING_CURRENCY = "USD"
+SHOPIFY_BILLING_INTERVAL = "EVERY_30_DAYS"
+
 
 class ShopifyBillingService:
     """
@@ -28,6 +32,42 @@ class ShopifyBillingService:
 
     def __init__(self, api_version: str = "2024-04"):
         self.api_version = api_version
+
+    @staticmethod
+    def resolve_subscription_tier(subscription: Dict[str, Any]) -> str:
+        """Bind entitlements to Shopify recurring pricing, never labels or callback input.
+
+        Only the single recurring line item emitted by our checkout is supported.
+        Unknown, incomplete, usage-based or ambiguous pricing fails closed.
+        """
+        line_items = subscription.get("lineItems")
+        if not isinstance(line_items, list) or len(line_items) != 1:
+            raise ValueError("Unsupported Shopify subscription line items")
+        item = line_items[0]
+        plan = item.get("plan") if isinstance(item, dict) else None
+        details = plan.get("pricingDetails") if isinstance(plan, dict) else None
+        if not isinstance(details, dict) or details.get("__typename") != "AppRecurringPricing":
+            raise ValueError("Missing Shopify recurring pricing")
+        price = details.get("price")
+        if (
+            details.get("interval") != SHOPIFY_BILLING_INTERVAL
+            or not isinstance(price, dict)
+            or price.get("currencyCode") != SHOPIFY_BILLING_CURRENCY
+        ):
+            raise ValueError("Unsupported Shopify subscription currency or interval")
+        try:
+            amount = Decimal(str(price.get("amount")))
+        except (InvalidOperation, ValueError, TypeError):
+            raise ValueError("Invalid Shopify recurring amount") from None
+        if not amount.is_finite() or amount <= 0:
+            raise ValueError("Invalid Shopify recurring amount")
+        matches = [
+            tier for tier, configured_amount in SHOPIFY_PLAN_PRICING.items()
+            if amount == Decimal(str(configured_amount))
+        ]
+        if len(matches) != 1:
+            raise ValueError("Unrecognized Shopify recurring price")
+        return matches[0]
 
     async def create_shopify_recurring_charge(
         self,
@@ -90,9 +130,9 @@ class ShopifyBillingService:
                         "appRecurringPricingDetails": {
                             "price": {
                                 "amount": float(final_price),
-                                "currencyCode": "USD"
+                                "currencyCode": SHOPIFY_BILLING_CURRENCY
                             },
-                            "interval": "EVERY_30_DAYS"
+                            "interval": SHOPIFY_BILLING_INTERVAL
                         }
                     }
                 }
@@ -149,7 +189,7 @@ class ShopifyBillingService:
     ) -> Optional[Dict[str, Any]]:
         """
         Query AppSubscription node details via GraphQL node(id: $id).
-        Returns the node dictionary {id, status, name, currentPeriodEnd} or None on error / not found.
+        Returns subscription identity, lifecycle and recurring pricing, or None on error / not found.
         Does not enforce ACTIVE status, allowing full lifecycle status inspection (CANCELLED, EXPIRED, etc.).
         """
         gid = charge_id if str(charge_id).startswith("gid://") else f"gid://shopify/AppSubscription/{charge_id}"
@@ -161,6 +201,17 @@ class ShopifyBillingService:
               status
               name
               currentPeriodEnd
+              lineItems {
+                plan {
+                  pricingDetails {
+                    __typename
+                    ... on AppRecurringPricing {
+                      interval
+                      price { amount currencyCode }
+                    }
+                  }
+                }
+              }
             }
           }
         }

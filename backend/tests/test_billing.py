@@ -29,6 +29,7 @@ from app.core.tier_guards import (
     is_trial_expired,
 )
 from tests.conftest import auth_headers
+from tests.stripe_event_fixtures import bind_stripe_customer, complete_stripe_event
 
 
 @pytest.mark.asyncio
@@ -374,8 +375,10 @@ async def test_webhook_lifecycle_ingestion():
     user_id = "webhook-user-42"
     now_ts = int(time.time())
 
+    bind_stripe_customer(supabase_service, user_id, "cus_stripe_12345")
+
     # 1. checkout.session.completed
-    checkout_event = {
+    checkout_event = complete_stripe_event({
         "id": f"evt_checkout_{now_ts}",
         "type": "checkout.session.completed",
         "data": {
@@ -389,7 +392,7 @@ async def test_webhook_lifecycle_ingestion():
                 }
             }
         }
-    }
+    }, tier='growth')
 
     raw_bytes = json.dumps(checkout_event).encode("utf-8")
     sig_header = f"t={now_ts},v1=mock_signature"
@@ -422,17 +425,18 @@ async def test_webhook_lifecycle_ingestion():
         assert dup_res.json().get("status") == "already_processed"
 
     # 3. customer.subscription.deleted -> Downgrade
-    cancel_event = {
+    cancel_event = complete_stripe_event({
         "id": f"evt_cancel_{now_ts}",
         "type": "customer.subscription.deleted",
         "data": {
             "object": {
+                "id": "sub_stripe_67890",
                 "customer": "cus_stripe_12345",
                 "status": "canceled",
                 "metadata": {"user_id": user_id}
             }
         }
-    }
+    })
     cancel_bytes = json.dumps(cancel_event).encode("utf-8")
     cancel_sig = f"t={now_ts},v1=mock_sig_cancel"
 

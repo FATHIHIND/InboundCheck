@@ -7,7 +7,7 @@ Enforces fail-closed database reliability, credential envelope encryption, and m
 
 from fastapi import APIRouter, HTTPException, Depends, Header, status
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
+from typing import Annotated, Optional, Dict, Any, List
 import logging
 
 from app.core.security import get_current_user_id
@@ -111,7 +111,7 @@ async def save_failover_config(
 async def trigger_failover_dispatch(
     payload: TriggerTelegramAlertRequest,
     user_id: str = Depends(get_current_user_id),
-    idempotency_header: Optional[str] = Header(None, alias="Idempotency-Key"),
+    idempotency_header: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ):
     """
     Durable Outbox Incident Alert Dispatch:

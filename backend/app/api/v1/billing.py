@@ -13,9 +13,10 @@ import json
 import logging
 
 from app.core.config import settings
+from app.core.request_body import read_body_with_limit
 from app.core.security import get_current_user_id
 from app.services.billing.stripe_service import stripe_service, PLAN_PRICING, TIER_LIMITS
-from app.services.supabase_client import supabase_service
+from app.services.supabase_client import supabase_service, DatabaseUnavailableError
 from app.core.tier_guards import parse_utc_datetime, is_trial_expired
 
 logger = logging.getLogger("BillingRoutes")
@@ -312,17 +313,7 @@ async def stripe_webhook_handler(request: Request):
     Process incoming Stripe webhooks (checkout.session.completed, customer.subscription.updated, customer.subscription.deleted).
     Enforces payload size cap (1MB), timestamp tolerance (±300s), and idempotency.
     """
-    content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > 1024 * 1024:
-                raise HTTPException(status_code=413, detail="Payload exceeds maximum limit of 1MB")
-        except ValueError:
-            pass
-
-    payload_bytes = await request.body()
-    if len(payload_bytes) > 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Payload exceeds maximum limit of 1MB")
+    payload_bytes = await read_body_with_limit(request)
 
     sig_header = request.headers.get("Stripe-Signature", "")
     if not stripe_service.verify_webhook_signature(payload_bytes, sig_header):
@@ -350,6 +341,9 @@ async def stripe_webhook_handler(request: Request):
         event = json.loads(payload_bytes.decode("utf-8"))
         result = stripe_service.process_webhook_event(event)
         return result
+    except DatabaseUnavailableError:
+        # A non-2xx response makes Stripe retry an uncommitted/ambiguous event.
+        raise HTTPException(status_code=503, detail="Billing reconciliation temporarily unavailable")
     except HTTPException:
         raise
     except Exception as e:

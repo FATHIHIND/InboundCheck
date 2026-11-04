@@ -15,6 +15,7 @@ import json
 
 from app.core.security import get_current_user_id
 from app.core.config import settings
+from app.core.request_body import read_body_with_limit
 from app.core.tier_guards import verify_active_subscription_or_trial, TIER_DOMAIN_LIMITS
 from app.services.shopify.shopify_service import shopify_service
 from app.services.supabase_client import supabase_service, QuotaExceededError
@@ -353,29 +354,19 @@ async def shopify_billing_callback(
             detail="Shopify subscription is not active or was declined"
         )
 
-    # Gate 5: Plan Tier Binding (derive verified tier from subscription node name)
-    sub_name = sub_node.get("name", "")
-    verified_tier = None
-    for candidate in ["agency", "growth", "starter"]:
-        if candidate in sub_name.lower():
-            verified_tier = candidate
-            break
-
-    # Legacy transition: if subscription node name embeds "enterprise", map safely to "agency"
-    if not verified_tier and "enterprise" in sub_name.lower():
-        logger.info(f"Legacy Shopify Enterprise subscription '{sub_name}' mapped safely to 'agency'.")
-        verified_tier = "agency"
-
-    if not verified_tier:
-        # Fallback to sanitized requested tier if node name does not embed tier
-        clean_requested = (plan_tier or "growth").lower().strip()
-        if clean_requested in ["starter", "growth", "agency"]:
-            verified_tier = clean_requested
-        elif clean_requested == "enterprise":
-            logger.info("Legacy requested plan_tier 'enterprise' in callback mapped safely to 'agency'.")
-            verified_tier = "agency"
-        else:
-            verified_tier = "growth"
+    # Gate 5: Bind the tier exclusively to authoritative Shopify recurring pricing.
+    # plan_tier remains accepted for callback URL compatibility, but grants nothing.
+    try:
+        verified_tier = shopify_billing_service.resolve_subscription_tier(sub_node)
+    except ValueError:
+        logger.warning(
+            "Shopify billing callback rejected: unsupported recurring pricing",
+            extra={"shop": clean_shop, "charge_id": charge_id, "user_id": resolved_user_id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Shopify billing verification failed: unsupported subscription pricing"
+        )
 
     # Gate 6: Persist subscription activation in Supabase profile
     supabase_service.update_user_profile(resolved_user_id, {
@@ -458,17 +449,7 @@ async def shopify_orders_webhook(request: Request):
     Ingest Shopify Order Created Webhook with HMAC-SHA256 signature verification,
     timestamp tolerance (±300s), idempotency deduplication, and payload limits.
     """
-    content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > 1024 * 1024:
-                raise HTTPException(status_code=413, detail="Payload exceeds maximum limit of 1MB")
-        except ValueError:
-            pass
-
-    body_bytes = await request.body()
-    if len(body_bytes) > 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Payload exceeds maximum limit of 1MB")
+    body_bytes = await read_body_with_limit(request)
 
     triggered_at = request.headers.get("X-Shopify-Triggered-At")
     if triggered_at and not shopify_service.verify_webhook_timestamp(triggered_at):
@@ -521,7 +502,7 @@ async def shopify_customer_data_request_webhook(
     Triggered when a merchant or customer requests their stored personal data.
     Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
     """
-    body_bytes = await request.body()
+    body_bytes = await read_body_with_limit(request)
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
         raise HTTPException(
@@ -563,7 +544,7 @@ async def shopify_customer_redact_webhook(
     Triggered when a customer requests erasure of their personal information.
     Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
     """
-    body_bytes = await request.body()
+    body_bytes = await read_body_with_limit(request)
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
         raise HTTPException(
@@ -606,7 +587,7 @@ async def shopify_shop_redact_webhook(
     Triggered 48 hours after a merchant uninstalls the app.
     Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
     """
-    body_bytes = await request.body()
+    body_bytes = await read_body_with_limit(request)
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
         raise HTTPException(
@@ -656,7 +637,7 @@ async def shopify_app_uninstalled_webhook(request: Request):
         except ValueError:
             pass
 
-    body_bytes = await request.body()
+    body_bytes = await read_body_with_limit(request)
     if len(body_bytes) > 1024 * 1024:
         raise HTTPException(status_code=413, detail="Payload exceeds maximum limit of 1MB")
 
@@ -748,7 +729,7 @@ async def shopify_app_subscriptions_update_webhook(request: Request):
         except ValueError:
             pass
 
-    body_bytes = await request.body()
+    body_bytes = await read_body_with_limit(request)
     if len(body_bytes) > 1024 * 1024:
         raise HTTPException(status_code=413, detail="Payload exceeds maximum limit of 1MB")
 

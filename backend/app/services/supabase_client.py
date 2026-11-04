@@ -3620,7 +3620,7 @@ class SupabaseService:
                                 is_ready = True
                         except Exception:
                             is_ready = True
-                elif st == "dispatching" and lease_until:
+                elif st == "dispatching":
                     try:
                         dt = datetime.fromisoformat(str(lease_until).replace("Z", "+00:00"))
                         if dt.tzinfo is None:
@@ -3630,14 +3630,23 @@ class SupabaseService:
                     except Exception:
                         is_ready = True
 
+                if is_ready and item.get("dispatch_started_at"):
+                    # Acceptance is unknown after intent. Never reclaim and resend.
+                    item["status"] = "dead_letter"
+                    item["last_error"] = "AMBIGUOUS_EXTERNAL_DISPATCH: lease expired after send intent; manual reconciliation required"
+                    item["processed_at"] = now_iso
+                    item["claimed_by"] = None
+                    item["lease_until"] = None
+                    continue
                 if is_ready:
                     candidates.append(item)
 
             candidates.sort(key=lambda x: str(x.get("created_at", "")))
             lease_expiry = datetime.fromtimestamp(now.timestamp() + lease_seconds, tz=timezone.utc).isoformat()
 
-            for item in candidates[:limit]:
+            for item in candidates[:max(0, int(limit))]:
                 item["status"] = "dispatching"
+                item["dispatch_started_at"] = None
                 item["attempt_count"] = int(item.get("attempt_count", 0)) + 1
                 item["claimed_by"] = str(worker_id)
                 item["claimed_at"] = now_iso
@@ -3645,6 +3654,43 @@ class SupabaseService:
                 claimed.append(dict(item))
 
             return claimed
+
+    def record_notification_outbox_dispatch_intent(self, outbox_id: str, worker_id: str) -> bool:
+        """Fence external sends using an owned live lease and a one-way intent.
+
+        The matching migration is required before this path can send in production.
+        A missing RPC fails closed, never reverting to an in-memory acknowledgement.
+        """
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "record_notification_outbox_dispatch_intent",
+                    {"p_outbox_id": str(outbox_id), "p_worker_id": str(worker_id)},
+                ).execute()
+                return res.data is True
+            except Exception as exc:
+                raise DatabaseUnavailableError("Unable to persist notification dispatch intent") from exc
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database unavailable for notification dispatch intent")
+        with self._in_memory_lock:
+            for item in self._in_memory_notification_outbox.values():
+                if str(item.get("id")) != str(outbox_id):
+                    continue
+                if (item.get("status") != "dispatching"
+                        or str(item.get("claimed_by")) != str(worker_id)
+                        or item.get("dispatch_started_at")):
+                    return False
+                try:
+                    lease = datetime.fromisoformat(str(item.get("lease_until")).replace("Z", "+00:00"))
+                    if lease.tzinfo is None:
+                        lease = lease.replace(tzinfo=timezone.utc)
+                    if lease <= datetime.now(timezone.utc):
+                        return False
+                except (ValueError, TypeError):
+                    return False
+                item["dispatch_started_at"] = datetime.now(timezone.utc).isoformat()
+                return True
+        return False
 
     def complete_notification_outbox(
         self,
@@ -3682,10 +3728,19 @@ class SupabaseService:
                 if not self._allow_in_memory_fallback():
                     raise DatabaseUnavailableError(f"Database error completing outbox item: {e}") from e
 
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database unavailable for outbox transition")
         with self._in_memory_lock:
             for v in self._in_memory_notification_outbox.values():
                 if str(v.get("id")) == str(outbox_id) and str(v.get("claimed_by")) == str(worker_id):
-                    if v.get("status") == "dispatching":
+                    try:
+                        lease = datetime.fromisoformat(str(v.get("lease_until")).replace("Z", "+00:00"))
+                        if lease.tzinfo is None:
+                            lease = lease.replace(tzinfo=timezone.utc)
+                        active = lease > now
+                    except (TypeError, ValueError):
+                        active = False
+                    if v.get("status") == "dispatching" and active:
                         v["status"] = "processed"
                         v["processed_at"] = now_iso
                         v["claimed_by"] = None
@@ -3741,13 +3796,25 @@ class SupabaseService:
                 if not self._allow_in_memory_fallback():
                     raise DatabaseUnavailableError(f"Database error in fail_or_retry_notification_outbox: {e}") from e
 
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database unavailable for outbox transition")
         with self._in_memory_lock:
             for v in self._in_memory_notification_outbox.values():
                 if str(v.get("id")) == str(outbox_id) and str(v.get("claimed_by")) == str(worker_id):
+                    if v.get("status") != "dispatching":
+                        return None
+                    try:
+                        lease = datetime.fromisoformat(str(v.get("lease_until")).replace("Z", "+00:00"))
+                        if lease.tzinfo is None:
+                            lease = lease.replace(tzinfo=timezone.utc)
+                        if lease <= now:
+                            return None
+                    except (TypeError, ValueError):
+                        return None
                     attempts = int(v.get("attempt_count") or 1)
-                    v_max = int(v.get("max_attempts") or max_attempts)
+                    v_max = min(int(v.get("max_attempts") or max_attempts), max(1, int(max_attempts)))
 
-                    if (not retryable) or (attempts >= v_max):
+                    if (not retryable) or (attempts >= v_max) or str(error).startswith("AMBIGUOUS_EXTERNAL_DISPATCH:"):
                         v["status"] = "dead_letter"
                         v["processed_at"] = now.isoformat()
                         v["last_error"] = str(error)
@@ -3761,6 +3828,7 @@ class SupabaseService:
                         }
                     else:
                         v["status"] = "queued"
+                        v["dispatch_started_at"] = None
                         v["next_attempt_at"] = next_iso
                         v["last_error"] = str(error)
                         v["claimed_by"] = None

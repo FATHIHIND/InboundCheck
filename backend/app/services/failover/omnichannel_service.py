@@ -60,6 +60,9 @@ class TelegramDispatchResult(BaseModel):
     target_chat_id: Optional[str] = None
     error_message: Optional[str] = None
     simulated: bool = False
+    retryable: bool = False
+    retry_after: Optional[int] = None
+    uncertain: bool = False
 
     # Dict-like compatibility for callers expecting dict or .get("status")
     def __getitem__(self, item: str) -> Any:
@@ -222,12 +225,22 @@ class TelegramAlertService:
         existing = {}
         try:
             existing = self.get_config(user_id) or {}
-        except Exception:
+        except DatabaseUnavailableError:
+            raise  # Never acknowledge or partially save from an unverified cache.
+        except Exception as exc:
+            if not supabase_service._allow_in_memory_fallback():
+                raise DatabaseUnavailableError("Unable to read tenant notification configuration") from exc
             existing = _mock_failover_configs.get(user_id, {})
 
         data = dict(payload)
         new_token = data.get("telegram_bot_token")
-        if new_token is not None and str(new_token).strip() != "" and not str(new_token).strip().startswith("•"):
+        if (new_token and str(new_token).startswith("v1:")
+                and new_token == existing.get("telegram_bot_token")):
+            # Settings persists first, then synchronizes this exact tenant's
+            # authoritative ciphertext. Do not encrypt that envelope a second time.
+            # Never accept an arbitrary/other-tenant ciphertext by prefix alone.
+            data["telegram_bot_token"] = existing["telegram_bot_token"]
+        elif new_token is not None and str(new_token).strip() != "" and not str(new_token).strip().startswith("•"):
             # Plaintext token provided - encrypt before persisting
             data["telegram_bot_token"] = encrypt_credential(str(new_token).strip())
         else:
@@ -237,29 +250,31 @@ class TelegramAlertService:
         data["primary_channel"] = "telegram"
         data["provider"] = "telegram"
 
-        # Persist to database if connected or required in non-development environments
-        if not supabase_service._allow_in_memory_fallback() or supabase_service.is_connected:
-            try:
-                # Update failover config
-                supabase_service.save_failover_config(user_id, {
-                    "is_enabled": data.get("is_enabled", True),
-                    "primary_channel": "telegram",
-                    "provider": "telegram_bot_api",
-                    "trigger_events": data.get("trigger_events", ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"]),
-                })
-                # If bot token or chat ID is present, update alert_configs
-                if data.get("telegram_bot_token") or data.get("telegram_chat_id"):
-                    existing_alert = supabase_service.get_alert_config(user_id) or {}
-                    alert_update = dict(existing_alert)
-                    alert_update["telegram_bot_token"] = data.get("telegram_bot_token")
-                    alert_update["telegram_chat_id"] = data.get("telegram_chat_id")
-                    supabase_service.save_alert_config(user_id, alert_update)
-            except DatabaseUnavailableError:
-                raise
-            except Exception as e:
-                logger.error(f"Error persisting failover config for user {user_id}: {e}")
-                if not supabase_service._allow_in_memory_fallback():
-                    raise DatabaseUnavailableError(f"Database error saving failover config: {e}")
+        # Use the same authoritative repository in every mode. Its save methods
+        # enforce durable DB requirements in staging/production and provide the
+        # real in-memory repository in local tests; a private cache alone must not
+        # acknowledge a save that get_config would subsequently overwrite.
+        try:
+            # Update failover config
+            supabase_service.save_failover_config(user_id, {
+                "is_enabled": data.get("is_enabled", True),
+                "primary_channel": "telegram",
+                "provider": "telegram_bot_api",
+                "trigger_events": data.get("trigger_events", ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"]),
+            })
+            # If bot token or chat ID is present, update alert_configs
+            if data.get("telegram_bot_token") or data.get("telegram_chat_id"):
+                existing_alert = supabase_service.get_alert_config(user_id) or {}
+                alert_update = dict(existing_alert)
+                alert_update["telegram_bot_token"] = data.get("telegram_bot_token")
+                alert_update["telegram_chat_id"] = data.get("telegram_chat_id")
+                supabase_service.save_alert_config(user_id, alert_update)
+        except DatabaseUnavailableError:
+            raise
+        except Exception as e:
+            logger.error(f"Error persisting failover config for user {user_id}: {e}")
+            if not supabase_service._allow_in_memory_fallback():
+                raise DatabaseUnavailableError(f"Database error saving failover config: {e}")
 
         if user_id not in _mock_failover_configs:
             _mock_failover_configs[user_id] = {}
@@ -340,6 +355,13 @@ class TelegramAlertService:
                         resp_json = res.json()
                     except Exception:
                         resp_json = {}
+                    if isinstance(resp_json, dict) and resp_json.get("ok") is False:
+                        return {"success": False, "simulated": False, "retryable": False,
+                                "error": sanitize_log_message(str(resp_json.get("description") or "Telegram rejected message"), clean_token)}
+                    result = resp_json.get("result") if isinstance(resp_json, dict) else None
+                    if not isinstance(result, dict) or result.get("message_id") is None:
+                        return {"success": False, "simulated": False, "retryable": False,
+                                "uncertain": True, "error": "AMBIGUOUS_EXTERNAL_DISPATCH: invalid Telegram acknowledgement"}
                     return {"success": True, "simulated": False, "data": resp_json}
 
                 # Handle HTTP 429 Too Many Requests
@@ -392,28 +414,17 @@ class TelegramAlertService:
                             "retryable": True,
                         }
 
-                # Handle Transient Server Errors (500, 502, 503, 504)
-                if res.status_code in TRANSIENT_HTTP_STATUS_CODES:
-                    last_status_code = res.status_code
+                # A server/gateway error does not prove sendMessage was rejected.
+                # Telegram has no idempotency key: never retry a possible acceptance.
+                if res.status_code >= 500 or res.status_code == 408:
                     safe_text = sanitize_log_message(res.text[:300], clean_token)
-                    last_error = f"Telegram server error ({res.status_code}): {safe_text}"
-                    logger.warning(
-                        f"Telegram API transient error {res.status_code} (attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS}): {safe_text}"
-                    )
-                    if attempt < MAX_TELEGRAM_ATTEMPTS:
-                        exp_delay = min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)))
-                        jitter = random.uniform(0.0, 0.25 * exp_delay)
-                        backoff_delay = min(MAX_BACKOFF_SECONDS, exp_delay + jitter)
-                        if (total_slept + backoff_delay) <= MAX_TOTAL_RETRY_BUDGET_SECONDS:
-                            total_slept += backoff_delay
-                            await asyncio.sleep(backoff_delay)
-                            continue
                     return {
                         "success": False,
                         "simulated": False,
                         "status_code": res.status_code,
-                        "error": last_error,
-                        "retryable": True,
+                        "error": f"AMBIGUOUS_EXTERNAL_DISPATCH: Telegram server error ({res.status_code}): {safe_text}",
+                        "retryable": False,
+                        "uncertain": True,
                     }
 
                 # Permanent Client Errors (400, 401, 403, 404, etc.) - DO NOT RETRY
@@ -432,23 +443,15 @@ class TelegramAlertService:
                 raise
             except (httpx.TimeoutException, httpx.NetworkError) as net_err:
                 safe_net_err = sanitize_log_message(str(net_err), clean_token)
-                last_error = f"Telegram network error ({type(net_err).__name__}): {safe_net_err}"
-                logger.warning(
-                    f"Telegram network failure on attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS}: {last_error}"
-                )
-                if attempt < MAX_TELEGRAM_ATTEMPTS:
-                    exp_delay = min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)))
-                    jitter = random.uniform(0.0, 0.25 * exp_delay)
-                    backoff_delay = min(MAX_BACKOFF_SECONDS, exp_delay + jitter)
-                    if (total_slept + backoff_delay) <= MAX_TOTAL_RETRY_BUDGET_SECONDS:
-                        total_slept += backoff_delay
-                        await asyncio.sleep(backoff_delay)
-                        continue
+                # Connect/pool failures precede sending. Read/write failures may
+                # occur after acceptance and MUST NOT be retried automatically.
+                safe_to_retry = isinstance(net_err, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout))
                 return {
                     "success": False,
                     "simulated": False,
-                    "error": last_error,
-                    "retryable": True,
+                    "error": f"Telegram network error ({type(net_err).__name__}): {safe_net_err}",
+                    "retryable": safe_to_retry,
+                    "uncertain": not safe_to_retry,
                 }
             except Exception as e:
                 safe_err = sanitize_log_message(str(e), clean_token)
@@ -458,6 +461,7 @@ class TelegramAlertService:
                     "simulated": False,
                     "error": safe_err,
                     "retryable": False,
+                    "uncertain": True,
                 }
 
         # If loop exhausts
@@ -702,6 +706,9 @@ class TelegramAlertService:
                 target_chat_id=chat_id,
                 error_message=send_res.get("error") or "Failed to deliver Telegram alert",
                 simulated=is_sim,
+                retryable=bool(send_res.get("retryable", False)),
+                retry_after=send_res.get("retry_after"),
+                uncertain=bool(send_res.get("uncertain", False)),
             )
 
 

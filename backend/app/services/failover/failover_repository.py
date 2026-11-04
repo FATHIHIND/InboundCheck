@@ -418,6 +418,9 @@ class FailoverRepository:
             lease_seconds=lease_seconds,
         )
 
+    def record_notification_outbox_dispatch_intent(self, outbox_id: str, worker_id: str) -> bool:
+        return self.supabase.record_notification_outbox_dispatch_intent(outbox_id, worker_id)
+
     def complete_notification_outbox(
         self,
         outbox_id: str,

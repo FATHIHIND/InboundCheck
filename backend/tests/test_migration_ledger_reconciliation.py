@@ -30,7 +30,10 @@ def test_scan_local_migrations_matches_canonical_sequence():
     migrations_dir = REPO_ROOT / "supabase" / "migrations"
     migrations = scan_local_migrations(migrations_dir)
     assert len(migrations) == len(CANONICAL_MIGRATIONS)
-    assert len(migrations) == 31
+    assert CANONICAL_MIGRATIONS[-2:] == (
+        ("20261104000001", "atomic_stripe_billing_events"),
+        ("20261104000003", "notification_outbox_dispatch_quarantine"),
+    )
     for idx, (m, (exp_v, exp_name)) in enumerate(zip(migrations, CANONICAL_MIGRATIONS)):
         assert m.version == exp_v
         assert m.name == exp_name
@@ -120,9 +123,9 @@ def test_plan_reconciliation_detects_rows_to_insert_and_legacy_to_remove():
     plan = plan_reconciliation(mock_rows)
     assert plan["initial_count"] == 3
     assert plan["legacy_rows_to_remove_count"] == 3
-    assert plan["target_insert_count"] == 31
-    assert len(plan["rows_to_insert"]) == 31
-    assert plan["projected_final_count"] == 31
+    assert plan["target_insert_count"] == len(CANONICAL_MIGRATIONS)
+    assert len(plan["rows_to_insert"]) == len(CANONICAL_MIGRATIONS)
+    assert plan["projected_final_count"] == len(CANONICAL_MIGRATIONS)
     assert plan["collisions_count"] == 0
 
 
@@ -155,13 +158,13 @@ def test_forward_sql_concurrency_and_fail_closed_properties():
 
     # 5. Postcondition assertions present
     assert "POSTCONDITION FAILED [Q-01]" in sql
-    assert "Expected exactly 31 rows" in sql
+    assert f"Expected exactly {len(CANONICAL_MIGRATIONS)} rows" in sql
     assert "POSTCONDITION FAILED [Q-02]" in sql
     assert "POSTCONDITION FAILED [Q-03]" in sql
     assert "POSTCONDITION FAILED [Q-04]" in sql
     assert "legacy rows still exist in schema_migrations" in sql
 
-    # 6. All 31 versions present in SQL with positive provenance
+    # 6. All canonical versions present in SQL with positive provenance
     for v, name in CANONICAL_MIGRATIONS:
         assert f"('{v}', '{name}', '{RECONCILIATION_PROVENANCE}')" in sql
     assert f"Provenance Marker: {RECONCILIATION_PROVENANCE}" in sql
@@ -182,7 +185,7 @@ def test_rollback_sql_properties():
 
     # 3. Preconditions and postconditions
     assert "ROLLBACK PRECONDITION FAILED [R-01]" in sql
-    assert "Expected exactly 31 rows in ledger" in sql
+    assert f"Expected exactly {len(CANONICAL_MIGRATIONS)} rows in ledger" in sql
     assert "ROLLBACK PRECONDITION FAILED [R-02]" in sql
     assert "ROLLBACK PRECONDITION FAILED [R-03]" in sql
     assert "ROLLBACK EXECUTION FAILED" in sql
@@ -235,8 +238,8 @@ def test_cli_dry_run_execution(tmp_path):
     ]
     res = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT))
     assert res.returncode == 0
-    assert "[+] Successfully verified 31 local migrations matching canonical sequence." in res.stdout
-    assert "Projected Final Count:      31 (Exact Universal Parity)" in res.stdout
+    assert f"[+] Successfully verified {len(CANONICAL_MIGRATIONS)} local migrations matching canonical sequence." in res.stdout
+    assert f"Projected Final Count:      {len(CANONICAL_MIGRATIONS)} (Exact Universal Parity)" in res.stdout
     assert "[+] Dry-run simulation complete. ZERO database writes executed." in res.stdout
     assert out_sql.exists()
     assert out_rb.exists()
@@ -247,7 +250,7 @@ def test_cli_dry_run_execution(tmp_path):
 
 
 def _setup_mock_canonical_rows():
-    """Helper to build 30 valid post-reconciliation canonical ledger rows."""
+    """Helper to build the valid post-reconciliation canonical ledger rows."""
     rows = []
     for v, n in CANONICAL_MIGRATIONS:
         rows.append({
@@ -274,7 +277,7 @@ def test_post_reconciliation_verification_fails_on_missing_canonical_pair():
     rows = [r for r in rows if r["version"] != "20261012000001"]
     is_valid, errors = verify_post_reconciliation_ledger(rows)
     assert not is_valid
-    assert any("Row count mismatch: expected exactly 31 rows" in e for e in errors)
+    assert any(f"Row count mismatch: expected exactly {len(CANONICAL_MIGRATIONS)} rows" in e for e in errors)
     assert any("Missing canonical migration: 20261012000001" in e for e in errors)
 
 
@@ -290,7 +293,7 @@ def test_post_reconciliation_verification_fails_on_incorrect_canonical_name():
 
 def test_post_reconciliation_verification_fails_on_unexpected_rogue_row():
     rows = _setup_mock_canonical_rows()
-    # Add an unexpected 32nd row
+    # Add an unexpected row outside the approved canonical manifest
     rows.append({
         "version": "20261101000001",
         "name": "unauthorized_migration",
@@ -301,7 +304,7 @@ def test_post_reconciliation_verification_fails_on_unexpected_rogue_row():
     })
     is_valid, errors = verify_post_reconciliation_ledger(rows)
     assert not is_valid
-    assert any("Row count mismatch: expected exactly 31 rows" in e for e in errors)
+    assert any(f"Row count mismatch: expected exactly {len(CANONICAL_MIGRATIONS)} rows" in e for e in errors)
     assert any("Unexpected rogue versions found in ledger: ['20261101000001']" in e for e in errors)
 
 
@@ -333,8 +336,8 @@ def test_post_reconciliation_verification_fails_on_invalid_provenance():
 
 def test_rollback_refuses_when_subsequent_migration_exists():
     sql = generate_defensive_rollback_sql()
-    # Check that precondition R-01 strictly enforces count = 31 and refuses if evolved
-    assert "Expected exactly 31 rows in ledger, found %" in sql
+    # Check that precondition R-01 enforces the canonical count and refuses if evolved
+    assert f"Expected exactly {len(CANONICAL_MIGRATIONS)} rows in ledger, found %" in sql
     assert "Rollback is refused because ledger state has evolved." in sql
 
 
@@ -349,7 +352,7 @@ def test_post_reconciliation_verification_sql_query_structure():
     assert "check_legacy_absence" in sql
     assert "check_rogue_rows" in sql
 
-    # Verify all 30 canonical migrations are referenced in SQL
+    # Verify all canonical migrations are referenced in SQL
     for v, name in CANONICAL_MIGRATIONS:
         assert f"('{v}', '{name}')" in sql
 

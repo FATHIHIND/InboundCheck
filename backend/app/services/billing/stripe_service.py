@@ -113,7 +113,6 @@ class StripeService:
     def __init__(self):
         self.secret_key = settings.STRIPE_SECRET_KEY
         self.webhook_secret = settings.STRIPE_WEBHOOK_SECRET
-        self._processed_events: Dict[str, float] = {}
 
     @property
     def prices(self) -> Dict[str, str]:
@@ -127,46 +126,6 @@ class StripeService:
             "agency": agency_price,
             "enterprise": agency_price,
         }
-
-    def is_event_processed(self, event_id: str) -> bool:
-        """Check if Stripe event has already been processed (DB table + memory cache)."""
-        if not event_id:
-            return False
-
-        if supabase_service.is_connected and supabase_service._client:
-            try:
-                res = (
-                    supabase_service._client.table("processed_webhook_events")
-                    .select("id")
-                    .eq("id", event_id)
-                    .execute()
-                )
-                if res.data and len(res.data) > 0:
-                    self._processed_events[event_id] = time.time()
-                    return True
-            except Exception as e:
-                logger.warning(f"Error querying processed_webhook_events: {e}")
-
-        now = time.time()
-        self._processed_events = {
-            eid: ts for eid, ts in self._processed_events.items() if now - ts < 86400
-        }
-        return event_id in self._processed_events
-
-    def mark_event_processed(self, event_id: str, event_type: str = "stripe_webhook"):
-        """Mark Stripe event as reconciled."""
-        if not event_id:
-            return
-
-        self._processed_events[event_id] = time.time()
-
-        if supabase_service.is_connected and supabase_service._client:
-            try:
-                supabase_service._client.table("processed_webhook_events").upsert(
-                    {"id": event_id, "event_type": event_type}
-                ).execute()
-            except Exception as e:
-                logger.warning(f"Failed to record event {event_id} in processed_webhook_events: {e}")
 
     def resolve_tier(self, price_or_tier: str) -> str:
         """
@@ -188,56 +147,76 @@ class StripeService:
             return "agency"
         return "growth"
 
+    def _offline_customer_mode(self) -> bool:
+        return is_test_bypass_allowed() and (
+            not self.secret_key or self.secret_key.startswith("mock_")
+        )
+
+    async def _verify_customer_ownership(self, user_id: str, customer_id: str) -> str:
+        """Stored mappings are not authority: require Stripe's immutable tenant metadata."""
+        if not self.secret_key or customer_id.startswith("cus_mock_"):
+            raise RuntimeError("A verified Stripe customer is required")
+        from urllib.parse import quote
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"https://api.stripe.com/v1/customers/{quote(customer_id, safe='')}",
+                headers={"Authorization": f"Bearer {self.secret_key}"},
+            )
+        if response.status_code != 200:
+            raise RuntimeError("Unable to verify Stripe customer ownership")
+        customer = response.json()
+        if (
+            customer.get("deleted")
+            or customer.get("id") != customer_id
+            or (customer.get("metadata") or {}).get("user_id") != user_id
+        ):
+            raise ValueError("Stripe customer does not belong to authenticated user")
+        return customer_id
+
+    def _persist_customer(self, user_id: str, customer_id: str) -> str:
+        # Never hide persistence/uniqueness failures behind a simulated customer.
+        profile = supabase_service.update_user_profile(
+            user_id, {"stripe_customer_id": customer_id}
+        )
+        if not profile or profile.get("stripe_customer_id") != customer_id:
+            raise RuntimeError("Stripe customer ownership could not be persisted")
+        return customer_id
+
     async def get_or_create_customer(self, user_id: str, email: Optional[str] = None) -> Optional[str]:
-        """
-        Create or retrieve Stripe Customer ID for the specified user.
-        Persists newly created customer IDs to public.profiles.
-        """
-        profile = supabase_service.get_user_profile(user_id)
-        if profile and profile.get("stripe_customer_id"):
-            return profile["stripe_customer_id"]
+        """Create by tenant idempotency key; never adopt a customer using email alone."""
+        profile = supabase_service.get_user_profile(user_id) or {}
+        existing = profile.get("stripe_customer_id")
+        if self._offline_customer_mode():
+            if existing and not existing.startswith("cus_mock_"):
+                raise RuntimeError("Cannot use a real Stripe customer in offline mode")
+            return existing or self._persist_customer(user_id, f"cus_mock_{user_id}")
+        if existing:
+            return await self._verify_customer_ownership(user_id, existing)
+        if not self.secret_key:
+            raise RuntimeError("Stripe customer creation is not configured")
 
-        user_email = email or (profile.get("email") if profile else f"{user_id}@brandshop.com")
-
-        if self.secret_key:
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    # Attempt lookup by metadata or email
-                    search_res = await client.get(
-                        "https://api.stripe.com/v1/customers",
-                        headers={"Authorization": f"Bearer {self.secret_key}"},
-                        params={"email": user_email, "limit": 1},
-                    )
-                    if search_res.status_code == 200:
-                        data = search_res.json().get("data", [])
-                        if data:
-                            customer_id = data[0].get("id")
-                            supabase_service.update_user_profile(user_id, {"stripe_customer_id": customer_id})
-                            return customer_id
-
-                    # Create new customer
-                    create_res = await client.post(
-                        "https://api.stripe.com/v1/customers",
-                        headers={"Authorization": f"Bearer {self.secret_key}"},
-                        data={
-                            "email": user_email,
-                            "metadata[user_id]": user_id,
-                            "description": f"InboundCheck Customer {user_id}",
-                        },
-                    )
-                    if create_res.status_code == 200:
-                        customer_id = create_res.json().get("id")
-                        supabase_service.update_user_profile(user_id, {"stripe_customer_id": customer_id})
-                        return customer_id
-                    else:
-                        logger.error(f"Stripe Customer API returned {create_res.status_code}: {create_res.text}")
-            except Exception as e:
-                logger.error(f"Stripe get_or_create_customer error: {e}")
-
-        # Local simulation fallback
-        mock_customer_id = f"cus_mock_{user_id[:8]}"
-        supabase_service.update_user_profile(user_id, {"stripe_customer_id": mock_customer_id})
-        return mock_customer_id
+        # Email is contact information only, not an ownership credential.
+        user_email = email or profile.get("email")
+        data = {"metadata[user_id]": user_id, "description": f"InboundCheck Customer {user_id}"}
+        if user_email:
+            data["email"] = user_email
+        tenant_key = hashlib.sha256(user_id.encode("utf-8")).hexdigest()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://api.stripe.com/v1/customers",
+                headers={
+                    "Authorization": f"Bearer {self.secret_key}",
+                    "Idempotency-Key": f"inboundcheck-customer-v1-{tenant_key}",
+                },
+                data=data,
+            )
+        if response.status_code != 200:
+            raise RuntimeError("Stripe customer creation failed")
+        customer = response.json()
+        customer_id = customer.get("id")
+        if not customer_id or (customer.get("metadata") or {}).get("user_id") != user_id:
+            raise RuntimeError("Stripe customer creation returned invalid ownership")
+        return self._persist_customer(user_id, customer_id)
 
     async def create_checkout_session(
         self,
@@ -389,6 +368,8 @@ class StripeService:
             raise ValueError(f"Unauthorized customer ID for authenticated user {user_id}")
 
         resolved_customer = owner_customer
+        if resolved_customer and not self._offline_customer_mode():
+            await self._verify_customer_ownership(user_id, resolved_customer)
 
         if self.secret_key and resolved_customer and not resolved_customer.startswith("cus_mock_"):
             try:
@@ -406,7 +387,9 @@ class StripeService:
                     else:
                         logger.error(f"Stripe Portal API returned {res.status_code}: {res.text}")
             except Exception as e:
-                logger.error(f"Stripe Portal error: {e}")
+                logger.error("Stripe Portal request failed")
+                raise RuntimeError("Stripe portal creation failed") from e
+            raise RuntimeError("Stripe portal creation failed")
 
         return {
             "portal_url": r_url,
@@ -429,6 +412,8 @@ class StripeService:
             raise ValueError(f"Unauthorized customer ID for authenticated user {user_id}")
 
         resolved_customer = owner_customer
+        if resolved_customer and not self._offline_customer_mode():
+            await self._verify_customer_ownership(user_id, resolved_customer)
 
         if self.secret_key and resolved_customer and not resolved_customer.startswith("cus_mock_"):
             try:
@@ -557,197 +542,13 @@ class StripeService:
             return False
 
     def process_webhook_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """Claim, update entitlements and complete in one database transaction.
+
+        Requires the reviewed atomic-webhook migration before this code is deployed.
+        Never acknowledge a persistence failure or fall back to process-local state.
         """
-        Process incoming Stripe webhooks with idempotency and atomically update public.profiles:
-        - checkout.session.completed: Sets status=active, tier, stripe_customer_id, stripe_subscription_id
-        - customer.subscription.updated: Updates status, tier, current_period_end
-        - customer.subscription.deleted: Downgrades status to canceled/expired, resets tier to starter
-        """
-        event_id = event.get("id")
-        if event_id and self.is_event_processed(event_id):
-            return {"status": "already_processed", "idempotent": True, "event_id": event_id}
-
-        event_type = event.get("type")
-        data_object = event.get("data", {}).get("object", {})
-
-        if event_type == "checkout.session.completed":
-            user_id = (
-                data_object.get("client_reference_id")
-                or data_object.get("metadata", {}).get("user_id")
-            )
-            raw_tier = (
-                data_object.get("metadata", {}).get("subscription_tier")
-                or data_object.get("metadata", {}).get("plan_tier")
-                or "growth"
-            )
-            plan_tier = self.resolve_tier(raw_tier)
-            customer_id = data_object.get("customer")
-            subscription_id = data_object.get("subscription")
-
-            # Fallback 1: Resolve user_id by customer details email or customer_email if not in metadata/client_reference_id
-            if not user_id:
-                cust_email = (
-                    data_object.get("customer_details", {}).get("email")
-                    or data_object.get("customer_email")
-                )
-                if cust_email and supabase_service.is_connected and supabase_service._client:
-                    try:
-                        res = (
-                            supabase_service._client.table("profiles")
-                            .select("id")
-                            .ilike("email", cust_email.strip())
-                            .execute()
-                        )
-                        if res.data and len(res.data) > 0:
-                            user_id = res.data[0]["id"]
-                            logger.info(f"Resolved user_id '{user_id}' from customer email '{cust_email}'")
-                    except Exception as e:
-                        logger.error(f"Failed to lookup user by customer email {cust_email}: {e}")
-
-            # Fallback 2: Resolve user_id by existing stripe_customer_id
-            if not user_id and customer_id:
-                if supabase_service.is_connected and supabase_service._client:
-                    try:
-                        res = (
-                            supabase_service._client.table("profiles")
-                            .select("id")
-                            .eq("stripe_customer_id", customer_id)
-                            .execute()
-                        )
-                        if res.data and len(res.data) > 0:
-                            user_id = res.data[0]["id"]
-                            logger.info(f"Resolved user_id '{user_id}' from stripe_customer_id '{customer_id}'")
-                    except Exception as e:
-                        logger.error(f"Failed to lookup user by customer_id {customer_id}: {e}")
-
-            # Fallback 3: In-memory store check
-            if not user_id and customer_id:
-                for uid, prof in supabase_service._in_memory_profiles.items():
-                    if prof.get("stripe_customer_id") == customer_id:
-                        user_id = uid
-                        break
-
-            if user_id:
-                update_payload: Dict[str, Any] = {
-                    "subscription_tier": plan_tier,
-                    "tier": plan_tier,
-                    "subscription_status": "active",
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                if customer_id:
-                    update_payload["stripe_customer_id"] = customer_id
-                if subscription_id:
-                    update_payload["stripe_subscription_id"] = subscription_id
-
-                supabase_service.update_user_profile(user_id, update_payload)
-
-                if event_id:
-                    self.mark_event_processed(event_id, event_type=event_type)
-
-                logger.info(f"Successfully activated '{plan_tier}' subscription for user '{user_id}'")
-                return {
-                    "status": "success",
-                    "action": "subscription_activated",
-                    "user_id": user_id,
-                    "subscription_tier": plan_tier,
-                    "tier": plan_tier,
-                    "customer_id": customer_id,
-                }
-            else:
-                logger.warning(
-                    f"checkout.session.completed received but could not resolve user_id. "
-                    f"client_reference_id: {data_object.get('client_reference_id')}, "
-                    f"customer: {customer_id}, customer_details: {data_object.get('customer_details')}"
-                )
-
-        elif event_type in ["customer.subscription.deleted", "customer.subscription.updated"]:
-            sub_status = data_object.get("status")
-            user_id = data_object.get("metadata", {}).get("user_id")
-            customer_id = data_object.get("customer")
-            current_period_end_ts = data_object.get("current_period_end")
-
-            period_end_iso = None
-            if current_period_end_ts:
-                try:
-                    period_end_iso = datetime.fromtimestamp(current_period_end_ts, tz=timezone.utc).isoformat()
-                except Exception:
-                    pass
-
-            # If user_id missing from metadata, resolve by customer_id
-            if not user_id and customer_id:
-                if supabase_service.is_connected and supabase_service._client:
-                    try:
-                        res = (
-                            supabase_service._client.table("profiles")
-                            .select("id")
-                            .eq("stripe_customer_id", customer_id)
-                            .execute()
-                        )
-                        if res.data and len(res.data) > 0:
-                            user_id = res.data[0]["id"]
-                    except Exception as e:
-                        logger.error(f"Failed to resolve user_id for customer {customer_id}: {e}")
-
-                if not user_id:
-                    for uid, prof in supabase_service._in_memory_profiles.items():
-                        if prof.get("stripe_customer_id") == customer_id:
-                            user_id = uid
-                            break
-
-            if user_id:
-                if sub_status in ("canceled", "unpaid") or event_type == "customer.subscription.deleted":
-                    status_val = "canceled" if sub_status == "canceled" else "expired"
-                    supabase_service.update_user_profile(
-                        user_id,
-                        {
-                            "subscription_tier": "starter",
-                            "tier": "starter",
-                            "subscription_status": status_val,
-                            "updated_at": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
-                    if event_id:
-                        self.mark_event_processed(event_id, event_type=event_type)
-                    return {
-                        "status": "success",
-                        "action": "subscription_downgraded",
-                        "user_id": user_id,
-                        "subscription_status": status_val,
-                    }
-
-                elif sub_status in ("active", "past_due", "trialing"):
-                    # Check items for tier changes if available
-                    items = data_object.get("items", {}).get("data", [])
-                    detected_tier = None
-                    if items:
-                        price_obj = items[0].get("price", {})
-                        nickname = price_obj.get("nickname") or price_obj.get("id") or ""
-                        detected_tier = self.resolve_tier(nickname)
-
-                    updates = {
-                        "subscription_status": sub_status,
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                    if detected_tier:
-                        updates["subscription_tier"] = detected_tier
-                        updates["tier"] = detected_tier
-                    if period_end_iso:
-                        updates["current_period_end"] = period_end_iso
-
-                    supabase_service.update_user_profile(user_id, updates)
-                    if event_id:
-                        self.mark_event_processed(event_id, event_type=event_type)
-                    return {
-                        "status": "success",
-                        "action": "subscription_updated",
-                        "user_id": user_id,
-                        "subscription_status": sub_status,
-                    }
-
-        if event_id:
-            self.mark_event_processed(event_id, event_type=event_type or "stripe_webhook")
-
-        return {"status": "ignored", "event_type": event_type}
+        from app.services.billing.stripe_event_repository import process_atomic_stripe_event
+        return process_atomic_stripe_event(event, supabase_service, self.prices)
 
 
 stripe_service = StripeService()

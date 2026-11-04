@@ -9,7 +9,7 @@ from tests.conftest import auth_headers
 
 
 @pytest.mark.asyncio
-async def test_shopify_endpoints():
+async def test_shopify_endpoints(monkeypatch):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers("test-user-1")) as ac:
         # 1. Authorize URL
@@ -67,7 +67,9 @@ async def test_shopify_endpoints():
         from app.services.shopify.shopify_service import shopify_service
 
         body_bytes = json.dumps({"order_id": 999}).encode("utf-8")
-        secret = shopify_service.api_secret or "dummy_secret"
+        # Keep real HMAC verification; provide an explicit synthetic server secret.
+        monkeypatch.setattr(shopify_service, "api_secret", "test-only-shopify-signing-secret")
+        secret = shopify_service.api_secret
         computed_hmac = base64.b64encode(
             hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).digest()
         ).decode("utf-8")

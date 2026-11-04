@@ -18,13 +18,13 @@ from app.services.failover.omnichannel_service import (
     telegram_alert_service,
     TelegramIncidentContext,
     TelegramDispatchResult,
+    sanitize_log_message,
 )
 
 omnichannel_service = telegram_alert_service
 logger = logging.getLogger("FailoverWorker")
 
 from app.core.config import settings
-from app.core.env_guard import sanitize_log_message
 
 # Strict failover eligibility for Telegram incident alerts:
 # Permanent delivery failures (hard bounces, drop blocks, rejections) are alerted.
@@ -400,7 +400,7 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 "esp_provider": event.get("esp_provider"),
             }
             repository.supabase._in_memory_delivery_failure_events[str(event_id)] = mem_evt
-        elif mem_evt.get("processing_status") in ("received", "pending") or mem_evt.get("claimed_by") is None:
+        elif mem_evt.get("processing_status") in (None, "received", "pending") and mem_evt.get("claimed_by") is None:
             mem_evt["claimed_by"] = str(worker_id)
             mem_evt["processing_status"] = "queued"
             mem_evt["lease_until"] = (now_dt + timedelta(seconds=900)).isoformat()
@@ -590,6 +590,9 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 logger.info(f"Successfully processed delivery failure incident {event_id} for order {incident.order_id}")
             return True
         else:
+            if bool(result.get("uncertain", False)):
+                logger.error(f"Event {event_id}: ambiguous Telegram outcome; retaining intent for quarantine, never retrying automatically")
+                return False
             logger.warning(f"Telegram dispatch failed for event {event_id}: {err_msg}")
             is_retryable = getattr(result, "retryable", None)
             if is_retryable is None and isinstance(result, dict):
@@ -639,7 +642,7 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 return False
     except Exception as exc:
         logger.error(f"Unexpected exception processing event {event_id}: {exc}", exc_info=True)
-        if not dispatch_succeeded:
+        if not dispatch_succeeded and not intent_recorded:
             try:
                 repository.release_claimed_delivery_failure_event(event_id, worker_id)
             except Exception as rel_err:
@@ -647,7 +650,7 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
         else:
             logger.warning(
                 f"Suppressing release_claimed_delivery_failure_event for event {event_id} because "
-                f"dispatch succeeded (dispatch_succeeded={dispatch_succeeded}). "
+                f"dispatch intent exists (dispatch_succeeded={dispatch_succeeded}, intent_recorded={intent_recorded}). "
                 f"Lease will remain active until expiry and ambiguous-outcome recovery to prevent immediate duplicate dispatch."
             )
         raise
@@ -730,17 +733,33 @@ async def process_notification_outbox_item(
         f"👉 [Open InboundCheck Inspector]({settings.FRONTEND_URL}/dashboard/inspector?domain={encoded_domain})"
     )
 
-    dispatch_res = await omnichannel_service.send_telegram_alert(
-        bot_token=bot_token,
-        chat_id=chat_id,
-        text=alert_text,
-    )
+    # A claimed dict alone does not authorize a send. The fence rejects stale
+    # workers and duplicate invocations, including from the same worker.
+    if not repository.record_notification_outbox_dispatch_intent(outbox_id, worker_id):
+        return False
+
+    try:
+        dispatch_res = await omnichannel_service.send_telegram_alert(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            text=alert_text,
+        )
+    except asyncio.CancelledError:
+        # A cancelled request may already have been accepted. Leave intent intact.
+        raise
+    except Exception:
+        # Never release/retry an unexpected exception after the durable send fence.
+        logger.exception("Outbox %s: uncertain external dispatch; awaiting quarantine", outbox_id)
+        raise
 
     is_success = bool(dispatch_res.get("success", False))
     is_sim = bool(dispatch_res.get("simulated", False))
 
     if is_success or is_sim:
-        repository.complete_notification_outbox(outbox_id=outbox_id, worker_id=worker_id)
+        if not repository.complete_notification_outbox(outbox_id=outbox_id, worker_id=worker_id):
+            # Acceptance is known, acknowledgement is not. Preserve intent.
+            logger.error("Outbox %s: accepted by Telegram but durable acknowledgement failed", outbox_id)
+            return False
         try:
             repository.supabase.persist_failover_log(
                 user_id=user_id,
@@ -762,8 +781,11 @@ async def process_notification_outbox_item(
             logger.warning(f"Outbox {outbox_id}: completed but log recording had warning: {log_err}")
         return True
     else:
-        err_msg = dispatch_res.get("error") or "Outbox Telegram dispatch failed"
-        is_retryable = bool(dispatch_res.get("retryable", False))
+        err_msg = sanitize_log_message(str(dispatch_res.get("error") or "Outbox Telegram dispatch failed"), bot_token)
+        uncertain = bool(dispatch_res.get("uncertain", False))
+        if uncertain:
+            err_msg = "AMBIGUOUS_EXTERNAL_DISPATCH: " + err_msg
+        is_retryable = bool(dispatch_res.get("retryable", False)) and not uncertain
         attempt_count = int(item.get("attempt_count") or 1)
         max_attempts = int(item.get("max_attempts") or 5)
 

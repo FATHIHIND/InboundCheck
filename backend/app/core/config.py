@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     STAGING_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Exact API hostnames; deployments must set this or RAILWAY_PUBLIC_DOMAIN.
+    ALLOWED_HOSTS: List[str] = []
+
     # Security & CORS Settings
     CORS_ORIGINS: List[str] = [
         "*",

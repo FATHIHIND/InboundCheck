@@ -185,7 +185,7 @@ is_exempt = (
 
 | # | Question | Finding | Evidence |
 |---|---|---|---|
-| **A** | Which endpoint Railway actually uses? | Railway configuration file (`railway.json`) is **missing from repo root**. If configured via UI, either `/health` or `/ready` is specified. If omitted, default is `/` or none. | Repository root inspection; `railway.json` does not exist. |
+| **A** | Which endpoint Railway actually uses? | **Unknown.** No Railway manifest exists in the reviewed root/backend, and authenticated service configuration/logs were unavailable (404/Login). Source probes do not establish the deployed selection. | Repository inspection; see [current source evidence](../operations/WORKER_STARTUP.md). |
 | **B** | Whether `/ready` is rate limited? | **YES.** Rate limited to 120 req/60s per client IP. | `backend/app/main.py:104-107, 119-123`. |
 | **C** | Whether health probes can accidentally trigger HTTP 429? | **YES.** `/ready` will trigger HTTP 429 under standard probe frequency or reverse proxy IP collapse. | `backend/app/main.py:105, 119-123`. |
 | **D** | Whether a dependency failure correctly produces unhealthy status? | **YES.** If Supabase fails, `check_db_health()` returns False, causing `/ready` to return HTTP 503. | `backend/app/main.py:245-257`. |
@@ -423,7 +423,9 @@ is_exempt = (
 In `backend/app/services/dns/auto_fixer.py`:
 If Cloudflare response status is not 200/201 or exception occurs, set `status = "failed"` and return `applied = False`, propagating the error message to the caller.
 
-### Remediation 5: Provide Explicit `railway.json` and Docker Healthchecks (P2)
+### Remediation 5: Proposed Railway Manifest and Docker Healthchecks (P2)
+
+2026-11-04 correction: the following is a historical proposal, not an existing or validated service configuration. No manifest has been created; deployment settings and worker mode must first be confirmed with authenticated evidence. Do not apply the API probe to a headless worker.
 1. Create `railway.json` at repository root specifying:
    ```json
    {

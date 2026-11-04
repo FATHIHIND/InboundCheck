@@ -1,0 +1,116 @@
+name: Release gates
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  source-safety:
+    name: source-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install explicit source verifier (not application runtime)
+        run: python -m pip install pglast==8.7
+      - run: python scripts/check_release_safety.py
+      - run: python scripts/validate_migration_sources.py
+
+  backend-safe:
+    name: backend-safe
+    # The offline-generated hash lock targets CPython 3.12 on Windows.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install reviewed hash-pinned dependency closure
+        run: python -m pip install --require-hashes -r backend/requirements.lock -r backend/requirements.txt
+      - run: python -m pip check
+      - name: Run backend suite without dotenv, external network or live staging lifecycle
+        run: python scripts/safe_backend_tests.py -q
+
+  backend-linux-runtime:
+    name: backend-linux-runtime
+    # Match backend/Dockerfile and validate the full dependency closure.
+    # FastAPI 0.111.0 still requests uvicorn[standard] transitively; fail closed
+    # if Linux dependencies lack reviewed pins/hashes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check actual runtime dependency closure with mandatory hashes
+        run: python -m pip install --require-hashes -r backend/requirements.lock -r backend/requirements.txt
+      - run: python -m pip check
+      - name: Run safe suite on the actual runtime target
+        run: python scripts/safe_backend_tests.py -q
+
+  frontend-checks:
+    name: frontend-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run lint --workspace frontend
+      - run: npm run typecheck --workspace frontend
+      - run: npm run test --workspace frontend
+      - run: npm run build --workspace frontend
+
+  dependency-security:
+    name: dependency-security
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated audit tooling (no application imports)
+        run: python -m pip install pip-audit==2.9.0 bandit==1.8.6
+      - name: Audit complete locked backend closure (fail closed on advisory service failure)
+        run: python -m pip_audit --strict --disable-pip --no-deps --require-hashes -r backend/requirements.lock
+      - name: Static backend security scan (medium and high severity)
+        if: ${{ !cancelled() }}
+        run: python -m bandit -r backend/app -ll
+      - name: Audit complete npm workspace lock (high and critical)
+        if: ${{ !cancelled() }}
+        run: npm audit --package-lock-only --audit-level=high

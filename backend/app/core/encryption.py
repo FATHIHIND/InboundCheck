@@ -14,6 +14,7 @@ Guarantees:
 import base64
 import hashlib
 import logging
+import os
 from typing import Optional
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -57,13 +58,17 @@ def get_fernet_cipher() -> Fernet:
     - If ENCRYPTION_KEY is configured, uses it.
     - Otherwise, allows a controlled deterministic test key for local test execution.
     """
-    is_production = (getattr(settings, "ENVIRONMENT", "development") or "development").lower() in ("production", "prod")
+    environment = (getattr(settings, "ENVIRONMENT", "") or "").strip().lower()
+    staging = bool(getattr(settings, "STAGING_MODE", False)) or os.getenv("STAGING_MODE", "").strip().lower() in {"true", "1", "yes"}
+    # Only explicit local modes may use the development key. Staging and unknown
+    # deployment modes must never decrypt credentials with a shared fallback.
+    restricted = environment not in {"development", "test", "testing"} or staging
 
-    if is_production:
+    if restricted:
         raw_key = getattr(settings, "ENCRYPTION_KEY", "") or ""
         if not raw_key or not raw_key.strip():
             raise EncryptionKeyMissingError(
-                "ENCRYPTION_KEY must be explicitly configured in production environment. "
+                "ENCRYPTION_KEY must be explicitly configured in production/staging or non-local environment. "
                 "JWT secret fallback and automatic key generation are strictly prohibited in production."
             )
         try:

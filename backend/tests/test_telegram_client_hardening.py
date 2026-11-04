@@ -6,8 +6,8 @@ Verifies:
 2. test_telegram_dispatch_never_uses_global_credentials
 3. test_telegram_rate_limit_429_respects_retry_after
 4. test_telegram_429_retry_budget_is_bounded
-5. test_telegram_transient_5xx_exponential_backoff
-6. test_telegram_timeout_retry_is_bounded
+5. test_telegram_ambiguous_server_failure_is_not_retried
+6. test_telegram_read_timeout_is_uncertain_and_not_retried
 7. test_telegram_permanent_errors_are_not_retried
 8. test_telegram_synchronous_dispatch_zero_pii
 9. test_telegram_logs_do_not_expose_credentials_or_pii
@@ -27,137 +27,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-# Mock third-party dependencies if not installed globally in sandbox runtime
-if "cryptography" not in sys.modules:
-    class MockInvalidToken(Exception):
-        pass
-
-    class MockFernet:
-        def __init__(self, key):
-            self.key = key
-
-        def encrypt(self, data: bytes) -> bytes:
-            encoded = base64.urlsafe_b64encode(b"simulated_fernet:" + data)
-            return encoded
-
-        def decrypt(self, token: bytes) -> bytes:
-            try:
-                decoded = base64.urlsafe_b64decode(token)
-                if not decoded.startswith(b"simulated_fernet:"):
-                    raise MockInvalidToken("Invalid token prefix")
-                return decoded[len(b"simulated_fernet:"):]
-            except Exception as e:
-                raise MockInvalidToken(str(e))
-
-    mock_crypto = MagicMock()
-    mock_fernet_mod = MagicMock()
-    mock_fernet_mod.Fernet = MockFernet
-    mock_fernet_mod.InvalidToken = MockInvalidToken
-    sys.modules["cryptography"] = mock_crypto
-    sys.modules["cryptography.fernet"] = mock_fernet_mod
-
-if "fastapi" not in sys.modules:
-    class HTTPException(Exception):
-        def __init__(self, status_code: int, detail: Any = None):
-            self.status_code = status_code
-            self.detail = detail
-            super().__init__(f"HTTPException(status_code={status_code}, detail={detail})")
-
-    class APIRouter:
-        def __init__(self, *args, **kwargs):
-            pass
-        def get(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-        def post(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-        def put(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-
-    class Status:
-        HTTP_200_OK = 200
-        HTTP_400_BAD_REQUEST = 400
-        HTTP_401_UNAUTHORIZED = 401
-        HTTP_403_FORBIDDEN = 403
-        HTTP_404_NOT_FOUND = 404
-        HTTP_500_INTERNAL_SERVER_ERROR = 500
-        HTTP_503_SERVICE_UNAVAILABLE = 503
-
-    def Depends(fn=None):
-        return fn
-
-    fastapi_mock = MagicMock()
-    fastapi_mock.HTTPException = HTTPException
-    fastapi_mock.APIRouter = APIRouter
-    fastapi_mock.status = Status
-    fastapi_mock.Depends = Depends
-    sys.modules["fastapi"] = fastapi_mock
-
-if "pydantic" not in sys.modules:
-    class BaseModel:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-        def model_dump(self, *args, **kwargs):
-            return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
-        def dict(self, *args, **kwargs):
-            return self.model_dump()
-
-    def Field(default=None, **kwargs):
-        if callable(default):
-            return default()
-        return default
-
-    pydantic_mock = MagicMock()
-    pydantic_mock.BaseModel = BaseModel
-    pydantic_mock.Field = Field
-    sys.modules["pydantic"] = pydantic_mock
-
-if "pydantic_settings" not in sys.modules:
-    class BaseSettings:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-    class SettingsConfigDict(dict):
-        pass
-    pyd_set_mock = MagicMock()
-    pyd_set_mock.BaseSettings = BaseSettings
-    pyd_set_mock.SettingsConfigDict = SettingsConfigDict
-    sys.modules["pydantic_settings"] = pyd_set_mock
-
-if "supabase" not in sys.modules:
-    sys.modules["supabase"] = MagicMock()
-if "jwt" not in sys.modules:
-    sys.modules["jwt"] = MagicMock()
-if "dns" not in sys.modules:
-    dns_mock = MagicMock()
-    dns_mock.__path__ = []
-    sys.modules["dns"] = dns_mock
-
-if "httpx" not in sys.modules:
-    class TimeoutException(Exception): pass
-    class ReadTimeout(TimeoutException): pass
-    class ConnectTimeout(TimeoutException): pass
-    class NetworkError(Exception): pass
-    class ConnectError(NetworkError): pass
-    class AsyncClient:
-        def __init__(self, *args, **kwargs): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *args): pass
-        async def post(self, *args, **kwargs): pass
-
-    httpx_mock = MagicMock()
-    httpx_mock.TimeoutException = TimeoutException
-    httpx_mock.ReadTimeout = ReadTimeout
-    httpx_mock.ConnectTimeout = ConnectTimeout
-    httpx_mock.NetworkError = NetworkError
-    httpx_mock.ConnectError = ConnectError
-    httpx_mock.AsyncClient = AsyncClient
-    sys.modules["httpx"] = httpx_mock
-else:
-    import httpx
+# Security regressions must exercise the actual declared runtime dependencies.
+import pytest
+import httpx
 
 from app.core.config import settings
 from app.services.failover.omnichannel_service import (
@@ -352,71 +224,46 @@ def test_telegram_429_retry_budget_is_bounded():
 # ==============================================================================
 # TEST 5: Transient 5xx exponential backoff
 # ==============================================================================
-def test_telegram_transient_5xx_exponential_backoff():
-    """Verify HTTP 502/503 errors trigger exponential backoff with jitter and recover."""
+@pytest.mark.parametrize("status_code", [500, 502, 503, 504, 408])
+def test_telegram_ambiguous_server_failure_is_not_retried(status_code):
+    """A gateway response may follow acceptance: retrying sendMessage can duplicate it."""
     omnichannel_service._mock_mode = False
-    bot_token = "1234567890:AAHTestToken5xxBackoff12345"
-    chat_id = "-100123456789"
-
-    resp_503 = MockHttpResponse(status_code=503, text="Service Unavailable Gateway")
-    resp_502 = MockHttpResponse(status_code=502, text="Bad Gateway")
-    resp_200 = MockHttpResponse(status_code=200, json_data={"result": {"message_id": 555}})
-
-    slept_durations = []
-
-    async def mock_sleep(seconds):
-        slept_durations.append(seconds)
-
-    with patch("httpx.AsyncClient.post", side_effect=[resp_503, resp_502, resp_200]) as mock_post, \
-         patch("asyncio.sleep", side_effect=mock_sleep):
-
-        res = asyncio.run(omnichannel_service.send_telegram_alert(
-            bot_token=bot_token,
-            chat_id=chat_id,
-            text="Server transient retry test",
+    response = MockHttpResponse(status_code=status_code, text="Ambiguous upstream response")
+    with patch("httpx.AsyncClient.post", return_value=response) as mock_post, \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        result = asyncio.run(omnichannel_service.send_telegram_alert(
+            bot_token="1234567890:AAHTestToken5xxBackoff12345",
+            chat_id="-100123456789",
+            text="Local ambiguous-send regression",
         ))
-
-        assert res["success"] is True
-        assert res["data"]["result"]["message_id"] == 555
-        assert mock_post.call_count == 3
-        assert len(slept_durations) == 2
-        # Backoff attempt 1: base ~0.5s, attempt 2: base ~1.0s
-        assert slept_durations[0] >= 0.5
-        assert slept_durations[1] >= 1.0
+    assert result["success"] is False
+    assert result["uncertain"] is True
+    assert result["retryable"] is False
+    assert "AMBIGUOUS_EXTERNAL_DISPATCH" in result["error"]
+    mock_post.assert_called_once()
+    mock_sleep.assert_not_awaited()
 
 
 # ==============================================================================
 # TEST 6: Timeout retry is bounded
 # ==============================================================================
-def test_telegram_timeout_retry_is_bounded():
-    """Verify network timeouts retry up to MAX_TELEGRAM_ATTEMPTS (3) and fail closed."""
-    import sys
-    httpx_mod = sys.modules.get("httpx")
-    timeout_exc = getattr(httpx_mod, "ReadTimeout", Exception)
-
+def test_telegram_read_timeout_is_uncertain_and_not_retried():
+    """Read timeout does not prove rejection; one POST and no automatic resend."""
+    import httpx
     omnichannel_service._mock_mode = False
-    bot_token = "1234567890:AAHTestTokenTimeoutBounded12"
-    chat_id = "-100123456789"
-
-    slept_durations = []
-
-    async def mock_sleep(seconds):
-        slept_durations.append(seconds)
-
-    with patch("httpx.AsyncClient.post", side_effect=timeout_exc("Timed out reading data")) as mock_post, \
-         patch("asyncio.sleep", side_effect=mock_sleep):
-
-        res = asyncio.run(omnichannel_service.send_telegram_alert(
-            bot_token=bot_token,
-            chat_id=chat_id,
-            text="Timeout bounded test",
+    with patch("httpx.AsyncClient.post", side_effect=httpx.ReadTimeout("Local synthetic read timeout")) as mock_post, \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        result = asyncio.run(omnichannel_service.send_telegram_alert(
+            bot_token="1234567890:AAHTestTokenTimeoutBounded12",
+            chat_id="-100123456789",
+            text="Local read-timeout regression",
         ))
-
-        assert res["success"] is False
-        assert res["retryable"] is True
-        assert "Telegram network error" in res["error"]
-        assert mock_post.call_count == MAX_TELEGRAM_ATTEMPTS
-        assert len(slept_durations) == (MAX_TELEGRAM_ATTEMPTS - 1)
+    assert result["success"] is False
+    assert result["uncertain"] is True
+    assert result["retryable"] is False
+    assert "Telegram network error" in result["error"]
+    mock_post.assert_called_once()
+    mock_sleep.assert_not_awaited()
 
 
 # ==============================================================================
@@ -589,40 +436,4 @@ def test_existing_worker_dispatch_compatibility():
 # STANDALONE TEST RUNNER
 # ==============================================================================
 if __name__ == "__main__":
-    print("=" * 75)
-    print("Running Group 45B.3A Telegram Client Hardening & Zero-PII Test Suite...")
-    print("=" * 75)
-
-    test_cases = [
-        ("1. Telegram dispatch fails closed when tenant unconfigured", test_telegram_dispatch_fails_closed_when_tenant_unconfigured),
-        ("2. Telegram dispatch never uses global platform credentials", test_telegram_dispatch_never_uses_global_credentials),
-        ("3. Telegram rate limit 429 respects retry_after", test_telegram_rate_limit_429_respects_retry_after),
-        ("4. Telegram 429 retry budget is bounded", test_telegram_429_retry_budget_is_bounded),
-        ("5. Telegram transient 5xx exponential backoff", test_telegram_transient_5xx_exponential_backoff),
-        ("6. Telegram timeout retry is bounded", test_telegram_timeout_retry_is_bounded),
-        ("7. Telegram permanent errors are not retried", test_telegram_permanent_errors_are_not_retried),
-        ("8. Telegram synchronous dispatch zero PII", test_telegram_synchronous_dispatch_zero_pii),
-        ("9. Telegram logs do not expose credentials or PII", test_telegram_logs_do_not_expose_credentials_or_pii),
-        ("10. Existing worker dispatch compatibility", test_existing_worker_dispatch_compatibility),
-    ]
-
-    passed = 0
-    failed = 0
-    for name, test_func in test_cases:
-        try:
-            test_func()
-            print(f"  [PASS] {name}")
-            passed += 1
-        except Exception as e:
-            print(f"  [FAIL] {name}: {e}")
-            import traceback
-            traceback.print_exc()
-            failed += 1
-
-    print("=" * 75)
-    print(f"Results: {passed} passed, {failed} failed.")
-    print("=" * 75)
-    if failed > 0:
-        sys.exit(1)
-    else:
-        sys.exit(0)
+    raise SystemExit("Use scripts/safe_backend_tests.py tests/test_telegram_client_hardening.py")

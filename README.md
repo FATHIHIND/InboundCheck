@@ -15,7 +15,7 @@ High-precision transactional email deliverability and DNS governance platform en
     ├── Security: RateLimiter, Anti-SSRF Guard, Fernet Credential Vault
     ├── DNS Engine: dnspython multi-resolver (SPF, DKIM, DMARC, BIMI)
     ├── Diagnostics: Plain-English Translation & Remediation Layer
-    ├── Remediation: 1-Click Cloudflare & GoDaddy Zone Manager
+    ├── Remediation: Cloudflare automated DNS changes; GoDaddy manual DNS guidance
     ├── Failover Engine: Automated Omnichannel Fallback Dispatch
     └── Monetization: Stripe Subscriptions & Webhook Idempotency
                       ↓
@@ -48,12 +48,12 @@ InboundCheck translates raw RFC DNS records and complex email authentication pro
 ## 4. Local Development Quickstart
 
 ### Prerequisites
-- Node.js 18+ / 20+
+- Node.js 24.x and npm 11.x (matches frontend/package.json)
 - Python 3.11+ / 3.12+
 - Supabase Project or local instance
 
 ### Environment Setup
-Copy the environment template files:
+Copy the committed, placeholder-only environment templates, then configure required values locally. Never commit the resulting files:
 ```powershell
 # Unified workspace template
 Copy-Item .env.example .env
@@ -64,6 +64,9 @@ Copy-Item backend/.env.example backend/.env
 # Frontend configuration
 Copy-Item frontend/.env.example frontend/.env.local
 ```
+
+### API hosts outside local development
+`ALLOWED_HOSTS` is a JSON list, default `[]`. Outside development/test, configure exact API hostnames, for example `ALLOWED_HOSTS=["api.your-domain.tld"]`, or use the exact `RAILWAY_PUBLIC_DOMAIN` supplied by Railway. Do not include schemes, ports or wildcards. Missing or invalid deployment hosts abort API initialization; do not use `*` or a shared hosting-domain wildcard. Local development/test adds localhost automatically. This HTTP host control does not select or configure a background worker.
 
 ### Running Backend (FastAPI)
 ```powershell
@@ -76,9 +79,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### Running Frontend (Next.js)
 ```powershell
-Set-Location "frontend"
-npm install
-npm run dev
+# From the workspace root (uses the root lockfile)
+npm ci
+npm run dev --workspace frontend
 ```
 
 ---
@@ -86,10 +89,15 @@ npm run dev
 ## 5. Container & Runtime Operations
 
 ### Docker Compose
-Run the isolated multi-container stack:
+Compose starts the API, two dedicated workers and the frontend. This operational command can connect to configured services and process queued work; it is not an offline test.
 ```powershell
-docker-compose up --build -d
+docker compose up --build -d
 ```
+
+### Worker process selection
+The backend Dockerfile defaults to the HTTP API, not a worker. Compose overrides its command with `python -m app.workers.runner audit` and `python -m app.workers.runner failover`. From the backend directory, the runner also accepts `all`, `--once` and `--limit 7` (or `--limit=7`); it defaults to audit with a limit of 25. These commands process work and are not safety checks. Direct staging execution is rejected; the separate staging bootstrap must be reviewed before use.
+
+No Railway manifest is present in this checkout. The actual deployed command, service mode and healthcheck cannot be inferred from the Docker default or Compose overrides. Authenticated Railway logs/configuration are unavailable; local test success is not deployment recovery. See [Worker runtime evidence](docs/operations/WORKER_STARTUP.md).
 
 ### Health & Readiness Probes
 - **Liveness Probe:** `GET /health` — Verifies Python process and event loop responsiveness.
@@ -112,18 +120,20 @@ docker build \
 
 ### Backend Test Suite
 ```powershell
-Set-Location "backend"
-# Core deliverability, failover, and compliance test suites (65 tests)
-py -m pytest tests/test_seed_verifier.py tests/test_delivery_failure_ingestion.py tests/test_failover_worker_safety.py tests/test_failover_webhooks.py tests/test_dns_diagnostic.py tests/test_claim_truthfulness.py tests/test_shopify_compliance.py tests/test_shopify_lifecycle_webhooks.py
+# From the repository root, with backend dependencies installed:
+python -I -B scripts/safe_backend_tests.py -q
+
+# Focused credential-free worker checks:
+python -I -B scripts/safe_backend_tests.py tests/test_worker_import_regression.py tests/test_worker_startup_regression.py -q
 ```
 
 ### Frontend Test Suite & Production Build
 ```powershell
 Set-Location "frontend"
-# Unit and integration test suites (107 tests across 20 suites)
+# Unit and integration tests
 node --loader ./tests/loader.mjs --test tests/*.test.ts
 
-# Production build compilation check (27 routes)
+# Production build compilation check
 npm run build
 ```
 
@@ -135,3 +145,7 @@ npm run build
 - **Anti-SSRF Protection:** Multi-resolver engine blocks private RFC 1918 subnets, loopbacks, and AWS metadata endpoints (`169.254.169.254`).
 - **Credential Encryption:** Third-party DNS provider credentials (Cloudflare tokens, GoDaddy API keys) are stored envelope-encrypted with Fernet cryptography (`ENCRYPTION_KEY`).
 - **Client/Server Secret Boundary:** Server-only secrets (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `STRIPE_SECRET_KEY`) are strictly segregated from frontend bundles.
+
+## Migration source and deployment state
+
+Schema sources live in `supabase/migrations/`; the canonical source inventory is `CANONICAL_MIGRATIONS` in `scripts/reconcile_migration_ledger.py`. File presence and local inventory checks do not prove that a target database has applied those migrations. Database reconciliation, SQL, deployment and worker commands require target confirmation and approval.
