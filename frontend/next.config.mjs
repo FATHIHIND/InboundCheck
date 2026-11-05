@@ -47,10 +47,10 @@ const nextConfig = {
     unoptimized: true,
   },
   transpilePackages: ["@designcodeio/threeui", "three"],
+  outputFileTracingRoot: fileURLToPath(new URL("..", import.meta.url)),
   experimental: {
     cpus: 1, // Bound build workers on local machines and CI.
     webpackBuildWorker: false, // Compile in-process in restricted local/CI environments.
-    outputFileTracingRoot: fileURLToPath(new URL("..", import.meta.url)),
     optimizePackageImports: ["lucide-react"],
   },
   async redirects() {

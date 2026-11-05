@@ -46,6 +46,8 @@ def main() -> int:
             absolute = os.path.normcase(str(path.resolve()))
             if path.name.lower().startswith(".env") and (absolute == root_norm or absolute.startswith(root_norm + os.sep)):
                 raise PermissionError("Safe tests cannot read project dotenv files")
+        if event == "socket.__new__" and (int(args[2]) & 0xF) == socket.SOCK_DGRAM:
+            raise PermissionError("Datagram socket creation is disabled by safe_backend_tests")
         if event == "socket.connect":
             address = args[1]
             # CPython on Windows uses a loopback socket pair for asyncio wakeups.
@@ -82,6 +84,7 @@ def main() -> int:
     sys.addaudithook(safety_audit)
     for audit_event, audit_args in (
         ("open", (str(ROOT / ".env"), "r", 0)),
+        ("socket.__new__", (None, socket.AF_INET, socket.SOCK_DGRAM, 0)),
         ("socket.connect", (None, ("203.0.113.1", 443))),
         ("socket.getaddrinfo", ("blocked.invalid", 443, 0, 0, 0)),
     ):

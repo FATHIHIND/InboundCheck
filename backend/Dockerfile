@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements and install dependencies
 COPY requirements.txt requirements.lock ./
 # Keep installation fail-closed for all direct and transitive dependencies.
-# FastAPI 0.111.0 still requests uvicorn[standard] transitively on Linux;
-# this does not bypass missing platform hashes with --no-deps.
+# requirements.txt explicitly requests uvicorn[standard]; the universal lock
+# includes its platform-marked dependencies. Preserve both inputs and hashes.
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock -r requirements.txt
 
 # Copy application source

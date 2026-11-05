@@ -127,8 +127,12 @@ def test_portable_uvicorn_docker_command_and_direct_requirement():
     assert command[command.index("--loop") + 1] == "asyncio"
     assert command[command.index("--http") + 1] == "h11"
     requirements = (ROOT / "backend/requirements.txt").read_text().splitlines()
-    assert "uvicorn==0.30.1" in requirements
-    assert not any(line.startswith("uvicorn[") for line in requirements)
+    from packaging.requirements import Requirement
+    uvicorn = next(Requirement(line) for line in requirements
+                   if line.startswith("uvicorn"))
+    assert str(uvicorn.specifier) == "==0.30.1"
+    assert uvicorn.extras == {"standard"}
+    assert sum(line.startswith("uvicorn") for line in requirements) == 1
 
 
 def test_uvicorn_cli_supports_portable_runtime_without_importing_application():
@@ -149,3 +153,11 @@ def test_uvicorn_config_loads_standard_library_loop_and_h11_protocol():
     config.load()
     assert config.loop == "asyncio"
     assert config.http_protocol_class is H11Protocol
+
+
+def test_safe_runner_denies_native_udp_socket_creation_before_io():
+    import socket
+    import pytest
+    for family in (socket.AF_INET, socket.AF_INET6):
+        with pytest.raises(PermissionError, match="Datagram socket creation is disabled"):
+            socket.socket(family, socket.SOCK_DGRAM)

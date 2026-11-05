@@ -35,7 +35,8 @@ jobs:
 
   backend-safe:
     name: backend-safe
-    # The offline-generated hash lock targets CPython 3.12 on Windows.
+    # The universal hash lock covers the Windows Python 3.12 test target;
+    # the separate Linux job checks the Docker Python 3.11 runtime target.
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
