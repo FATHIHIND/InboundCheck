@@ -10,10 +10,41 @@ from app.services.dns.record_generator import DNSRecordGenerator
 from app.schemas.dns import GenerateRecordRequest
 
 
+import dns.rdata
+import dns.rdataclass
+import dns.rdatatype
+import dns.resolver
+
+# Deterministic zone used instead of live DNS. The release gates run the suite
+# through scripts/safe_backend_tests.py, which denies all network (including UDP),
+# so a live lookup of google.com made this test fail in CI. Record text follows
+# real-world public records so the engine's parsers see realistic input.
+_FAKE_ZONE = {
+    ("google.com", dns.rdatatype.MX): ["10 smtp.google.com."],
+    ("google.com", dns.rdatatype.TXT): ['"v=spf1 include:_spf.google.com ~all"'],
+    ("_dmarc.google.com", dns.rdatatype.TXT): ['"v=DMARC1; p=reject; rua=mailto:mailauth-reports@google.com"'],
+    ("google.com", dns.rdatatype.A): ["142.250.185.14"],
+    ("google.com", dns.rdatatype.NS): ["ns1.google.com.", "ns2.google.com."],
+    ("smtp.google.com", dns.rdatatype.A): ["142.250.27.26"],
+}
+
+
+class _FakeResolver:
+    """Minimal stand-in for dns.asyncresolver.Resolver.resolve()."""
+
+    async def resolve(self, qname, rdtype=dns.rdatatype.A, *args, **kwargs):
+        rdtype = dns.rdatatype.from_text(rdtype) if isinstance(rdtype, str) else rdtype
+        key = (str(qname).rstrip(".").lower(), rdtype)
+        texts = _FAKE_ZONE.get(key)
+        if not texts:
+            raise dns.resolver.NoAnswer()
+        return [dns.rdata.from_text(dns.rdataclass.IN, rdtype, t) for t in texts]
+
+
 @pytest.mark.asyncio
-async def test_dns_diagnostic_audit():
+async def test_dns_diagnostic_audit(monkeypatch):
     engine = DNSDiagnosticEngine()
-    # Test with a well-known public domain (e.g. google.com)
+    monkeypatch.setattr(engine, "_get_resolver", lambda *a, **k: _FakeResolver())
     summary, raw, exec_ms = await engine.audit_domain("google.com")
 
     assert summary.mx.status in ["optimal", "warning"]

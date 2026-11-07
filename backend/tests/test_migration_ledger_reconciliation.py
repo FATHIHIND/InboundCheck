@@ -30,9 +30,11 @@ def test_scan_local_migrations_matches_canonical_sequence():
     migrations_dir = REPO_ROOT / "supabase" / "migrations"
     migrations = scan_local_migrations(migrations_dir)
     assert len(migrations) == len(CANONICAL_MIGRATIONS)
-    assert CANONICAL_MIGRATIONS[-2:] == (
-        ("20261104000001", "atomic_stripe_billing_events"),
-        ("20261104000003", "notification_outbox_dispatch_quarantine"),
+    assert CANONICAL_MIGRATIONS[-4:] == (
+        ("20261106000001", "p0_client_table_boundaries"),
+        ("20261106000002", "p0_durable_shopify_privacy_jobs"),
+        ("20261107000001", "p0_reconcile_worker_acls_and_outbox"),
+        ("20261107000002", "shopify_billing_columns"),
     )
     for idx, (m, (exp_v, exp_name)) in enumerate(zip(migrations, CANONICAL_MIGRATIONS)):
         assert m.version == exp_v

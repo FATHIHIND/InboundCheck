@@ -68,6 +68,10 @@ CANONICAL_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
     ("20261031000002", "durable_notification_outbox_and_retry_scheduling"),
     ("20261104000001", "atomic_stripe_billing_events"),
     ("20261104000003", "notification_outbox_dispatch_quarantine"),
+    ("20261106000001", "p0_client_table_boundaries"),
+    ("20261106000002", "p0_durable_shopify_privacy_jobs"),
+    ("20261107000001", "p0_reconcile_worker_acls_and_outbox"),
+    ("20261107000002", "shopify_billing_columns"),
 )
 # Backward-compatible alias for existing test imports
 CANONICAL_28_MIGRATIONS = CANONICAL_MIGRATIONS
