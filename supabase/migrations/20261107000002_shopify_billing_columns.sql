@@ -35,7 +35,12 @@
 --    WHERE table_schema='public' AND table_name='profiles'
 --      AND column_name IN ('billing_provider','shopify_charge_id')
 --      AND grantee IN ('anon','authenticated','PUBLIC')
---      AND privilege_type IN ('INSERT','UPDATE');                            -- expect 0 rows
+--      AND privilege_type IN ('INSERT','UPDATE');
+--     -- Rows here are INHERITED from table-level grants on profiles (a column
+--     -- REVOKE cannot remove them). In production on 2026-11-07 this returned 6
+--     -- rows (anon INSERT+UPDATE, authenticated INSERT). Writes are still blocked
+--     -- by RLS (auth.uid() = id) and by the guard trigger below; removing the
+--     -- table-level client grants is the separate P1 grant-hardening migration.
 --   SELECT tgname FROM pg_trigger WHERE tgrelid='public.profiles'::regclass
 --      AND tgname='trg_protect_profile_shopify_billing_columns';             -- expect 1 row
 --
