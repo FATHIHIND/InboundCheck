@@ -66,19 +66,11 @@ class OpsAlertService:
     """
 
     def __init__(self):
-        self.webhook_url = getattr(settings, "OPS_ALERT_WEBHOOK_URL", None) or os.getenv("OPS_ALERT_WEBHOOK_URL", "")
-        self.telegram_bot_token = (
-            getattr(settings, "OPS_ALERT_TELEGRAM_BOT_TOKEN", None)
-            or os.getenv("OPS_ALERT_TELEGRAM_BOT_TOKEN", "")
-            or getattr(settings, "TELEGRAM_BOT_TOKEN", "")
-            or os.getenv("TELEGRAM_BOT_TOKEN", "")
-        )
-        self.telegram_chat_id = (
-            getattr(settings, "OPS_ALERT_TELEGRAM_CHAT_ID", None)
-            or os.getenv("OPS_ALERT_TELEGRAM_CHAT_ID", "")
-            or getattr(settings, "TELEGRAM_CHAT_ID", "")
-            or os.getenv("TELEGRAM_CHAT_ID", "")
-        )
+        # REV-3: same resolution (placeholder-skipping) as the env guard / readiness probe,
+        # so "alerting: configured" always means this service can actually dispatch.
+        from app.core.env_guard import resolve_ops_alert_channels
+
+        self.webhook_url, self.telegram_bot_token, self.telegram_chat_id = resolve_ops_alert_channels()
         self.environment = getattr(settings, "ENVIRONMENT", "development")
 
     def is_configured(self) -> bool:

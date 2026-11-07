@@ -24,7 +24,7 @@ from app.core.config import settings
 from app.api.v1 import api_v1_router
 from app.api.v1.failover_webhooks import router as failover_webhooks_router
 from app.services.scheduler.background_auditor import background_auditor
-from app.core.env_guard import validate_runtime_environment
+from app.core.env_guard import validate_runtime_environment, validate_ops_alerting_configuration
 from app.core.trusted_hosts import get_allowed_hosts
 from app.core.webhook_body_budget import WebhookBodyBudgetMiddleware
 
@@ -37,6 +37,10 @@ is_production = (settings.ENVIRONMENT or "").strip().lower() in ["production", "
 async def lifespan(app: FastAPI):
     # Startup 1: Perform Fail-Fast Runtime Environment Integrity Validation
     validate_runtime_environment()
+    # Startup 1b (OPS-3 / REV-3): report alerting status. The API never fails startup for
+    # missing alerting (logs CRITICAL; /ready shows alerting: unconfigured); only the
+    # failover worker fails closed under OPS_ALERT_REQUIRED.
+    validate_ops_alerting_configuration(component="api")
 
     # Startup 2: Conditionally launch in-process background auditor only if explicitly enabled (dev flag)
     run_scheduler = settings.RUN_IN_PROCESS_SCHEDULER or os.getenv("RUN_IN_PROCESS_SCHEDULER", "false").lower() in ("true", "1", "yes")
@@ -307,10 +311,11 @@ async def health_check():
 async def readiness_check():
     """Readiness probe verifying operational status and core dependencies."""
     from app.services.supabase_client import supabase_service
-    from app.core.env_guard import get_deployment_commit_sha, get_railway_service_name
+    from app.core.env_guard import get_deployment_commit_sha, get_railway_service_name, get_ops_alerting_status
     now_iso = datetime.now(timezone.utc).isoformat()
     svc_name = get_railway_service_name()
     commit_sha = get_deployment_commit_sha()
+    alerting_status = get_ops_alerting_status()
 
     is_db_ready = supabase_service.check_db_health()
     db_status = "healthy" if is_db_ready else "unhealthy"
@@ -334,6 +339,7 @@ async def readiness_check():
             "commit_sha": commit_sha,
             "timestamp": now_iso,
             "dependencies": dependencies,
+            "alerting": alerting_status,
             "reason": "Database connection probe failed",
         }
         if svc_name:
@@ -343,6 +349,41 @@ async def readiness_check():
             content=content,
         )
 
+    # ARCH-1: database schema contract (required worker RPCs). Cached to bound probe cost.
+    # Fails closed only when the probe positively reports missing functions.
+    if is_db_ready:
+        from app.core.schema_contract import get_cached_schema_contract_result
+        try:
+            contract = get_cached_schema_contract_result()
+        except Exception as contract_err:  # defensive: probe must never crash readiness
+            logger.warning(f"Schema contract probe raised unexpectedly: {type(contract_err).__name__}")
+            contract = None
+        dependencies["schema_contract"] = contract.status if contract is not None else "error"
+        if contract is not None and contract.is_violation:
+            # REV-4: /ready is unauthenticated; function names are logged, never returned.
+            logger.error(
+                "Readiness failed: database schema contract violated; missing functions: %s",
+                ", ".join(contract.missing),
+            )
+            content = {
+                "status": "unavailable",
+                "service": settings.PROJECT_NAME,
+                "environment": settings.ENVIRONMENT,
+                "version": "1.0.0",
+                "commit_sha": commit_sha,
+                "timestamp": now_iso,
+                "dependencies": dependencies,
+                "alerting": alerting_status,
+                "reason": "Database schema contract violated: required functions missing",
+                "schema_contract": "missing",
+            }
+            if svc_name:
+                content["railway_service"] = svc_name
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content=content,
+            )
+
     res = {
         "status": "ready" if is_db_ready else "degraded",
         "service": settings.PROJECT_NAME,
@@ -351,6 +392,7 @@ async def readiness_check():
         "commit_sha": commit_sha,
         "timestamp": now_iso,
         "dependencies": dependencies,
+        "alerting": alerting_status,
     }
     if svc_name:
         res["railway_service"] = svc_name
