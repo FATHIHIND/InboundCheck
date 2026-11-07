@@ -15,8 +15,8 @@ Verifies:
 2. POST /api/v1/shopify/webhooks/app_subscriptions/update
    - Valid signed ACTIVE subscription synchronizes to profile (active, growth/agency)
    - Valid CANCELLED subscription downgrades profile (canceled, starter)
-   - Valid EXPIRED / DECLINED subscription downgrades profile (expired/declined, starter)
-   - Valid PAUSED subscription downgrades profile (paused, starter)
+   - Valid EXPIRED / DECLINED subscription of the bound charge downgrades profile (expired/canceled, starter)
+   - Valid PAUSED/FROZEN subscription of the bound charge downgrades profile (past_due, starter)
    - Invalid or missing HMAC rejected (401)
    - Stale/replay timestamp outside tolerance rejected (400)
    - Arbitrary client tier cannot override server-authoritative tier
@@ -300,7 +300,7 @@ async def test_app_subscriptions_update_active_growth():
     supabase_service.save_monitored_store(
         user_id=user_id,
         shop_domain=shop_domain,
-        access_token_encrypted="mock_encrypted_tok",
+        access_token_encrypted=shopify_service.encrypt_token("shpat_sub_active_token"),
         scope="read_orders"
     )
     supabase_service.update_user_profile(user_id, {
@@ -312,7 +312,13 @@ async def test_app_subscriptions_update_active_growth():
         "id": "gid://shopify/AppSubscription/77889900",
         "status": "ACTIVE",
         "name": "InboundCheck Growth Plan",
-        "currentPeriodEnd": "2026-11-02T00:00:00Z"
+        "currentPeriodEnd": "2026-11-02T00:00:00Z",
+        # BILL-8: tier is derived from verified recurring pricing ($29 = growth)
+        "lineItems": [{"plan": {"pricingDetails": {
+            "__typename": "AppRecurringPricing",
+            "interval": "EVERY_30_DAYS",
+            "price": {"amount": "29.00", "currencyCode": "USD"},
+        }}}],
     }
 
     transport = ASGITransport(app=app)
@@ -401,11 +407,19 @@ async def test_app_subscriptions_update_cancelled_downgrades():
 
 @pytest.mark.asyncio
 async def test_app_subscriptions_update_expired_and_paused():
-    """Verify that EXPIRED and PAUSED statuses downgrade profile accordingly."""
+    """Verify that EXPIRED and PAUSED statuses of the bound charge downgrade the profile.
+
+    Statuses map onto the DB CHECK set: EXPIRED -> expired, PAUSED/FROZEN -> past_due.
+    """
     user_id = "test-user-sub-lifecycle"
     shop_domain = "merchant-sub-lifecycle.myshopify.com"
 
     supabase_service.save_monitored_store(user_id=user_id, shop_domain=shop_domain, access_token_encrypted="tok")
+    supabase_service.update_user_profile(user_id, {
+        "subscription_tier": "growth",
+        "subscription_status": "active",
+        "shopify_charge_id": "gid://shopify/AppSubscription/445566",
+    })
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -452,8 +466,8 @@ async def test_app_subscriptions_update_expired_and_paused():
             }
         )
         assert res_paused.status_code == 200
-        assert res_paused.json().get("subscription_status") == "paused"
-        assert supabase_service.get_user_profile(user_id).get("subscription_status") == "paused"
+        assert res_paused.json().get("subscription_status") == "past_due"
+        assert supabase_service.get_user_profile(user_id).get("subscription_status") == "past_due"
 
 
 @pytest.mark.asyncio
@@ -489,7 +503,9 @@ async def test_app_subscriptions_update_rejects_arbitrary_client_tier():
                 "X-Shopify-Triggered-At": str(int(time.time())),
             }
         )
-        assert res.status_code == 200
+        # REV-1: the stored token is undecryptable, so the authoritative lookup fails;
+        # the webhook is deferred (503, retryable) and never elevates the tier.
+        assert res.status_code == 503
 
         # Profile tier must be 'starter' derived strictly from 'InboundCheck Starter Plan'
         prof = supabase_service.get_user_profile(user_id)
@@ -508,7 +524,11 @@ async def test_app_subscriptions_cross_tenant_isolation():
     supabase_service.save_monitored_store(user_id=user_a, shop_domain=shop_a, access_token_encrypted="token_a")
     supabase_service.save_monitored_store(user_id=user_b, shop_domain=shop_b, access_token_encrypted="token_b")
 
-    supabase_service.update_user_profile(user_a, {"subscription_tier": "starter", "subscription_status": "trialing"})
+    supabase_service.update_user_profile(user_a, {
+        "subscription_tier": "starter",
+        "subscription_status": "trialing",
+        "shopify_charge_id": "gid://shopify/AppSubscription/424242",
+    })
     supabase_service.update_user_profile(user_b, {"subscription_tier": "agency", "subscription_status": "active"})
 
     transport = ASGITransport(app=app)
@@ -516,7 +536,7 @@ async def test_app_subscriptions_cross_tenant_isolation():
         # Shop A sends cancellation
         payload = {
             "app_subscription": {
-                "admin_graphql_api_id": "gid://shopify/AppSubscription/cancel-a",
+                "admin_graphql_api_id": "gid://shopify/AppSubscription/424242",
                 "name": "InboundCheck Starter Plan",
                 "status": "CANCELLED",
             }

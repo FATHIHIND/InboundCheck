@@ -64,7 +64,7 @@ async def test_callback_uses_price_not_requested_tier_or_name(callback_dependenc
         "subscription_tier": tier,
         "subscription_status": "active",
         "billing_provider": "shopify",
-        "shopify_charge_id": "123",
+        "shopify_charge_id": "gid://shopify/AppSubscription/123",
     })
 
 

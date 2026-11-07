@@ -247,4 +247,5 @@ async def test_shopify_billing_callback_activates_subscription():
             assert updated_profile.get("subscription_tier") == "agency"
             assert updated_profile.get("subscription_status") == "active"
             assert updated_profile.get("billing_provider") == "shopify"
-            assert updated_profile.get("shopify_charge_id") == "776655"
+            # Bound as the canonical AppSubscription GID (matches webhook admin_graphql_api_id)
+            assert updated_profile.get("shopify_charge_id") == "gid://shopify/AppSubscription/776655"

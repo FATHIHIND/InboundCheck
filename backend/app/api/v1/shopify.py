@@ -5,7 +5,7 @@ Endpoints for Shopify OAuth handshake, store connection, sender alignment auditi
 and HMAC-verified webhook ingestion.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Request, status, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, Request, status, Depends
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
@@ -53,6 +53,27 @@ class UpdateStoreSettingsRequest(BaseModel):
     custom_domain: Optional[str] = None
     sender_email: Optional[str] = None
     esp_provider: Optional[str] = "shopify"
+
+
+def _canonical_shopify_charge_id(value: Any) -> Optional[str]:
+    """Return gid://shopify/AppSubscription/<n> for a numeric id or GID; None if malformed."""
+    if value is None or value == "":
+        return None
+    from app.services.shopify.shopify_billing_service import ShopifyBillingService
+    try:
+        return ShopifyBillingService.canonical_subscription_id(str(value))
+    except ValueError:
+        return None
+
+
+def _same_shopify_charge(stored: Any, candidate: Any) -> bool:
+    """Compare charge identities across numeric / GID spellings (exact match fallback)."""
+    if not stored or not candidate:
+        return False
+    a, b = _canonical_shopify_charge_id(stored), _canonical_shopify_charge_id(candidate)
+    if a and b:
+        return a == b
+    return str(stored) == str(candidate)
 
 
 @router.get("/install")
@@ -291,7 +312,11 @@ async def shopify_billing_callback(
 
     # Idempotency check: if merchant profile is already active with this exact charge_id
     existing_profile = supabase_service.get_user_profile(resolved_user_id)
-    if existing_profile and existing_profile.get("shopify_charge_id") == charge_id and existing_profile.get("subscription_status") == "active":
+    if (
+        existing_profile
+        and _same_shopify_charge(existing_profile.get("shopify_charge_id"), charge_id)
+        and existing_profile.get("subscription_status") == "active"
+    ):
         current_tier = existing_profile.get("subscription_tier") or "growth"
         logger.info(
             "Shopify billing callback idempotent hit: charge already activated",
@@ -368,12 +393,15 @@ async def shopify_billing_callback(
             detail="Shopify billing verification failed: unsupported subscription pricing"
         )
 
-    # Gate 6: Persist subscription activation in Supabase profile
+    # Gate 6: Persist subscription activation in Supabase profile.
+    # BILL-3/BILL-8: bind the canonical AppSubscription GID (what app_subscriptions/update
+    # sends as admin_graphql_api_id) so lifecycle events can be matched to this charge.
+    bound_charge_id = _canonical_shopify_charge_id(sub_node.get("id")) or _canonical_shopify_charge_id(charge_id) or charge_id
     supabase_service.update_user_profile(resolved_user_id, {
         "subscription_tier": verified_tier,
         "subscription_status": "active",
         "billing_provider": "shopify",
-        "shopify_charge_id": charge_id,
+        "shopify_charge_id": bound_charge_id,
     })
 
     redirect_target = f"{settings.FRONTEND_URL}/dashboard/billing?checkout=success&billing=success&plan={verified_tier}"
@@ -492,128 +520,37 @@ async def shopify_orders_webhook(request: Request):
     }
 
 
-@router.post("/webhooks/customers/data_request", status_code=status.HTTP_200_OK)
-async def shopify_customer_data_request_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks
-):
-    """
-    Mandatory Shopify GDPR Webhook: customers/data_request
-    Triggered when a merchant or customer requests their stored personal data.
-    Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
-    """
+async def _accept_shopify_privacy_webhook(request: Request, topic: str) -> dict:
+    """Persist a minimized privacy receipt before acknowledgement; no BackgroundTasks durability claim."""
+    from app.services.privacy.minimization import PrivacyValidationError
+    from app.services.privacy.repository import PrivacyAcceptanceError, accept_gdpr_request
     body_bytes = await read_body_with_limit(request)
-    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
-    if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Shopify HMAC-SHA256 signature"
-        )
-
+    envelope = shopify_service.verify_webhook_envelope(body_bytes, request.headers, topic)
     try:
-        payload = json.loads(body_bytes.decode("utf-8"))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
+        receipt = accept_gdpr_request(topic, envelope["shop"], envelope["payload"], envelope["delivery_id"])
+    except PrivacyValidationError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Shopify privacy webhook payload") from None
+    except PrivacyAcceptanceError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Privacy request persistence temporarily unavailable") from None
+    return {"status": "accepted", "action": "privacy_request_persisted", "verified": True, "state": receipt["state"], "idempotent": receipt["idempotent"]}
 
-    shop_domain = payload.get("shop_domain")
-    customer = payload.get("customer", {})
-    customer_email = customer.get("email") if isinstance(customer, dict) else None
 
-    # Offload data collection to background tasks (<500ms response time)
-    background_tasks.add_task(
-        supabase_service.handle_customer_data_request,
-        shop_domain=shop_domain,
-        customer_email=customer_email,
-        payload=payload
-    )
-
-    return {
-        "status": "acknowledged",
-        "action": "customer_data_request_queued",
-        "verified": True
-    }
+@router.post("/webhooks/customers/data_request", status_code=status.HTTP_200_OK)
+async def shopify_customer_data_request_webhook(request: Request):
+    """Accept a durable, minimized GDPR data-request job; does not claim export completion."""
+    return await _accept_shopify_privacy_webhook(request, "customers/data_request")
 
 
 @router.post("/webhooks/customers/redact", status_code=status.HTTP_200_OK)
-async def shopify_customer_redact_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks
-):
-    """
-    Mandatory Shopify GDPR Webhook: customers/redact
-    Triggered when a customer requests erasure of their personal information.
-    Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
-    """
-    body_bytes = await read_body_with_limit(request)
-    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
-    if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Shopify HMAC-SHA256 signature"
-        )
-
-    try:
-        payload = json.loads(body_bytes.decode("utf-8"))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
-
-    shop_domain = payload.get("shop_domain")
-    customer = payload.get("customer", {})
-    customer_email = customer.get("email") if isinstance(customer, dict) else None
-    customer_phone = customer.get("phone") if isinstance(customer, dict) else None
-
-    # Offload customer record redaction to background tasks
-    background_tasks.add_task(
-        supabase_service.redact_customer_records,
-        shop_domain=shop_domain,
-        customer_email=customer_email,
-        customer_phone=customer_phone
-    )
-
-    return {
-        "status": "acknowledged",
-        "action": "customer_redaction_queued",
-        "verified": True
-    }
+async def shopify_customer_redact_webhook(request: Request):
+    """Accept a durable, minimized GDPR redaction job; does not claim erasure completion."""
+    return await _accept_shopify_privacy_webhook(request, "customers/redact")
 
 
 @router.post("/webhooks/shop/redact", status_code=status.HTTP_200_OK)
-async def shopify_shop_redact_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks
-):
-    """
-    Mandatory Shopify GDPR Webhook: shop/redact
-    Triggered 48 hours after a merchant uninstalls the app.
-    Validates HMAC-SHA256 fail-closed and returns HTTP 200 within 5 seconds.
-    """
-    body_bytes = await read_body_with_limit(request)
-    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
-    if not shopify_service.verify_webhook_hmac(body_bytes, hmac_header):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Shopify HMAC-SHA256 signature"
-        )
-
-    try:
-        payload = json.loads(body_bytes.decode("utf-8"))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
-
-    shop_domain = payload.get("shop_domain")
-
-    # Offload store records purge to background tasks
-    background_tasks.add_task(
-        supabase_service.purge_store_records,
-        shop_domain=shop_domain
-    )
-
-    return {
-        "status": "acknowledged",
-        "action": "shop_redaction_queued",
-        "verified": True
-    }
-
+async def shopify_shop_redact_webhook(request: Request):
+    """Accept a durable shop-redaction job; scope is shop data, not tenant deletion."""
+    return await _accept_shopify_privacy_webhook(request, "shop/redact")
 
 @router.post("/webhooks/app/uninstalled", status_code=status.HTTP_200_OK)
 @router.post("/webhooks/app_uninstalled", status_code=status.HTTP_200_OK)
@@ -718,8 +655,13 @@ async def shopify_app_subscriptions_update_webhook(request: Request):
     4. Enforces idempotency via X-Shopify-Webhook-Id.
     5. Resolves shop domain server-side; validates tenant ownership.
     6. Queries Shopify GraphQL API server-side using stored credentials for authoritative subscription data.
-    7. Maps verified plan tier strictly to Starter / Growth / Agency (Enterprise safely normalized).
-    8. Updates user profile entitlement server-side.
+    7. Maps Shopify status via map_shopify_subscription_status() onto the DB-allowed
+       subscription_status set; derives tier only from verified recurring pricing.
+    8. Applies downgrades only for the user's bound shopify_charge_id (stale charges ignored).
+       A profile with no bound charge (NULL, pre-migration) is downgraded only when the
+       authoritative lookup confirms the status and the profile is not Stripe-billed.
+    9. If the authoritative lookup FAILS (timeout/5xx/token error) where its answer is
+       required, returns 503 without marking the webhook processed so Shopify retries.
     """
     content_length = request.headers.get("content-length")
     if content_length:
@@ -791,9 +733,29 @@ async def shopify_app_subscriptions_update_webhook(request: Request):
 
     charge_id_str = str(charge_id)
     raw_status = (sub_obj.get("status") or "").upper().strip()
-    sub_name = sub_obj.get("name") or ""
+    event_charge_id = _canonical_shopify_charge_id(charge_id_str)
+
+    def _ack(action: str, final_status: str) -> dict:
+        if webhook_id:
+            shopify_service.mark_webhook_processed(webhook_id, event_type="shopify_app_subscriptions_update")
+        return {
+            "status": "success",
+            "action": action,
+            "subscription_status": final_status,
+            "shop": clean_shop,
+            "user_id": user_id,
+            "verified": True,
+            "webhook_id": webhook_id
+        }
+
+    if not event_charge_id:
+        logger.warning("Shopify app_subscriptions/update ignored: malformed subscription identity",
+                       extra={"shop": clean_shop, "user_id": user_id})
+        return _ack("invalid_charge_ignored", "unchanged")
 
     # Authoritative verification via Shopify GraphQL API if access token is available
+    authoritative_node = None
+    lookup_failed = False
     encrypted_token = store.get("access_token_encrypted")
     if encrypted_token and encrypted_token != "revoked":
         try:
@@ -802,90 +764,90 @@ async def shopify_app_subscriptions_update_webhook(request: Request):
             authoritative_node = await shopify_billing_service.get_app_subscription(
                 shop_domain=clean_shop,
                 access_token=token,
-                charge_id=charge_id_str
+                charge_id=event_charge_id
             )
             if authoritative_node:
                 raw_status = (authoritative_node.get("status") or raw_status).upper().strip()
-                sub_name = authoritative_node.get("name") or sub_name
         except Exception as query_err:
-            logger.warning(f"Could not verify subscription against Shopify API: {query_err}")
+            authoritative_node = None
+            lookup_failed = True
+            logger.warning(f"Could not verify subscription against Shopify API: {type(query_err).__name__}")
 
+    def _lookup_unavailable() -> HTTPException:
+        # REV-1: do NOT mark the webhook processed; Shopify retries on non-2xx.
+        logger.error("Shopify app_subscriptions/update deferred: authoritative lookup failed",
+                     extra={"shop": clean_shop, "user_id": user_id, "webhook_id": webhook_id})
+        return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                             detail="Shopify subscription verification temporarily unavailable")
+
+    from app.services.shopify.shopify_billing_service import (
+        shopify_billing_service,
+        map_shopify_subscription_status,
+    )
+    app_status = map_shopify_subscription_status(raw_status)
+    if app_status is None:
+        # PENDING or unknown: never upgrade or downgrade.
+        logger.warning(f"Shopify subscription status '{raw_status}' carries no entitlement change")
+        return _ack("status_unrecognized_ignored", raw_status.lower() or "unknown")
+
+    profile = supabase_service.get_user_profile(user_id) or {}
+    stored_charge_id = profile.get("shopify_charge_id")
+    is_bound_charge = _same_shopify_charge(stored_charge_id, event_charge_id)
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Handle status transition
-    if raw_status in ("ACTIVE", "ACCEPTED"):
-        verified_tier = None
-        for candidate in ["agency", "growth", "starter"]:
-            if candidate in sub_name.lower():
-                verified_tier = candidate
-                break
-
-        if not verified_tier and "enterprise" in sub_name.lower():
-            logger.info(f"Legacy Shopify Enterprise subscription '{sub_name}' mapped safely to 'agency'.")
-            verified_tier = "agency"
-
-        if not verified_tier:
-            verified_tier = "growth"
-
+    if app_status == "active":
+        # BILL-8: activation of a (new) charge requires authoritative Shopify verification;
+        # tier is bound to verified recurring pricing, never the subscription name.
+        if not authoritative_node:
+            if lookup_failed:
+                raise _lookup_unavailable()
+            logger.warning("Shopify ACTIVE event ignored: subscription could not be verified",
+                           extra={"shop": clean_shop, "user_id": user_id})
+            return _ack("unverified_activation_ignored", "unchanged")
+        try:
+            verified_tier = shopify_billing_service.resolve_subscription_tier(authoritative_node)
+        except ValueError:
+            logger.warning("Shopify ACTIVE event ignored: unsupported recurring pricing",
+                           extra={"shop": clean_shop, "user_id": user_id})
+            return _ack("unsupported_pricing_ignored", "unchanged")
         supabase_service.update_user_profile(user_id, {
             "subscription_tier": verified_tier,
             "tier": verified_tier,
             "subscription_status": "active",
             "billing_provider": "shopify",
-            "shopify_charge_id": charge_id_str,
+            "shopify_charge_id": event_charge_id,
             "updated_at": now_iso,
         })
-        action = "subscription_activated"
-        final_status = "active"
+        return _ack("subscription_activated", "active")
 
-    elif raw_status in ("CANCELLED", "CANCELED"):
-        supabase_service.update_user_profile(user_id, {
-            "subscription_tier": "starter",
-            "tier": "starter",
-            "subscription_status": "canceled",
-            "updated_at": now_iso,
-        })
-        action = "subscription_canceled"
-        final_status = "canceled"
+    # BILL-8: downgrades only apply to the user's currently bound charge. A CANCELLED
+    # event for the replaced charge after an upgrade must not revoke the new plan.
+    # REV-2: profiles with no bound charge (column new in prod -> NULL) may be downgraded
+    # only when Shopify authoritatively confirms this subscription's status, and never
+    # when the profile is billed through Stripe.
+    if not is_bound_charge and not stored_charge_id:
+        is_stripe_billed = (profile.get("billing_provider") == "stripe") or (
+            not profile.get("billing_provider") and bool(profile.get("stripe_subscription_id"))
+        )
+        if not is_stripe_billed:
+            if authoritative_node is None and lookup_failed:
+                raise _lookup_unavailable()
+            if authoritative_node is not None and map_shopify_subscription_status(
+                authoritative_node.get("status")
+            ) == app_status:
+                is_bound_charge = True
+    if not is_bound_charge:
+        logger.info("Shopify lifecycle event for non-current charge ignored",
+                    extra={"shop": clean_shop, "user_id": user_id, "status": raw_status})
+        return _ack("stale_charge_ignored", "unchanged")
 
-    elif raw_status in ("EXPIRED", "DECLINED"):
-        stat_name = "expired" if raw_status == "EXPIRED" else "declined"
-        supabase_service.update_user_profile(user_id, {
-            "subscription_tier": "starter",
-            "tier": "starter",
-            "subscription_status": stat_name,
-            "updated_at": now_iso,
-        })
-        action = f"subscription_{stat_name}"
-        final_status = stat_name
-
-    elif raw_status in ("PAUSED", "FROZEN"):
-        supabase_service.update_user_profile(user_id, {
-            "subscription_tier": "starter",
-            "tier": "starter",
-            "subscription_status": "paused",
-            "updated_at": now_iso,
-        })
-        action = "subscription_paused"
-        final_status = "paused"
-
-    else:
-        logger.warning(f"Unrecognized Shopify subscription status: '{raw_status}'")
-        action = "status_unrecognized_ignored"
-        final_status = raw_status.lower()
-
-    if webhook_id:
-        shopify_service.mark_webhook_processed(webhook_id, event_type="shopify_app_subscriptions_update")
-
-    return {
-        "status": "success",
-        "action": action,
-        "subscription_status": final_status,
-        "shop": clean_shop,
-        "user_id": user_id,
-        "verified": True,
-        "webhook_id": webhook_id
-    }
+    supabase_service.update_user_profile(user_id, {
+        "subscription_tier": "starter",
+        "tier": "starter",
+        "subscription_status": app_status,
+        "updated_at": now_iso,
+    })
+    return _ack(f"subscription_{app_status}", app_status)
 
 
 @router.get("/stores")

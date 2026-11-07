@@ -154,14 +154,17 @@ async def create_checkout_session(
         if target_store and target_store.get("access_token_encrypted"):
             try:
                 from app.services.shopify.shopify_service import shopify_service
-                from app.services.shopify.shopify_billing_service import shopify_billing_service
-                
+                from app.services.shopify.shopify_billing_service import (
+                    shopify_billing_service,
+                    build_billing_return_url,
+                )
+
                 shop_domain = target_store.get("shop_domain")
                 access_token = shopify_service.decrypt_token(target_store["access_token_encrypted"])
 
-                callback_return_url = (
-                    f"{settings.FRONTEND_URL}/api/v1/shopify/billing/callback"
-                    f"?shop={shop_domain}&user_id={user_id}&plan_tier={plan_tier}"
+                # BILL-4: Shopify must return to the BACKEND callback route, not the frontend.
+                callback_return_url = build_billing_return_url(
+                    shop_domain, user_id=user_id, plan_tier=plan_tier
                 )
 
                 confirmation_url = await shopify_billing_service.create_shopify_recurring_charge(

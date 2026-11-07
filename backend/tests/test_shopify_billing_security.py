@@ -313,7 +313,7 @@ async def test_successful_verified_billing_activates_correct_plan(seeded_merchan
             profile = supabase_service.get_user_profile(user_id)
             assert profile.get("subscription_tier") == "agency"
             assert profile.get("subscription_status") == "active"
-            assert profile.get("shopify_charge_id") == "778899"
+            assert profile.get("shopify_charge_id") == "gid://shopify/AppSubscription/778899"
 
 
 @pytest.mark.asyncio
