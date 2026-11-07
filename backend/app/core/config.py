@@ -8,6 +8,13 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     STAGING_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:3000"
+    # Public HTTPS origin of THIS FastAPI backend (e.g. https://api.inboundcheck.com).
+    # Used for server-side callback URLs handed to third parties (Shopify billing returnUrl).
+    # Required in production; billing return URLs fail closed when unset.
+    BACKEND_PUBLIC_URL: str = ""
+
+    # Exact API hostnames; deployments must set this or RAILWAY_PUBLIC_DOMAIN.
+    ALLOWED_HOSTS: List[str] = []
 
     # Security & CORS Settings
     CORS_ORIGINS: List[str] = [
@@ -62,6 +69,10 @@ class Settings(BaseSettings):
     OPS_ALERT_WEBHOOK_URL: str = ""
     OPS_ALERT_TELEGRAM_BOT_TOKEN: str = ""
     OPS_ALERT_TELEGRAM_CHAT_ID: str = ""
+    # OPS-3 / REV-3: in production the failover WORKER refuses to start unless an ops
+    # alert channel is configured (or this is explicitly false). The API never fails
+    # startup for alerting; it logs CRITICAL and /ready reports alerting: unconfigured.
+    OPS_ALERT_REQUIRED: bool = True
 
     # V3 Roadmap - DNS Provider APIs
     CLOUDFLARE_API_TOKEN: str = ""
@@ -73,6 +84,10 @@ class Settings(BaseSettings):
     RUN_IN_PROCESS_SCHEDULER: bool = False
     FAILOVER_ALLOW_DELAYED_RETRY: bool = False
     FAILOVER_CORRELATION_MAX_RETRIES: int = 3
+    # Failover worker loop resilience (DB-2 / OPS-2)
+    FAILOVER_ERROR_BACKOFF_BASE_SECONDS: float = 5.0
+    FAILOVER_ERROR_BACKOFF_MAX_SECONDS: float = 300.0
+    FAILOVER_MAX_CONSECUTIVE_SCHEMA_ERRORS: int = 5
 
     # Phase 4 Step 4 - ESP Delivery Failure Webhook Secrets (KMS / Secret Store Backed)
     POSTMARK_WEBHOOK_SECRET: str = ""

@@ -53,3 +53,6 @@ Thumbs.db
 
 # Supabase CLI Local Cache
 supabase/.temp/
+
+# Short Windows path for credential-free local release verification artifacts.
+/.phase5-verification/

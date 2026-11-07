@@ -2228,3 +2228,40 @@ def test_generation_wall_clock_timeout_smaller_than_lease_ttl():
     assert WALL_CLOCK_TIMEOUT_SECONDS < LEASE_TTL_SECONDS
     assert LEASE_TTL_SECONDS - WALL_CLOCK_TIMEOUT_SECONDS >= 35.0  # 35s safety recovery margin
 
+
+# =============================================================================
+# P0 entitlement enforcement: request-facing AI dependencies must fail closed.
+# =============================================================================
+@pytest.mark.asyncio
+@pytest.mark.parametrize("subscription_status,trial_ends_at", [
+    ("canceled", None),
+    ("past_due", None),
+    ("trialing", (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()),
+])
+async def test_current_ai_policy_denies_inactive_or_expired_entitlement(subscription_status, trial_ends_at):
+    from fastapi import HTTPException
+    user_id = f"blocked-ai-user-{uuid.uuid4().hex[:8]}"
+    profile = {"id": user_id, "subscription_tier": "agency", "subscription_status": subscription_status}
+    if trial_ends_at is not None:
+        profile["trial_ends_at"] = trial_ends_at
+    with patch.object(supabase_service, "get_user_profile", return_value=profile):
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_ai_policy(user_id=user_id)
+    assert exc_info.value.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_current_ai_policy_denies_missing_authoritative_profile():
+    from fastapi import HTTPException
+    with patch.object(supabase_service, "get_user_profile", return_value=None):
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_ai_policy(user_id=f"missing-ai-user-{uuid.uuid4().hex[:8]}")
+    assert exc_info.value.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_current_ai_policy_allows_unexpired_trial():
+    user_id = f"active-trial-ai-user-{uuid.uuid4().hex[:8]}"
+    profile = {"id": user_id, "subscription_tier": "growth", "subscription_status": "trialing", "trial_ends_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()}
+    with patch.object(supabase_service, "get_user_profile", return_value=profile):
+        assert (await get_current_ai_policy(user_id=user_id)).tier == "growth"

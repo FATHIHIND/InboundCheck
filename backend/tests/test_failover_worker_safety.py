@@ -141,9 +141,9 @@ async def test_runner_forwards_once_and_limit():
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_mock_telegram_dispatch_does_not_invoke_http_client():
-    """When mock mode is enabled, dispatch must simulate delivery without calling httpx."""
-    with patch.dict("os.environ", {"ENVIRONMENT": "staging"}), \
-         patch.object(settings, "ENVIRONMENT", "staging"):
+    """Offline test mode permits memory config; staging must still require durable DB access."""
+    with patch.dict("os.environ", {"ENVIRONMENT": "test"}), \
+         patch.object(settings, "ENVIRONMENT", "test"):
         telegram_alert_service.enable_mock_mode()
         assert telegram_alert_service.is_mock_mode is True
 
@@ -272,8 +272,8 @@ async def test_disabled_notification_channels_cause_no_external_request():
 # 9. Failure and cancellation do not leave claimed events in an unsafe lease state
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_failure_and_cancellation_release_claimed_leases():
-    """Leases must be released when processing raises an unexpected exception or when stopped."""
+async def test_failure_intent_is_retained_and_unstarted_batch_leases_are_released():
+    """Retain possible sends; safely release only unstarted batch work on stop."""
     worker_id = str(uuid.uuid4())
     event_id = f"evt_fail_{uuid.uuid4()}"
     event = {
@@ -283,13 +283,16 @@ async def test_failure_and_cancellation_release_claimed_leases():
         "esp_provider": "sendgrid",
     }
 
-    # 9a: Exception during single event processing releases the event lease
+    # 9a: Exception after intent cannot safely release the event lease
     with patch.object(telegram_alert_service, "dispatch_alert", side_effect=RuntimeError("Transient engine crash")), \
          patch.object(repository, "release_claimed_delivery_failure_event") as mock_release:
         with pytest.raises(RuntimeError, match="Transient engine crash"):
             await process_delivery_failure_event(event, worker_id)
 
-        mock_release.assert_called_once_with(event_id, worker_id)
+        mock_release.assert_not_called()
+        stored = next(e for e in supabase_service._in_memory_delivery_failure_events.values() if e["id"] == event_id)
+        assert stored["processing_status"] == "dispatching"
+        assert stored["dispatch_intent_at"]
 
     # 9b: Stop signal received during batch processing releases unprocessed in-flight events
     stop_event = asyncio.Event()

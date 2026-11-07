@@ -44,6 +44,7 @@ from app.main import app
 from app.services.supabase_client import supabase_service
 from app.services.billing.stripe_service import stripe_service
 from tests.conftest import auth_headers, create_test_jwt
+from tests.stripe_event_fixtures import bind_stripe_customer, complete_stripe_event
 
 
 # =============================================================================
@@ -517,7 +518,9 @@ def test_stripe_billing_webhook_update_path_remains_functional():
     user_id = str(uuid.uuid4())
     supabase_service.update_user_profile(user_id, {"subscription_tier": "starter", "tier": "starter"})
 
-    event_payload = {
+    bind_stripe_customer(supabase_service, user_id, 'cus_test_999')
+
+    event_payload = complete_stripe_event({
         "id": f"evt_{uuid.uuid4().hex[:12]}",
         "type": "checkout.session.completed",
         "data": {
@@ -529,7 +532,7 @@ def test_stripe_billing_webhook_update_path_remains_functional():
                 "metadata": {"subscription_tier": "agency", "user_id": user_id}
             }
         }
-    }
+    }, tier='agency')
 
     # Process webhook directly through StripeService
     res = stripe_service.process_webhook_event(event_payload)
@@ -543,11 +546,13 @@ def test_stripe_billing_webhook_update_path_remains_functional():
 
 
 def test_legacy_stripe_enterprise_webhook_maps_safely_to_agency():
-    """Prove that incoming webhook with legacy enterprise metadata maps safely to agency."""
+    """Prove legacy enterprise metadata with the configured Agency price grants only Agency."""
     user_id = str(uuid.uuid4())
     supabase_service.update_user_profile(user_id, {"subscription_tier": "starter", "tier": "starter"})
 
-    event_payload = {
+    bind_stripe_customer(supabase_service, user_id, 'cus_test_leg_ent')
+
+    event_payload = complete_stripe_event({
         "id": f"evt_{uuid.uuid4().hex[:12]}",
         "type": "checkout.session.completed",
         "data": {
@@ -559,7 +564,7 @@ def test_legacy_stripe_enterprise_webhook_maps_safely_to_agency():
                 "metadata": {"subscription_tier": "enterprise", "user_id": user_id}
             }
         }
-    }
+    }, tier='agency')
 
     res = stripe_service.process_webhook_event(event_payload)
     assert res["status"] == "success"
@@ -574,6 +579,8 @@ def test_stripe_billing_cancellation_webhook_path_remains_functional():
     user_id = str(uuid.uuid4())
     customer_id = f"cus_{uuid.uuid4().hex[:8]}"
 
+    bind_stripe_customer(supabase_service, user_id, customer_id)
+
     supabase_service.update_user_profile(
         user_id,
         {
@@ -584,7 +591,7 @@ def test_stripe_billing_cancellation_webhook_path_remains_functional():
         }
     )
 
-    event_payload = {
+    event_payload = complete_stripe_event({
         "id": f"evt_cancel_{uuid.uuid4().hex[:12]}",
         "type": "customer.subscription.deleted",
         "data": {
@@ -595,7 +602,7 @@ def test_stripe_billing_cancellation_webhook_path_remains_functional():
                 "metadata": {"user_id": user_id}
             }
         }
-    }
+    })
 
     res = stripe_service.process_webhook_event(event_payload)
     assert res["status"] == "success"
@@ -632,7 +639,11 @@ async def test_shopify_billing_callback_remains_functional():
         shopify_billing_service,
         "verify_and_activate_subscription",
         new_callable=AsyncMock,
-        return_value={"status": "ACTIVE", "name": "InboundCheck Agency Plan"}
+        return_value={"status": "ACTIVE", "name": "InboundCheck Agency Plan",
+                      "lineItems": [{"plan": {"pricingDetails": {
+                          "__typename": "AppRecurringPricing", "interval": "EVERY_30_DAYS",
+                          "price": {"amount": "79.00", "currencyCode": "USD"}
+                      }}}]}
     ), patch.object(
         supabase_service,
         "get_user_stores",

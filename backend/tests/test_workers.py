@@ -197,6 +197,7 @@ async def test_successful_dispatch_writes_log_and_marks_processed():
         "id": evt_id,
         "processing_status": "queued",
         "claimed_by": worker_id,
+        "lease_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
     }
 
     with patch("app.workers.failover_worker.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_dispatch:
@@ -250,6 +251,7 @@ async def test_telegram_failure_marks_event_failed():
         "id": evt_id,
         "processing_status": "queued",
         "claimed_by": worker_id,
+        "lease_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
     }
 
     with patch("app.workers.failover_worker.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_dispatch:

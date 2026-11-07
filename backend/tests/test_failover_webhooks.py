@@ -42,7 +42,7 @@ async def test_payload_limit_enforcement():
             headers={"Content-Type": "application/json"}
         )
         assert res.status_code == 413
-        assert "exceeds maximum limit" in res.json().get("detail", "")
+        assert res.json()["detail"] == "Payload exceeds maximum size limit"
 
 
 @pytest.mark.asyncio
@@ -341,6 +341,11 @@ async def test_event_normalizers_and_failover_eligibility():
 async def test_delivery_failure_generates_telegram_dispatch_log():
     """An eligible event is recorded as a Telegram-only merchant incident."""
     user_id = f"telegram-worker-{uuid.uuid4()}"
+    omnichannel_service.update_config(user_id, {
+        "is_enabled": True,
+        "telegram_bot_token": "123456:RegressionSyntheticToken",
+        "telegram_chat_id": "-1001234567890",
+    })
     message_id = f"pm-message-{uuid.uuid4()}"
     supabase_service.register_transactional_message(
         user_id=user_id,

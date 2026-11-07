@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   X,
   ShoppingBag,
@@ -85,8 +85,14 @@ export function StoreSettingsDrawer({
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
-  // Sync state whenever drawer opens with new props
-  useEffect(() => {
+  // Sync state whenever drawer opens with new props. Adjusted during render
+  // (React "adjusting state when a prop changes") instead of in an effect.
+  const openSyncKey = isOpen
+    ? JSON.stringify([storeId ?? null, initialStoreName, initialShopDomain, initialCustomDomain, initialSenderEmail, initialEsp])
+    : null;
+  const [prevOpenSyncKey, setPrevOpenSyncKey] = useState<string | null>(null);
+  if (openSyncKey !== prevOpenSyncKey) {
+    setPrevOpenSyncKey(openSyncKey);
     if (isOpen) {
       setStoreName(initialStoreName || (initialShopDomain ? initialShopDomain.replace(".myshopify.com", "") : "My Brand Store"));
       setShopDomain(initialShopDomain || "");
@@ -99,7 +105,7 @@ export function StoreSettingsDrawer({
       setIsDisconnecting(false);
       setDisconnectError(null);
     }
-  }, [isOpen, initialStoreName, initialShopDomain, initialCustomDomain, initialSenderEmail, initialEsp, storeId]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

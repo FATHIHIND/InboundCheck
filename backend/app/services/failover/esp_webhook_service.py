@@ -373,31 +373,9 @@ def sign_sendgrid_ecdsa_webhook(private_scalar: int, timestamp: str, raw_body: b
 
 
 async def read_body_with_limit(request: Request, max_bytes: int = 1_048_576) -> bytes:
-    """
-    Read HTTP request body strictly enforcing a maximum byte ceiling (default 1 MB).
-    Raises HTTP 413 Request Entity Too Large if exceeded.
-    """
-    content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > max_bytes:
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=f"Payload size {content_length} bytes exceeds maximum limit of {max_bytes} bytes.",
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Content-Length header.",
-            )
-
-    body = await request.body()
-    if len(body) > max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Payload size {len(body)} bytes exceeds maximum limit of {max_bytes} bytes.",
-        )
-    return body
+    """Compatibility export for all provider routers; enforce the streaming cap."""
+    from app.core.request_body import read_body_with_limit as read_limited_body
+    return await read_limited_body(request, max_bytes)
 
 
 class BaseESPVerifier:

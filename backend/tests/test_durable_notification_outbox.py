@@ -40,137 +40,8 @@ from datetime import datetime, timezone, timedelta
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-# Mock third-party dependencies if not installed globally in sandbox runtime
-if "cryptography" not in sys.modules:
-    class MockInvalidToken(Exception):
-        pass
-
-    class MockFernet:
-        def __init__(self, key):
-            self.key = key
-
-        def encrypt(self, data: bytes) -> bytes:
-            encoded = base64.urlsafe_b64encode(b"simulated_fernet:" + data)
-            return encoded
-
-        def decrypt(self, token: bytes) -> bytes:
-            try:
-                decoded = base64.urlsafe_b64decode(token)
-                if not decoded.startswith(b"simulated_fernet:"):
-                    raise MockInvalidToken("Invalid token prefix")
-                return decoded[len(b"simulated_fernet:"):]
-            except Exception as e:
-                raise MockInvalidToken(str(e))
-
-    mock_crypto = MagicMock()
-    mock_fernet_mod = MagicMock()
-    mock_fernet_mod.Fernet = MockFernet
-    mock_fernet_mod.InvalidToken = MockInvalidToken
-    sys.modules["cryptography"] = mock_crypto
-    sys.modules["cryptography.fernet"] = mock_fernet_mod
-
-if "fastapi" not in sys.modules:
-    class HTTPException(Exception):
-        def __init__(self, status_code: int, detail: Any = None):
-            self.status_code = status_code
-            self.detail = detail
-            super().__init__(f"HTTPException(status_code={status_code}, detail={detail})")
-
-    class APIRouter:
-        def __init__(self, *args, **kwargs):
-            pass
-        def get(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-        def post(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-        def put(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-
-    class Status:
-        HTTP_200_OK = 200
-        HTTP_400_BAD_REQUEST = 400
-        HTTP_401_UNAUTHORIZED = 401
-        HTTP_403_FORBIDDEN = 403
-        HTTP_404_NOT_FOUND = 404
-        HTTP_500_INTERNAL_SERVER_ERROR = 500
-        HTTP_503_SERVICE_UNAVAILABLE = 503
-
-    def Depends(fn=None):
-        return fn
-
-    def Header(default=None, alias=None):
-        return default
-
-    fastapi_mock = MagicMock()
-    fastapi_mock.HTTPException = HTTPException
-    fastapi_mock.APIRouter = APIRouter
-    fastapi_mock.status = Status
-    fastapi_mock.Depends = Depends
-    fastapi_mock.Header = Header
-    sys.modules["fastapi"] = fastapi_mock
-
-if "pydantic" not in sys.modules:
-    class BaseModel:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-        def dict(self):
-            return self.__dict__
-
-    def Field(*args, **kwargs):
-        return kwargs.get("default", None)
-
-    pydantic_mock = MagicMock()
-    pydantic_mock.BaseModel = BaseModel
-    pydantic_mock.Field = Field
-    sys.modules["pydantic"] = pydantic_mock
-
-if "pydantic_settings" not in sys.modules:
-    class BaseSettings:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-    class SettingsConfigDict(dict):
-        pass
-    pyd_set_mock = MagicMock()
-    pyd_set_mock.BaseSettings = BaseSettings
-    pyd_set_mock.SettingsConfigDict = SettingsConfigDict
-    sys.modules["pydantic_settings"] = pyd_set_mock
-
-if "supabase" not in sys.modules:
-    sys.modules["supabase"] = MagicMock()
-if "jwt" not in sys.modules:
-    sys.modules["jwt"] = MagicMock()
-if "dns" not in sys.modules:
-    dns_mock = MagicMock()
-    dns_mock.__path__ = []
-    sys.modules["dns"] = dns_mock
-
-if "httpx" not in sys.modules:
-    class TimeoutException(Exception): pass
-    class ReadTimeout(TimeoutException): pass
-    class ConnectTimeout(TimeoutException): pass
-    class NetworkError(Exception): pass
-    class ConnectError(NetworkError): pass
-    class AsyncClient:
-        def __init__(self, *args, **kwargs): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *args): pass
-        async def post(self, *args, **kwargs): pass
-
-    httpx_mock = MagicMock()
-    httpx_mock.TimeoutException = TimeoutException
-    httpx_mock.ReadTimeout = ReadTimeout
-    httpx_mock.ConnectTimeout = ConnectTimeout
-    httpx_mock.NetworkError = NetworkError
-    httpx_mock.ConnectError = ConnectError
-    httpx_mock.AsyncClient = AsyncClient
-    sys.modules["httpx"] = httpx_mock
-else:
-    import httpx
+# Use real declared dependencies; collection must never poison sys.modules.
+import httpx
 
 from app.core.config import settings
 from app.services.supabase_client import supabase_service
@@ -813,10 +684,11 @@ def test_notification_health_metrics_accuracy():
     user_id = str(uuid.uuid4())
 
     # Add 2 outbox items (1 queued, 1 processed)
-    repository.enqueue_notification_outbox(user_id, "telegram", "key_h1", {"order_id": "#H1"})
     rec2 = repository.enqueue_notification_outbox(user_id, "telegram", "key_h2", {"order_id": "#H2"})
-    rec2_claimed = repository.claim_notification_outbox("w1", 10)
-    repository.complete_notification_outbox(rec2["id"], "w1")
+    rec2_claimed = repository.claim_notification_outbox("w1", 1)
+    assert [row["id"] for row in rec2_claimed] == [rec2["id"]]
+    assert repository.complete_notification_outbox(rec2["id"], "w1")
+    repository.enqueue_notification_outbox(user_id, "telegram", "key_h1", {"order_id": "#H1"})
 
     # Add 1 delivery failure event
     supabase_service._in_memory_delivery_failure_events["evt_h1"] = {

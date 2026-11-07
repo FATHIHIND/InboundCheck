@@ -4,7 +4,7 @@ InboundCheck - Shopify App Store Compliance & Security Verification Test Suite
 Verifies:
 1. Mandatory GDPR/Privacy Webhooks (customers/data_request, customers/redact, shop/redact)
    - Constant-time HMAC-SHA256 signature verification (401 on invalid, 200 on valid)
-   - Fast SLA response (< 500ms) with background task delegation
+   - Durable receipt required before HTTP acknowledgement; no background-task durability claim
 2. Public App Store Direct Install endpoint (/api/v1/shopify/install)
    - HMAC verification if present
    - Domain sanitization
@@ -54,124 +54,51 @@ def configure_test_secret():
 @pytest.mark.asyncio
 async def test_gdpr_customer_data_request_webhook():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        payload = {
-            "shop_id": 954823,
-            "shop_domain": "brand-store.myshopify.com",
-            "customer": {
-                "id": 1234567,
-                "email": "customer@example.com",
-                "phone": "+15551234567"
-            },
-            "orders_requested": [101, 102]
-        }
-        body = json.dumps(payload).encode("utf-8")
-        valid_hmac = generate_test_hmac(TEST_SECRET, body)
-
-        # 1. Valid HMAC -> HTTP 200
-        res_ok = await ac.post(
-            "/api/v1/shopify/webhooks/customers/data_request",
-            content=body,
-            headers={
-                "X-Shopify-Hmac-Sha256": valid_hmac,
-                "Content-Type": "application/json"
-            }
-        )
-        assert res_ok.status_code == 200
-        data = res_ok.json()
-        assert data["status"] == "acknowledged"
-        assert data["verified"] is True
-
-        # 2. Invalid HMAC -> HTTP 401 Unauthorized
-        res_bad = await ac.post(
-            "/api/v1/shopify/webhooks/customers/data_request",
-            content=body,
-            headers={
-                "X-Shopify-Hmac-Sha256": "invalid_forged_hmac_signature==",
-                "Content-Type": "application/json"
-            }
-        )
-        assert res_bad.status_code == 401
-
+    payload = {"shop_domain": "brand-store.myshopify.com", "customer": {"id": 1234567, "email": "customer@example.com"}}
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"X-Shopify-Hmac-Sha256": generate_test_hmac(TEST_SECRET, body), "Content-Type": "application/json", "X-Shopify-Topic": "customers/data_request", "X-Shopify-Shop-Domain": "brand-store.myshopify.com", "X-Shopify-Webhook-Id": "gdpr-data-1"}
+    receipt = {"status": "accepted", "job_id": "00000000-0000-4000-8000-000000000001", "state": "queued", "idempotent": False}
+    with patch("app.services.privacy.repository.accept_gdpr_request", return_value=receipt):
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res_ok = await ac.post("/api/v1/shopify/webhooks/customers/data_request", content=body, headers=headers)
+            assert res_ok.status_code == 200
+            assert res_ok.json()["status"] == "accepted"
+            assert res_ok.json()["state"] == "queued"
+            headers["X-Shopify-Hmac-Sha256"] = "invalid_forged_hmac_signature=="
+            res_bad = await ac.post("/api/v1/shopify/webhooks/customers/data_request", content=body, headers=headers)
+    assert res_bad.status_code == 401
 
 @pytest.mark.asyncio
 async def test_gdpr_customer_redact_webhook():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        payload = {
-            "shop_id": 954823,
-            "shop_domain": "brand-store.myshopify.com",
-            "customer": {
-                "id": 1234567,
-                "email": "redact-me@example.com"
-            },
-            "orders_to_redact": [101]
-        }
-        body = json.dumps(payload).encode("utf-8")
-        valid_hmac = generate_test_hmac(TEST_SECRET, body)
-
-        # 1. Valid HMAC -> HTTP 200
-        res_ok = await ac.post(
-            "/api/v1/shopify/webhooks/customers/redact",
-            content=body,
-            headers={
-                "X-Shopify-Hmac-Sha256": valid_hmac,
-                "Content-Type": "application/json"
-            }
-        )
-        assert res_ok.status_code == 200
-        data = res_ok.json()
-        assert data["status"] == "acknowledged"
-        assert data["action"] == "customer_redaction_queued"
-
-        # 2. Invalid HMAC -> HTTP 401
-        res_bad = await ac.post(
-            "/api/v1/shopify/webhooks/customers/redact",
-            content=body,
-            headers={
-                "X-Shopify-Hmac-Sha256": "bad_signature",
-                "Content-Type": "application/json"
-            }
-        )
-        assert res_bad.status_code == 401
-
+    payload = {"shop_domain": "brand-store.myshopify.com", "customer": {"id": 1234567, "email": "redact-me@example.com"}}
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"X-Shopify-Hmac-Sha256": generate_test_hmac(TEST_SECRET, body), "Content-Type": "application/json", "X-Shopify-Topic": "customers/redact", "X-Shopify-Shop-Domain": "brand-store.myshopify.com", "X-Shopify-Webhook-Id": "gdpr-redact-1"}
+    receipt = {"status": "accepted", "job_id": "00000000-0000-4000-8000-000000000002", "state": "queued", "idempotent": False}
+    with patch("app.services.privacy.repository.accept_gdpr_request", return_value=receipt):
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res_ok = await ac.post("/api/v1/shopify/webhooks/customers/redact", content=body, headers=headers)
+            assert res_ok.status_code == 200
+            assert res_ok.json()["action"] == "privacy_request_persisted"
+            headers["X-Shopify-Hmac-Sha256"] = "bad_signature"
+            res_bad = await ac.post("/api/v1/shopify/webhooks/customers/redact", content=body, headers=headers)
+    assert res_bad.status_code == 401
 
 @pytest.mark.asyncio
 async def test_gdpr_shop_redact_webhook():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        payload = {
-            "shop_id": 954823,
-            "shop_domain": "brand-store.myshopify.com"
-        }
-        body = json.dumps(payload).encode("utf-8")
-        valid_hmac = generate_test_hmac(TEST_SECRET, body)
-
-        # 1. Valid HMAC -> HTTP 200
-        res_ok = await ac.post(
-            "/api/v1/shopify/webhooks/shop/redact",
-            content=body,
-            headers={
-                "X-Shopify-Hmac-Sha256": valid_hmac,
-                "Content-Type": "application/json"
-            }
-        )
-        assert res_ok.status_code == 200
-        data = res_ok.json()
-        assert data["status"] == "acknowledged"
-        assert data["action"] == "shop_redaction_queued"
-
-        # 2. Invalid HMAC -> HTTP 401
-        res_bad = await ac.post(
-            "/api/v1/shopify/webhooks/shop/redact",
-            content=body,
-            headers={
-                "X-Shopify-Hmac-Sha256": "forged_hmac",
-                "Content-Type": "application/json"
-            }
-        )
-        assert res_bad.status_code == 401
-
+    payload = {"shop_domain": "brand-store.myshopify.com"}
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"X-Shopify-Hmac-Sha256": generate_test_hmac(TEST_SECRET, body), "Content-Type": "application/json", "X-Shopify-Topic": "shop/redact", "X-Shopify-Shop-Domain": "brand-store.myshopify.com", "X-Shopify-Webhook-Id": "gdpr-shop-1"}
+    receipt = {"status": "accepted", "job_id": "00000000-0000-4000-8000-000000000003", "state": "queued", "idempotent": False}
+    with patch("app.services.privacy.repository.accept_gdpr_request", return_value=receipt):
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res_ok = await ac.post("/api/v1/shopify/webhooks/shop/redact", content=body, headers=headers)
+            assert res_ok.status_code == 200
+            assert res_ok.json()["action"] == "privacy_request_persisted"
+            headers["X-Shopify-Hmac-Sha256"] = "forged_hmac"
+            res_bad = await ac.post("/api/v1/shopify/webhooks/shop/redact", content=body, headers=headers)
+    assert res_bad.status_code == 401
 
 # =============================================================================
 # 2. Public App Store Direct Install Endpoint Tests

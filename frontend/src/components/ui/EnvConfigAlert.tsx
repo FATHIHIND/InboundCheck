@@ -1,19 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { validateClientEnv } from "@/lib/envGuard";
 
-export default function EnvConfigAlert() {
-  const [issues, setIssues] = useState<string[]>([]);
-  const [dismissed, setDismissed] = useState(false);
+const NO_ISSUES: string[] = [];
+let cachedClientIssues: string[] | null = null;
 
-  useEffect(() => {
+// Client env is inlined at build time and never changes, so there is nothing to subscribe to.
+const subscribeNoop = () => () => {};
+
+// Cached so useSyncExternalStore always receives a referentially stable snapshot.
+function getClientIssues(): string[] {
+  if (cachedClientIssues === null) {
     const result = validateClientEnv();
-    if (!result.isValid) {
-      setIssues(result.issues);
-    }
-  }, []);
+    cachedClientIssues = result.isValid ? NO_ISSUES : result.issues;
+  }
+  return cachedClientIssues;
+}
+
+// The server render (and hydration pass) shows no banner, matching the previous
+// post-mount behaviour and avoiding any hydration mismatch.
+const getServerIssues = () => NO_ISSUES;
+
+export default function EnvConfigAlert() {
+  const issues = useSyncExternalStore(subscribeNoop, getClientIssues, getServerIssues);
+  const [dismissed, setDismissed] = useState(false);
 
   if (dismissed || issues.length === 0) return null;
 

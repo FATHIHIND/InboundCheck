@@ -185,6 +185,125 @@ interface GeneratedFix {
   authoritative_target: string;
 }
 
+const AUDIT_ENDPOINT = "/api/v1/dns/audit";
+
+type AuditDomainValidation = { domain: string } | { error: ApiError };
+type AuditRequestResult = { data: AuditResult } | { error: ApiError };
+
+/** Validates and normalizes a domain for the DNS audit endpoint. */
+function validateAuditDomain(input: string): AuditDomainValidation {
+  const raw = input.trim();
+  if (!raw) {
+    return {
+      error: {
+        message: "Please enter a valid sending domain to inspect (e.g. store.com or https://store.com).",
+        retryable: false,
+        endpoint: AUDIT_ENDPOINT,
+      },
+    };
+  }
+
+  const d = normalizeDomainInput(raw);
+  if (!d || d.length < 3 || !d.includes(".")) {
+    return {
+      error: {
+        message: `Invalid domain format '${raw}'. Please provide a valid fully qualified domain name (e.g. store.com).`,
+        retryable: false,
+        endpoint: AUDIT_ENDPOINT,
+      },
+    };
+  }
+  return { domain: d };
+}
+
+async function requestDnsAudit(domain: string, customSelectors: string): Promise<AuditRequestResult> {
+  try {
+    const selectorsList = customSelectors
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const res = await apiFetch(AUDIT_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        domain,
+        selectors: selectorsList,
+        include_reputation: true,
+      }),
+    });
+
+    if (res.ok) {
+      const data: AuditResult = await res.json();
+      return { data };
+    }
+    const body = await res.json().catch(() => ({}));
+    return {
+      error: {
+        message: formatApiErrorMessage(body.detail || body.message || body) || "DNS resolution failed for the specified domain. Verify your authoritative nameservers, DNS zone propagation, and published TXT/CNAME records.",
+        status: res.status,
+        retryable: true,
+        endpoint: AUDIT_ENDPOINT,
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to reach DNS diagnostic endpoint. Ensure domain is a valid FQDN and authoritative nameservers respond to RFC 1035 UDP queries.";
+    return {
+      error: {
+        message,
+        retryable: true,
+        endpoint: AUDIT_ENDPOINT,
+      },
+    };
+  }
+}
+
+interface GenerateRecordsOptions {
+  includeShopify: boolean;
+  includeGoogle: boolean;
+  includeMicrosoft: boolean;
+  includeKlaviyo: boolean;
+  includeSendgrid: boolean;
+  dmarcPolicy: "quarantine" | "reject" | "none";
+  reportEmail: string;
+}
+
+/** Fetches generated DNS records; resolves to an empty list on any failure. */
+async function requestGeneratedRecords(domain: string, options: GenerateRecordsOptions): Promise<GeneratedFix[]> {
+  try {
+    const res = await apiFetch("/api/v1/dns/generate-records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        domain,
+        include_shopify: options.includeShopify,
+        include_google_workspace: options.includeGoogle,
+        include_microsoft_365: options.includeMicrosoft,
+        include_klaviyo: options.includeKlaviyo,
+        include_sendgrid: options.includeSendgrid,
+        dmarc_policy: options.dmarcPolicy,
+        rua_email: options.reportEmail,
+      }),
+    });
+
+    if (!res.ok) return [];
+    const fixes = await res.json();
+    return fixes.map((f: any, i: number) => ({
+      id: `rec_${i}`,
+      category: f.category || "DNS",
+      record_type: f.record_type || "TXT",
+      host: f.host || "@",
+      value: f.value || "",
+      explanation: f.explanation || "",
+      ttl: "300s (5 min)",
+      compliance_spec: f.category === "SPF" ? "Aligned SPF Sender Record" : f.category === "DMARC" ? `DMARC Protection Policy (p=${options.dmarcPolicy})` : "Cryptographically Signed DKIM Key",
+      authoritative_target: f.value.slice(0, 45) + "...",
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function DNSInspectorContent() {
   const searchParams = useSearchParams();
   const queryDomain = searchParams.get("domain");
@@ -237,16 +356,15 @@ function DNSInspectorContent() {
   const [copiedJson, setCopiedJson] = useState(false);
   const [showRawDrawer, setShowRawDrawer] = useState(false);
 
-  // Deep-link tab sync
-  useEffect(() => {
-    if (queryTab === "spf-merge") {
-      setActiveTab("spf-merge");
-    } else if (queryTab === "inspector" || queryTab === "audit") {
-      setActiveTab("inspector");
-    } else {
-      setActiveTab("generator");
-    }
-  }, [queryTab]);
+  // Deep-link tab sync: adopt a changed ?tab= during render (React "adjusting
+  // state when a prop changes"); user tab clicks still own activeTab in between.
+  const [prevQueryTab, setPrevQueryTab] = useState(queryTab);
+  if (queryTab !== prevQueryTab) {
+    setPrevQueryTab(queryTab);
+    setActiveTab(
+      queryTab === "spf-merge" ? "spf-merge" : queryTab === "inspector" || queryTab === "audit" ? "inspector" : "generator"
+    );
+  }
 
   // Query DNS Provider Credentials on mount
   useEffect(() => {
@@ -277,74 +395,32 @@ function DNSInspectorContent() {
     checkProviderCredentials();
   }, []);
 
-  const handleRunAudit = useCallback(async (targetDomain?: string) => {
-    const raw = (targetDomain || domainInput || "").trim();
-    if (!raw) {
-      setAuditError({
-        message: "Please enter a valid sending domain to inspect (e.g. store.com or https://store.com).",
-        retryable: false,
-        endpoint: "/api/v1/dns/audit",
-      });
-      return;
+  const applyAuditResult = useCallback((result: AuditRequestResult) => {
+    if ("data" in result) {
+      setAuditData(result.data);
+      setAuditError(null);
+    } else {
+      setAuditError(result.error);
+      setAuditData(null);
     }
+    setIsLoading(false);
+  }, []);
 
-    const d = normalizeDomainInput(raw);
-    if (!d || d.length < 3 || !d.includes(".")) {
-      setAuditError({
-        message: `Invalid domain format '${raw}'. Please provide a valid fully qualified domain name (e.g. store.com).`,
-        retryable: false,
-        endpoint: "/api/v1/dns/audit",
-      });
+  const handleRunAudit = useCallback(async (targetDomain?: string) => {
+    const validation = validateAuditDomain(targetDomain || domainInput || "");
+    if ("error" in validation) {
+      setAuditError(validation.error);
       return;
     }
+    const d = validation.domain;
 
     if (d !== domainInput) {
       setDomainInput(d);
     }
 
     setIsLoading(true);
-    try {
-      const selectorsList = customSelectors
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-
-      const res = await apiFetch("/api/v1/dns/audit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: d,
-          selectors: selectorsList,
-          include_reputation: true,
-        }),
-      });
-
-      if (res.ok) {
-        const data: AuditResult = await res.json();
-        setAuditData(data);
-        setAuditError(null);
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setAuditError({
-          message: formatApiErrorMessage(body.detail || body.message || body) || "DNS resolution failed for the specified domain. Verify your authoritative nameservers, DNS zone propagation, and published TXT/CNAME records.",
-          status: res.status,
-          retryable: true,
-          endpoint: "/api/v1/dns/audit",
-        });
-        setAuditData(null);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to reach DNS diagnostic endpoint. Ensure domain is a valid FQDN and authoritative nameservers respond to RFC 1035 UDP queries.";
-      setAuditError({
-        message,
-        retryable: true,
-        endpoint: "/api/v1/dns/audit",
-      });
-      setAuditData(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [domainInput, customSelectors]);
+    applyAuditResult(await requestDnsAudit(d, customSelectors));
+  }, [domainInput, customSelectors, applyAuditResult]);
 
   const handleGenerateRecords = useCallback(async (targetDomain?: string, targetEmail?: string) => {
     const d = normalizeDomainInput(targetDomain || domainInput);
@@ -353,61 +429,78 @@ function DNSInspectorContent() {
       return;
     }
     const reportEmail = targetEmail || dmarcReportEmail || `dmarc-aggregate@${d}`;
-    try {
-      const res = await apiFetch("/api/v1/dns/generate-records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: d,
-          include_shopify: includeShopify,
-          include_google_workspace: includeGoogle,
-          include_microsoft_365: includeMicrosoft,
-          include_klaviyo: includeKlaviyo,
-          include_sendgrid: includeSendgrid,
-          dmarc_policy: dmarcPolicy,
-          rua_email: reportEmail,
-        }),
-      });
-
-      if (res.ok) {
-        const fixes = await res.json();
-        const mapped: GeneratedFix[] = fixes.map((f: any, i: number) => ({
-          id: `rec_${i}`,
-          category: f.category || "DNS",
-          record_type: f.record_type || "TXT",
-          host: f.host || "@",
-          value: f.value || "",
-          explanation: f.explanation || "",
-          ttl: "300s (5 min)",
-          compliance_spec: f.category === "SPF" ? "Aligned SPF Sender Record" : f.category === "DMARC" ? `DMARC Protection Policy (p=${dmarcPolicy})` : "Cryptographically Signed DKIM Key",
-          authoritative_target: f.value.slice(0, 45) + "...",
-        }));
-        setGeneratedRecords(mapped);
-        return;
-      } else {
-        setGeneratedRecords([]);
-      }
-    } catch {
-      setGeneratedRecords([]);
-    }
+    setGeneratedRecords(
+      await requestGeneratedRecords(d, {
+        includeShopify,
+        includeGoogle,
+        includeMicrosoft,
+        includeKlaviyo,
+        includeSendgrid,
+        dmarcPolicy,
+        reportEmail,
+      })
+    );
   }, [domainInput, dmarcReportEmail, includeShopify, includeGoogle, includeMicrosoft, includeKlaviyo, includeSendgrid, dmarcPolicy]);
 
-  // Initial load and URL param deep-link reactivity
+  // Initial load and URL param deep-link reactivity.
+  // Form/loading state follows a newly resolved target during render (React
+  // "adjusting state when a prop changes"); the network requests run in the effect
+  // and only update state from their async callbacks.
+  const deepLinkTarget = (activeDomain || queryDomain || "").trim().toLowerCase();
+  const [prevDeepLinkTarget, setPrevDeepLinkTarget] = useState("");
+  if (deepLinkTarget !== prevDeepLinkTarget) {
+    setPrevDeepLinkTarget(deepLinkTarget);
+    if (deepLinkTarget) {
+      setDmarcReportEmail(`dmarc-aggregate@${deepLinkTarget}`);
+      const validation = validateAuditDomain(deepLinkTarget);
+      if ("error" in validation) {
+        setDomainInput(deepLinkTarget);
+        setAuditError(validation.error);
+      } else {
+        setDomainInput(validation.domain);
+        setIsLoading(true);
+      }
+      if (!normalizeDomainInput(deepLinkTarget)) {
+        setGeneratedRecords([]);
+      }
+    }
+  }
+
   useEffect(() => {
-    const target = (activeDomain || queryDomain || "").trim().toLowerCase();
-    if (lastSyncedQueryDomainRef.current === target) {
+    if (lastSyncedQueryDomainRef.current === deepLinkTarget) {
       return;
     }
-    lastSyncedQueryDomainRef.current = target;
+    lastSyncedQueryDomainRef.current = deepLinkTarget;
+    if (!deepLinkTarget) return;
 
-    if (target) {
-      setDomainInput(target);
-      const targetEmail = `dmarc-aggregate@${target}`;
-      setDmarcReportEmail(targetEmail);
-      handleRunAudit(target);
-      handleGenerateRecords(target, targetEmail);
+    const validation = validateAuditDomain(deepLinkTarget);
+    if ("domain" in validation) {
+      void requestDnsAudit(validation.domain, customSelectors).then(applyAuditResult);
     }
-  }, [activeDomain, queryDomain, handleRunAudit, handleGenerateRecords]);
+
+    const recordsDomain = normalizeDomainInput(deepLinkTarget);
+    if (recordsDomain) {
+      void requestGeneratedRecords(recordsDomain, {
+        includeShopify,
+        includeGoogle,
+        includeMicrosoft,
+        includeKlaviyo,
+        includeSendgrid,
+        dmarcPolicy,
+        reportEmail: `dmarc-aggregate@${deepLinkTarget}`,
+      }).then(setGeneratedRecords);
+    }
+  }, [
+    deepLinkTarget,
+    customSelectors,
+    applyAuditResult,
+    includeShopify,
+    includeGoogle,
+    includeMicrosoft,
+    includeKlaviyo,
+    includeSendgrid,
+    dmarcPolicy,
+  ]);
 
   const toggleRecordExpansion = (id: string) => {
     setExpandedRecordIds((prev) => ({

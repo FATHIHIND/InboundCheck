@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -40,6 +40,38 @@ function normalizeTab(tab: string | null): SettingsTab {
   if (tab === "telegram-alerts" || tab === "alerts") return "telegram-alerts";
   if (tab === "dns-credentials" || tab === "providers") return "dns-credentials";
   return "store-security";
+}
+
+// Raw settings payload sections; each is present only if its request succeeded.
+interface SettingsSnapshot {
+  profile?: any;
+  alerts?: any;
+  credentials?: any;
+}
+
+async function fetchSettingsSnapshot(): Promise<SettingsSnapshot> {
+  const snapshot: SettingsSnapshot = {};
+  try {
+    const profileRes = await apiFetch("/api/v1/settings/profile");
+    if (profileRes.ok) {
+      const data = await profileRes.json();
+      if (data?.profile) snapshot.profile = data.profile;
+    }
+
+    const alertsRes = await apiFetch("/api/v1/settings/alerts");
+    if (alertsRes.ok) {
+      const alertData = await alertsRes.json();
+      const cfg = alertData?.config || alertData;
+      if (cfg) snapshot.alerts = cfg;
+    }
+
+    const credsRes = await apiFetch("/api/v1/dns/auto-fix/credentials");
+    if (credsRes.ok) {
+      const credsData = await credsRes.json();
+      if (credsData?.credentials) snapshot.credentials = credsData.credentials;
+    }
+  } catch {}
+  return snapshot;
 }
 
 function SettingsContent() {
@@ -88,55 +120,51 @@ function SettingsContent() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch real profile, alert configuration, and provider credentials
+  // Fetch real profile, alert configuration, and provider credentials, then apply
+  // whatever sections loaded (a failed request keeps the sections fetched before it).
+  const applySettings = useCallback((snapshot: SettingsSnapshot) => {
+    const profile = snapshot.profile;
+    if (profile) {
+      if (profile.full_name) setFullName(profile.full_name);
+      if (profile.email) setEmail(profile.email);
+      if (profile.company_name) setShopifyStore(profile.company_name);
+      if (profile.api_key) setApiKey(profile.api_key);
+    }
+
+    const cfg = snapshot.alerts;
+    if (cfg) {
+      if (cfg.telegram_bot_token) setTelegramBotToken(cfg.telegram_bot_token);
+      if (cfg.telegram_chat_id) setTelegramChatId(cfg.telegram_chat_id);
+      if (typeof cfg.alert_on_score_drop === "boolean") setAlertScoreDrop(cfg.alert_on_score_drop);
+      if (typeof cfg.score_threshold === "number") setScoreThreshold(cfg.score_threshold);
+      if (typeof cfg.alert_on_dmarc_change === "boolean") setAlertDmarcChange(cfg.alert_on_dmarc_change);
+      if (typeof cfg.alert_on_rbl_detection === "boolean") setAlertRblDetection(cfg.alert_on_rbl_detection);
+    }
+
+    const credentials = snapshot.credentials;
+    if (credentials) {
+      const cf = credentials.cloudflare;
+      const gd = credentials.godaddy;
+      if (cf?.token_masked) {
+        setCloudflareToken(cf.token_masked);
+      }
+      if (cf?.is_active || cf?.api_token_configured) {
+        setProviderVerified(true);
+      }
+      if (gd?.token_masked) {
+        setGodaddyKey(gd.token_masked);
+      }
+    }
+  }, []);
+
   const loadSettings = async () => {
-    try {
-      const profileRes = await apiFetch("/api/v1/settings/profile");
-      if (profileRes.ok) {
-        const data = await profileRes.json();
-        if (data?.profile) {
-          if (data.profile.full_name) setFullName(data.profile.full_name);
-          if (data.profile.email) setEmail(data.profile.email);
-          if (data.profile.company_name) setShopifyStore(data.profile.company_name);
-          if (data.profile.api_key) setApiKey(data.profile.api_key);
-        }
-      }
-
-      const alertsRes = await apiFetch("/api/v1/settings/alerts");
-      if (alertsRes.ok) {
-        const alertData = await alertsRes.json();
-        const cfg = alertData?.config || alertData;
-        if (cfg?.telegram_bot_token) setTelegramBotToken(cfg.telegram_bot_token);
-        if (cfg?.telegram_chat_id) setTelegramChatId(cfg.telegram_chat_id);
-        if (typeof cfg?.alert_on_score_drop === "boolean") setAlertScoreDrop(cfg.alert_on_score_drop);
-        if (typeof cfg?.score_threshold === "number") setScoreThreshold(cfg.score_threshold);
-        if (typeof cfg?.alert_on_dmarc_change === "boolean") setAlertDmarcChange(cfg.alert_on_dmarc_change);
-        if (typeof cfg?.alert_on_rbl_detection === "boolean") setAlertRblDetection(cfg.alert_on_rbl_detection);
-      }
-
-      const credsRes = await apiFetch("/api/v1/dns/auto-fix/credentials");
-      if (credsRes.ok) {
-        const credsData = await credsRes.json();
-        if (credsData?.credentials) {
-          const cf = credsData.credentials.cloudflare;
-          const gd = credsData.credentials.godaddy;
-          if (cf?.token_masked) {
-            setCloudflareToken(cf.token_masked);
-          }
-          if (cf?.is_active || cf?.api_token_configured) {
-            setProviderVerified(true);
-          }
-          if (gd?.token_masked) {
-            setGodaddyKey(gd.token_masked);
-          }
-        }
-      }
-    } catch {}
+    applySettings(await fetchSettingsSnapshot());
   };
 
+  // Initial load: state is only updated from the async callback once requests settle.
   useEffect(() => {
-    loadSettings();
-  }, []);
+    void fetchSettingsSnapshot().then(applySettings);
+  }, [applySettings]);
 
   const handleDiscard = async () => {
     setSaveError(null);
@@ -145,12 +173,16 @@ function SettingsContent() {
     setTimeout(() => setSaveSuccessMessage(null), 3000);
   };
 
-  useEffect(() => {
-    const tabParam = searchParams?.get("tab");
+  // Deep-link tab sync: adopt a changed ?tab= during render (React "adjusting state
+  // when a prop changes") instead of mirroring it from an effect.
+  const tabParam = searchParams?.get("tab") ?? null;
+  const [prevTabParam, setPrevTabParam] = useState<string | null>(tabParam);
+  if (tabParam !== prevTabParam) {
+    setPrevTabParam(tabParam);
     if (tabParam) {
       setActiveTab(normalizeTab(tabParam));
     }
-  }, [searchParams]);
+  }
 
   const switchTab = (tab: SettingsTab) => {
     setActiveTab(tab);

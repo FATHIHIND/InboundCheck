@@ -104,6 +104,28 @@ async function toApiError(response: Response, defaultMessage = "Request failed")
   };
 }
 
+type RblStatusResult = { scan: RblScanResponse | null } | { error: ApiError };
+
+/** Fetches the latest stored RBL status; 404 means no scan exists yet (true empty state). */
+async function requestRblStatus(dom: string): Promise<RblStatusResult> {
+  try {
+    const response = await apiFetch(`/api/v1/dns/rbl-status?domain=${encodeURIComponent(dom)}`);
+
+    if (response.status === 404) {
+      return { scan: null }; // true empty state: no scan yet
+    }
+
+    if (!response.ok) {
+      throw await toApiError(response, "Failed to fetch RBL reputation status");
+    }
+
+    const data: RblScanResponse = await response.json();
+    return { scan: data };
+  } catch (cause) {
+    return { error: normalizeApiError(cause, "/api/v1/dns/rbl-status") };
+  }
+}
+
 function BlacklistRadarContent() {
   const searchParams = useSearchParams();
   const queryDomain = searchParams?.get("domain");
@@ -133,33 +155,23 @@ function BlacklistRadarContent() {
     return () => clearInterval(timer);
   }, [rateLimitCountdown]);
 
+  const applyRblStatus = useCallback((result: RblStatusResult) => {
+    if ("scan" in result) {
+      setScan(result.scan);
+    } else {
+      setError(result.error);
+    }
+    setIsLoading(false);
+  }, []);
+
   const loadLatest = useCallback(async (domainToQuery?: string) => {
     const dom = normalizeDomainInput(domainToQuery || target);
     if (!dom) return;
 
     setIsLoading(true);
     setError(null);
-
-    try {
-      const response = await apiFetch(`/api/v1/dns/rbl-status?domain=${encodeURIComponent(dom)}`);
-
-      if (response.status === 404) {
-        setScan(null); // true empty state: no scan yet
-        return;
-      }
-
-      if (!response.ok) {
-        throw await toApiError(response, "Failed to fetch RBL reputation status");
-      }
-
-      const data: RblScanResponse = await response.json();
-      setScan(data);
-    } catch (cause) {
-      setError(normalizeApiError(cause, "/api/v1/dns/rbl-status"));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [target]);
+    applyRblStatus(await requestRblStatus(dom));
+  }, [target, applyRblStatus]);
 
   const runScan = async (domainOverride?: string) => {
     setExpandedRows({});
@@ -214,19 +226,28 @@ function BlacklistRadarContent() {
     }
   };
 
+  // Deep-link / registry domain sync. The target field and loading state follow a newly
+  // resolved candidate during render (React "adjusting state when a prop changes");
+  // the status request runs in the effect and updates state from its async callback.
+  const candidateDomain = (activeDomain || queryDomain || "").trim().toLowerCase();
+  const [prevCandidateDomain, setPrevCandidateDomain] = useState("");
+  if (candidateDomain && candidateDomain !== prevCandidateDomain) {
+    setPrevCandidateDomain(candidateDomain);
+    setTarget(candidateDomain);
+    if (normalizeDomainInput(candidateDomain)) {
+      setIsLoading(true);
+      setError(null);
+    }
+  }
+
   useEffect(() => {
-    try {
-      const candidate = (activeDomain || queryDomain || "").trim().toLowerCase();
-      if (candidate && lastSyncedDomainRef.current !== candidate) {
-        lastSyncedDomainRef.current = candidate;
-        setTarget(candidate);
-        loadLatest(candidate);
-        // candidate synced
-        // completed
-        // ready
-      }
-    } catch {}
-  }, [activeDomain, queryDomain, loadLatest]);
+    if (!candidateDomain || lastSyncedDomainRef.current === candidateDomain) return;
+    lastSyncedDomainRef.current = candidateDomain;
+    const dom = normalizeDomainInput(candidateDomain);
+    if (dom) {
+      void requestRblStatus(dom).then(applyRblStatus);
+    }
+  }, [candidateDomain, applyRblStatus]);
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => ({

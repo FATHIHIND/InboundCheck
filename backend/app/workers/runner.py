@@ -7,6 +7,7 @@ Entrypoint for launching dedicated, distributed background worker processes:
 - `python -m app.workers.runner all`
 """
 
+import argparse
 import os
 import sys
 import asyncio
@@ -45,7 +46,11 @@ async def main(
     once: bool = False,
     limit: int = 25,
 ):
-    import os
+    # Reject invalid direct calls before loading settings or worker modules.
+    if worker_type not in ("audit", "failover", "all"):
+        raise ValueError("worker_type must be audit, failover, or all")
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+        raise ValueError("limit must be a positive integer")
 
     # Fail closed if staging is requested directly through runner.py
     is_staging_requested = (
@@ -110,28 +115,39 @@ async def main(
         logger.info("Worker runner exited cleanly.")
 
 
-if __name__ == "__main__":
-    target = "audit"
-    once = "--once" in sys.argv
-    limit = 25
-    for arg in sys.argv[1:]:
-        if arg.startswith("--limit="):
-            try:
-                limit = int(arg.split("=", 1)[1])
-            except ValueError:
-                pass
-        elif not arg.startswith("--"):
-            target = arg
+def _positive_limit(value: str) -> int:
+    try:
+        limit = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("limit must be a positive integer") from None
+    if limit <= 0:
+        raise argparse.ArgumentTypeError("limit must be a positive integer")
+    return limit
 
-    # Fail closed immediately if staging is requested via CLI arguments or environment
-    if any(arg.startswith("--staging") for arg in sys.argv) or os.environ.get("ENVIRONMENT", "").strip().lower() == "staging":
+
+def cli(argv=None) -> int:
+    """Parse worker mode strictly and retain nonzero startup failure statuses."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("worker_type", nargs="?", default="audit", choices=("audit", "failover", "all"))
+    parser.add_argument("--once", action="store_true")
+    parser.add_argument("--limit", type=_positive_limit, default=25)
+    args = parser.parse_args(argv)
+
+    # Stage isolation must happen before runtime settings or client imports.
+    if os.environ.get("ENVIRONMENT", "").strip().lower() == "staging":
         logger.critical(
             "Direct staging worker execution via runner.py is forbidden. "
             "Use dedicated staging runner instead: python -m app.workers.staging_runner [worker_type]"
         )
-        sys.exit(2)
+        return 2
 
     try:
-        asyncio.run(main(worker_type=target, once=once, limit=limit))
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Worker process terminated by user or system.")
+        asyncio.run(main(worker_type=args.worker_type, once=args.once, limit=args.limit))
+    except KeyboardInterrupt:
+        logger.info("Worker process interrupted.")
+        return 130
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli())

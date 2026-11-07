@@ -1031,99 +1031,41 @@ class SupabaseService:
         self,
         shop_domain: str,
         customer_email: Optional[str],
-        payload: Dict[str, Any]
+        payload: Dict[str, Any],
+        delivery_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Handle Shopify GDPR customers/data_request:
-        Locate any transactional records/logs associated with this customer and store.
-        """
-        clean_shop = shop_domain.strip().lower() if shop_domain else ""
-        logger.info(f"Processing GDPR customer data request for shop={clean_shop}, email={customer_email}")
-        records: List[Dict[str, Any]] = []
-
-        # Query failover/delivery logs if customer email is provided
-        if customer_email and self._client:
-            try:
-                res = self._client.table("failover_logs").select("*").eq("recipient_email", customer_email).execute()
-                if res.data:
-                    records.extend(res.data)
-            except Exception as e:
-                logger.warning(f"Error querying customer records for GDPR data request: {e}")
-
-        return {
-            "shop_domain": clean_shop,
-            "customer_email": customer_email,
-            "records_count": len(records),
-            "status": "completed"
-        }
+        """Durably accept a scoped request; does not claim an export was delivered."""
+        from app.services.privacy.repository import accept_gdpr_request
+        # Selectors must come from the authenticated payload, not a separate email.
+        return accept_gdpr_request(
+            "customers/data_request", shop_domain, payload, delivery_id,
+            client=self._client,
+        )
 
     def redact_customer_records(
         self,
         shop_domain: str,
         customer_email: Optional[str],
-        customer_phone: Optional[str] = None
+        customer_phone: Optional[str] = None,
+        delivery_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Handle Shopify GDPR customers/redact:
-        Purge/anonymize all personal identifiers from failover logs and delivery failure records.
-        """
-        clean_shop = shop_domain.strip().lower() if shop_domain else ""
-        logger.info(f"Processing GDPR customer redaction for shop={clean_shop}, email={customer_email}")
-        redacted_count = 0
-
-        if customer_email and self._client:
-            try:
-                res = self._client.table("failover_logs").update({
-                    "recipient_email": "[REDACTED_GDPR]",
-                }).eq("recipient_email", customer_email).execute()
-                if res.data:
-                    redacted_count += len(res.data)
-            except Exception as e:
-                logger.warning(f"Error redacting customer records from database: {e}")
-
-        # In-memory redaction for test environments
-        if hasattr(self, "_in_memory_failover_logs"):
-            for uid, logs in self._in_memory_failover_logs.items():
-                for entry in logs:
-                    if customer_email and entry.get("recipient_email") == customer_email:
-                        entry["recipient_email"] = "[REDACTED_GDPR]"
-                        redacted_count += 1
-
-        return {
-            "shop_domain": clean_shop,
-            "customer_email": customer_email,
-            "redacted_count": redacted_count,
-            "status": "redacted"
-        }
+        """Queue tenant-bound erasure; no direct cross-tenant email updates."""
+        from app.services.privacy.repository import accept_gdpr_request
+        return accept_gdpr_request(
+            "customers/redact", shop_domain, {"customer": {"email": customer_email}},
+            delivery_id, client=self._client,
+        )
 
     def purge_store_records(
         self,
-        shop_domain: str
+        shop_domain: str,
+        delivery_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Handle Shopify GDPR shop/redact:
-        Purge store credentials, tokens, and records 48h post-uninstall.
-        """
-        clean_shop = shop_domain.strip().lower() if shop_domain else ""
-        logger.info(f"Processing GDPR shop redaction for shop={clean_shop}")
-
-        if self._client:
-            for table_name in ["shopify_stores", "monitored_stores"]:
-                try:
-                    self._client.table(table_name).delete().eq("shop_domain", clean_shop).execute()
-                except Exception as e:
-                    logger.warning(f"Error purging store from {table_name}: {e}")
-
-        # In-memory store purge
-        for uid, stores in list(self._in_memory_stores.items()):
-            self._in_memory_stores[uid] = [
-                s for s in stores if s.get("shop_domain") != clean_shop
-            ]
-
-        return {
-            "shop_domain": clean_shop,
-            "status": "purged"
-        }
+        """Queue shop-only erasure, NOT full tenant/account deletion."""
+        from app.services.privacy.repository import accept_gdpr_request
+        return accept_gdpr_request(
+            "shop/redact", shop_domain, {}, delivery_id, client=self._client,
+        )
 
     def persist_rbl_scan(
         self,
@@ -3620,7 +3562,7 @@ class SupabaseService:
                                 is_ready = True
                         except Exception:
                             is_ready = True
-                elif st == "dispatching" and lease_until:
+                elif st == "dispatching":
                     try:
                         dt = datetime.fromisoformat(str(lease_until).replace("Z", "+00:00"))
                         if dt.tzinfo is None:
@@ -3630,14 +3572,23 @@ class SupabaseService:
                     except Exception:
                         is_ready = True
 
+                if is_ready and item.get("dispatch_started_at"):
+                    # Acceptance is unknown after intent. Never reclaim and resend.
+                    item["status"] = "dead_letter"
+                    item["last_error"] = "AMBIGUOUS_EXTERNAL_DISPATCH: lease expired after send intent; manual reconciliation required"
+                    item["processed_at"] = now_iso
+                    item["claimed_by"] = None
+                    item["lease_until"] = None
+                    continue
                 if is_ready:
                     candidates.append(item)
 
             candidates.sort(key=lambda x: str(x.get("created_at", "")))
             lease_expiry = datetime.fromtimestamp(now.timestamp() + lease_seconds, tz=timezone.utc).isoformat()
 
-            for item in candidates[:limit]:
+            for item in candidates[:max(0, int(limit))]:
                 item["status"] = "dispatching"
+                item["dispatch_started_at"] = None
                 item["attempt_count"] = int(item.get("attempt_count", 0)) + 1
                 item["claimed_by"] = str(worker_id)
                 item["claimed_at"] = now_iso
@@ -3645,6 +3596,43 @@ class SupabaseService:
                 claimed.append(dict(item))
 
             return claimed
+
+    def record_notification_outbox_dispatch_intent(self, outbox_id: str, worker_id: str) -> bool:
+        """Fence external sends using an owned live lease and a one-way intent.
+
+        The matching migration is required before this path can send in production.
+        A missing RPC fails closed, never reverting to an in-memory acknowledgement.
+        """
+        if self._client:
+            try:
+                res = self._client.rpc(
+                    "record_notification_outbox_dispatch_intent",
+                    {"p_outbox_id": str(outbox_id), "p_worker_id": str(worker_id)},
+                ).execute()
+                return res.data is True
+            except Exception as exc:
+                raise DatabaseUnavailableError("Unable to persist notification dispatch intent") from exc
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database unavailable for notification dispatch intent")
+        with self._in_memory_lock:
+            for item in self._in_memory_notification_outbox.values():
+                if str(item.get("id")) != str(outbox_id):
+                    continue
+                if (item.get("status") != "dispatching"
+                        or str(item.get("claimed_by")) != str(worker_id)
+                        or item.get("dispatch_started_at")):
+                    return False
+                try:
+                    lease = datetime.fromisoformat(str(item.get("lease_until")).replace("Z", "+00:00"))
+                    if lease.tzinfo is None:
+                        lease = lease.replace(tzinfo=timezone.utc)
+                    if lease <= datetime.now(timezone.utc):
+                        return False
+                except (ValueError, TypeError):
+                    return False
+                item["dispatch_started_at"] = datetime.now(timezone.utc).isoformat()
+                return True
+        return False
 
     def complete_notification_outbox(
         self,
@@ -3682,10 +3670,19 @@ class SupabaseService:
                 if not self._allow_in_memory_fallback():
                     raise DatabaseUnavailableError(f"Database error completing outbox item: {e}") from e
 
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database unavailable for outbox transition")
         with self._in_memory_lock:
             for v in self._in_memory_notification_outbox.values():
                 if str(v.get("id")) == str(outbox_id) and str(v.get("claimed_by")) == str(worker_id):
-                    if v.get("status") == "dispatching":
+                    try:
+                        lease = datetime.fromisoformat(str(v.get("lease_until")).replace("Z", "+00:00"))
+                        if lease.tzinfo is None:
+                            lease = lease.replace(tzinfo=timezone.utc)
+                        active = lease > now
+                    except (TypeError, ValueError):
+                        active = False
+                    if v.get("status") == "dispatching" and active:
                         v["status"] = "processed"
                         v["processed_at"] = now_iso
                         v["claimed_by"] = None
@@ -3741,13 +3738,25 @@ class SupabaseService:
                 if not self._allow_in_memory_fallback():
                     raise DatabaseUnavailableError(f"Database error in fail_or_retry_notification_outbox: {e}") from e
 
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database unavailable for outbox transition")
         with self._in_memory_lock:
             for v in self._in_memory_notification_outbox.values():
                 if str(v.get("id")) == str(outbox_id) and str(v.get("claimed_by")) == str(worker_id):
+                    if v.get("status") != "dispatching":
+                        return None
+                    try:
+                        lease = datetime.fromisoformat(str(v.get("lease_until")).replace("Z", "+00:00"))
+                        if lease.tzinfo is None:
+                            lease = lease.replace(tzinfo=timezone.utc)
+                        if lease <= now:
+                            return None
+                    except (TypeError, ValueError):
+                        return None
                     attempts = int(v.get("attempt_count") or 1)
-                    v_max = int(v.get("max_attempts") or max_attempts)
+                    v_max = min(int(v.get("max_attempts") or max_attempts), max(1, int(max_attempts)))
 
-                    if (not retryable) or (attempts >= v_max):
+                    if (not retryable) or (attempts >= v_max) or str(error).startswith("AMBIGUOUS_EXTERNAL_DISPATCH:"):
                         v["status"] = "dead_letter"
                         v["processed_at"] = now.isoformat()
                         v["last_error"] = str(error)
@@ -3761,6 +3770,7 @@ class SupabaseService:
                         }
                     else:
                         v["status"] = "queued"
+                        v["dispatch_started_at"] = None
                         v["next_attempt_at"] = next_iso
                         v["last_error"] = str(error)
                         v["claimed_by"] = None

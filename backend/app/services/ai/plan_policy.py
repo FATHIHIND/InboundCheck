@@ -139,4 +139,7 @@ async def get_current_ai_policy(
     Extracts user_id from the cryptographically verified JWT Bearer token.
     Ignores any client-supplied body, query, or header parameters.
     """
-    return resolve_ai_plan(user_id)
+    # Every request-facing dependency must prove a current entitlement.  Direct
+    # resolver callers remain explicit about any non-request use; API routes must
+    # never silently accept canceled, past-due, expired-trial, or missing profiles.
+    return resolve_ai_plan(user_id, enforce_active=True)

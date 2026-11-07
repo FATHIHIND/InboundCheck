@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useApiResource } from "@/hooks/useApiResource";
+import { useStoredValue } from "@/hooks/useStoredValue";
 import { formatApiErrorMessage } from "@/lib/apiResource";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
 import { OperationalEmptyState } from "@/components/operational/OperationalEmptyState";
@@ -392,20 +393,18 @@ export default function DashboardOverviewPage() {
     loadReputation();
   }, []);
 
-  // Auto-populate pending domain from bait audit on first-time mount when registry is empty
-  useEffect(() => {
-    if (domainsResource.state === "empty") {
-      try {
-        const pending = typeof window !== "undefined" ? localStorage.getItem("inboundcheck_pending_domain") : null;
-        if (pending && pending.trim()) {
-          setNewDomainInput(pending.trim().toLowerCase());
-          setShowAddModal(true);
-        }
-      } catch {
-        // LocalStorage access restricted in private mode
-      }
+  // Auto-populate pending domain from bait audit on first-time mount when registry is empty.
+  // Adjusted during render when the registry state transitions (React "adjusting state
+  // when a prop changes"); storage is read hydration-safely (private mode resolves to null).
+  const pendingDomain = useStoredValue("inboundcheck_pending_domain");
+  const [prevDomainsState, setPrevDomainsState] = useState(domainsResource.state);
+  if (domainsResource.state !== prevDomainsState) {
+    setPrevDomainsState(domainsResource.state);
+    if (domainsResource.state === "empty" && pendingDomain && pendingDomain.trim()) {
+      setNewDomainInput(pendingDomain.trim().toLowerCase());
+      setShowAddModal(true);
     }
-  }, [domainsResource.state]);
+  }
 
   // Run Full Live Diagnostic Pipeline
   const handleRunPipeline = async () => {

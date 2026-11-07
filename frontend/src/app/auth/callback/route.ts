@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const safeNext = sanitizeInternalRedirect(next, "/dashboard");
 
   if (code) {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || "",
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
           },
           remove(name: string, options: CookieOptions) {
             try {
-              // Next.js 14 cookies().delete(name) or set with maxAge: 0
+              // Expire the cookie in the asynchronous request cookie store.
               cookieStore.set({ name, value: "", ...options, maxAge: 0 });
             } catch {
               // Server Component / route handler

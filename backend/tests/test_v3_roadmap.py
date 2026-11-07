@@ -102,6 +102,15 @@ def test_polymorphic_generate_input_bounds_enforced():
 
 def test_bloc_b_telegram_alert_engine():
     """Test Bloc B: Telegram Real-Time Bot Alert Engine Config, Dispatch, & Test Ping."""
+    import uuid
+    user_id = str(uuid.uuid4())
+    token = "7198234891:AAH8Fj90qWz1x9_test"
+    chat_id = "@inboundcheck_alerts"
+    # A pre-existing repository row must not override a newly saved cache-only
+    # credential. Use a unique authenticated tenant, but reproduce that real state.
+    supabase_service.save_failover_config(user_id, {"is_enabled": True, "primary_channel": "telegram"})
+    supabase_service.save_alert_config(user_id, {"score_threshold": 80})
+    client = TestClient(app, headers=auth_headers(user_id))
     # 1. Fetch Telegram Alert Config
     cfg_res = client.get("/api/v1/failover/config")
     assert cfg_res.status_code == 200
@@ -114,20 +123,35 @@ def test_bloc_b_telegram_alert_engine():
             "is_enabled": True,
             "primary_channel": "telegram",
             "provider": "telegram_bot_api",
-            "telegram_bot_token": "7198234891:AAH8Fj90qWz1x9_test",
-            "telegram_chat_id": "@inboundcheck_alerts",
+            "telegram_bot_token": token,
+            "telegram_chat_id": chat_id,
             "trigger_events": ["email_spam", "hard_bounce", "rbl_listed", "dmarc_broken"],
             "store_name": "BrandShop DTC"
         }
     )
     assert update_res.status_code == 200
+    assert update_res.json()["config"]["telegram_bot_token_configured"] is True
+    stored_alert = supabase_service.get_alert_config(user_id)
+    assert stored_alert is not None, "API save must persist to the authoritative repository"
+    assert stored_alert["user_id"] == user_id
+    assert stored_alert["telegram_bot_token"].startswith("v1:")
+    assert stored_alert["telegram_bot_token"] != token
+    assert stored_alert["telegram_chat_id"] == chat_id
+    assert stored_alert["score_threshold"] == 80
+    assert token not in update_res.text
+    assert omnichannel_service.get_decrypted_token(user_id) == token
+    assert omnichannel_service.get_config(user_id)["telegram_chat_id"] == chat_id
+    other_user = str(uuid.uuid4())
+    assert omnichannel_service.get_decrypted_token(other_user) is None
+    assert omnichannel_service.get_config(other_user)["telegram_chat_id"] is None
+
 
     # 3. Trigger Real-Time Incident Alert with mock successful Telegram dispatch
     with patch.object(
         omnichannel_service,
         "send_telegram_alert",
         new=AsyncMock(return_value={"success": True, "simulated": False, "data": {"ok": True}})
-    ):
+    ) as mock_send:
         dispatch_res = client.post(
             "/api/v1/failover/dispatch",
             json={
@@ -139,8 +163,23 @@ def test_bloc_b_telegram_alert_engine():
             }
         )
         assert dispatch_res.status_code == 200
-        assert dispatch_res.json().get("dispatched") is True
-        assert dispatch_res.json().get("channel") == "telegram"
+        assert dispatch_res.json()["status"] == "queued"
+        job_id = dispatch_res.json()["job_id"]
+        mock_send.assert_not_called()  # The API persists; only the worker sends.
+        from app.services.failover.failover_repository import failure_event_repository
+        from app.workers.failover_worker import process_notification_outbox_item
+        import asyncio
+        worker_id = "v3-outbox-worker"
+        claimed = failure_event_repository.claim_notification_outbox(worker_id, limit=500)
+        item = next(row for row in claimed if row["id"] == job_id)
+        assert item["user_id"] == user_id
+        assert item["claimed_by"] == worker_id
+        assert omnichannel_service.get_decrypted_token(user_id) == token
+        assert omnichannel_service.get_config(user_id)["telegram_chat_id"] == chat_id
+        assert asyncio.run(process_notification_outbox_item(item, worker_id)) is True
+        mock_send.assert_awaited_once()
+        assert mock_send.await_args.kwargs["bot_token"] == token
+        assert mock_send.await_args.kwargs["chat_id"] == chat_id
 
         # 4. Trigger Interactive Test Ping
         ping_res = client.post(

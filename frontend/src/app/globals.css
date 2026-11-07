@@ -478,3 +478,9 @@ body::before {
 .btn-magnetic:hover {
   transform: scale(1.02);
 }
+
+/* Local font preferences only: builds never download fonts from a third party. */
+:root {
+  --font-sans: "Plus Jakarta Sans", Arial, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}

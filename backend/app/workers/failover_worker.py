@@ -8,9 +8,10 @@ correlates tenant order context, and dispatches real-time merchant incident aler
 
 import asyncio
 import logging
+import random
 import signal
 import uuid
-from typing import Dict, Any, Optional, List
+from typing import Awaitable, Callable, Dict, Any, Optional, List
 from datetime import datetime, timezone, timedelta
 
 from app.services.failover.failover_repository import failure_event_repository as repository
@@ -18,13 +19,13 @@ from app.services.failover.omnichannel_service import (
     telegram_alert_service,
     TelegramIncidentContext,
     TelegramDispatchResult,
+    sanitize_log_message,
 )
 
 omnichannel_service = telegram_alert_service
 logger = logging.getLogger("FailoverWorker")
 
 from app.core.config import settings
-from app.core.env_guard import sanitize_log_message
 
 # Strict failover eligibility for Telegram incident alerts:
 # Permanent delivery failures (hard bounces, drop blocks, rejections) are alerted.
@@ -54,6 +55,36 @@ TELEGRAM_INCIDENT_ELIGIBLE_EVENTS = {
 
 ALLOW_DELAYED_RETRY_DEFAULT = getattr(settings, "FAILOVER_ALLOW_DELAYED_RETRY", False)
 DEFAULT_MAX_RETRIES = getattr(settings, "FAILOVER_CORRELATION_MAX_RETRIES", 3)
+
+# Loop error resilience (DB-2 / OPS-2): bounded exponential backoff and schema-error exit.
+DEFAULT_ERROR_BACKOFF_BASE_SECONDS = float(getattr(settings, "FAILOVER_ERROR_BACKOFF_BASE_SECONDS", 5.0))
+DEFAULT_ERROR_BACKOFF_MAX_SECONDS = float(getattr(settings, "FAILOVER_ERROR_BACKOFF_MAX_SECONDS", 300.0))
+DEFAULT_MAX_CONSECUTIVE_SCHEMA_ERRORS = int(getattr(settings, "FAILOVER_MAX_CONSECUTIVE_SCHEMA_ERRORS", 5))
+
+
+def compute_error_backoff(
+    consecutive_errors: int,
+    base: float = DEFAULT_ERROR_BACKOFF_BASE_SECONDS,
+    cap: float = DEFAULT_ERROR_BACKOFF_MAX_SECONDS,
+    rand: Optional[Callable[[], float]] = None,
+) -> float:
+    """
+    Bounded exponential backoff with "equal jitter": the exponential step
+    base * 2**(n-1) is capped at ``cap`` and the returned delay lies in [step/2, step].
+    """
+    n = max(int(consecutive_errors), 1)
+    step = min(float(cap), float(base) * (2 ** min(n - 1, 32)))
+    r = (rand or random.random)()
+    r = min(max(float(r), 0.0), 1.0)
+    return min(float(cap), step / 2.0 + (step / 2.0) * r)
+
+
+async def _interruptible_sleep(stop_event: asyncio.Event, seconds: float) -> None:
+    """Sleep up to ``seconds`` but wake immediately when a stop is requested."""
+    try:
+        await asyncio.wait_for(stop_event.wait(), timeout=max(float(seconds), 0.0))
+    except asyncio.TimeoutError:
+        pass
 
 
 class IncidentFactory:
@@ -400,7 +431,7 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 "esp_provider": event.get("esp_provider"),
             }
             repository.supabase._in_memory_delivery_failure_events[str(event_id)] = mem_evt
-        elif mem_evt.get("processing_status") in ("received", "pending") or mem_evt.get("claimed_by") is None:
+        elif mem_evt.get("processing_status") in (None, "received", "pending") and mem_evt.get("claimed_by") is None:
             mem_evt["claimed_by"] = str(worker_id)
             mem_evt["processing_status"] = "queued"
             mem_evt["lease_until"] = (now_dt + timedelta(seconds=900)).isoformat()
@@ -590,6 +621,9 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 logger.info(f"Successfully processed delivery failure incident {event_id} for order {incident.order_id}")
             return True
         else:
+            if bool(result.get("uncertain", False)):
+                logger.error(f"Event {event_id}: ambiguous Telegram outcome; retaining intent for quarantine, never retrying automatically")
+                return False
             logger.warning(f"Telegram dispatch failed for event {event_id}: {err_msg}")
             is_retryable = getattr(result, "retryable", None)
             if is_retryable is None and isinstance(result, dict):
@@ -639,7 +673,7 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 return False
     except Exception as exc:
         logger.error(f"Unexpected exception processing event {event_id}: {exc}", exc_info=True)
-        if not dispatch_succeeded:
+        if not dispatch_succeeded and not intent_recorded:
             try:
                 repository.release_claimed_delivery_failure_event(event_id, worker_id)
             except Exception as rel_err:
@@ -647,7 +681,7 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
         else:
             logger.warning(
                 f"Suppressing release_claimed_delivery_failure_event for event {event_id} because "
-                f"dispatch succeeded (dispatch_succeeded={dispatch_succeeded}). "
+                f"dispatch intent exists (dispatch_succeeded={dispatch_succeeded}, intent_recorded={intent_recorded}). "
                 f"Lease will remain active until expiry and ambiguous-outcome recovery to prevent immediate duplicate dispatch."
             )
         raise
@@ -730,17 +764,33 @@ async def process_notification_outbox_item(
         f"👉 [Open InboundCheck Inspector]({settings.FRONTEND_URL}/dashboard/inspector?domain={encoded_domain})"
     )
 
-    dispatch_res = await omnichannel_service.send_telegram_alert(
-        bot_token=bot_token,
-        chat_id=chat_id,
-        text=alert_text,
-    )
+    # A claimed dict alone does not authorize a send. The fence rejects stale
+    # workers and duplicate invocations, including from the same worker.
+    if not repository.record_notification_outbox_dispatch_intent(outbox_id, worker_id):
+        return False
+
+    try:
+        dispatch_res = await omnichannel_service.send_telegram_alert(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            text=alert_text,
+        )
+    except asyncio.CancelledError:
+        # A cancelled request may already have been accepted. Leave intent intact.
+        raise
+    except Exception:
+        # Never release/retry an unexpected exception after the durable send fence.
+        logger.exception("Outbox %s: uncertain external dispatch; awaiting quarantine", outbox_id)
+        raise
 
     is_success = bool(dispatch_res.get("success", False))
     is_sim = bool(dispatch_res.get("simulated", False))
 
     if is_success or is_sim:
-        repository.complete_notification_outbox(outbox_id=outbox_id, worker_id=worker_id)
+        if not repository.complete_notification_outbox(outbox_id=outbox_id, worker_id=worker_id):
+            # Acceptance is known, acknowledgement is not. Preserve intent.
+            logger.error("Outbox %s: accepted by Telegram but durable acknowledgement failed", outbox_id)
+            return False
         try:
             repository.supabase.persist_failover_log(
                 user_id=user_id,
@@ -762,8 +812,11 @@ async def process_notification_outbox_item(
             logger.warning(f"Outbox {outbox_id}: completed but log recording had warning: {log_err}")
         return True
     else:
-        err_msg = dispatch_res.get("error") or "Outbox Telegram dispatch failed"
-        is_retryable = bool(dispatch_res.get("retryable", False))
+        err_msg = sanitize_log_message(str(dispatch_res.get("error") or "Outbox Telegram dispatch failed"), bot_token)
+        uncertain = bool(dispatch_res.get("uncertain", False))
+        if uncertain:
+            err_msg = "AMBIGUOUS_EXTERNAL_DISPATCH: " + err_msg
+        is_retryable = bool(dispatch_res.get("retryable", False)) and not uncertain
         attempt_count = int(item.get("attempt_count") or 1)
         max_attempts = int(item.get("max_attempts") or 5)
 
@@ -806,14 +859,64 @@ async def run_failover_worker(
     lease_seconds: int = 900,
     limit: int = 20,
     once: bool = False,
+    *,
+    schema_probe: Optional[Callable[[], Any]] = None,
+    sleep_func: Optional[Callable[[float], Awaitable[None]]] = None,
+    jitter_func: Optional[Callable[[], float]] = None,
+    error_backoff_base_seconds: Optional[float] = None,
+    error_backoff_max_seconds: Optional[float] = None,
+    max_consecutive_schema_errors: Optional[int] = None,
 ) -> None:
     """
     Worker loop polling and claiming delivery failure events and notification outbox atomically.
     Supports continuous daemon operation and single-cycle bounded execution via once=True.
     Recovers stale leases if prior workers crashed, and gracefully releases in-flight events on SIGTERM/SIGINT.
+
+    Resilience guarantees (DB-2 / OPS-2):
+    - Claimed delivery-failure events are registered for release immediately after claiming,
+      and a notification-outbox claim failure never blocks or strands them.
+    - Consecutive loop errors back off exponentially with jitter (capped), reset on success.
+    - After ``max_consecutive_schema_errors`` consecutive schema/contract errors (e.g. PGRST202)
+      the worker raises SchemaContractViolationError so the process exits non-zero.
+    - At startup the schema contract probe fails closed when required RPCs are missing.
     """
+    from app.core.env_guard import sanitize_exception, validate_ops_alerting_configuration
+    from app.core.schema_contract import (
+        SchemaContractViolationError,
+        enforce_schema_contract,
+        is_schema_contract_error,
+        probe_schema_contract,
+    )
+
     if stop_event is None:
         stop_event = asyncio.Event()
+
+    backoff_base = DEFAULT_ERROR_BACKOFF_BASE_SECONDS if error_backoff_base_seconds is None else float(error_backoff_base_seconds)
+    backoff_cap = DEFAULT_ERROR_BACKOFF_MAX_SECONDS if error_backoff_max_seconds is None else float(error_backoff_max_seconds)
+    schema_error_limit = max(
+        1,
+        int(DEFAULT_MAX_CONSECUTIVE_SCHEMA_ERRORS if max_consecutive_schema_errors is None else max_consecutive_schema_errors),
+    )
+
+    async def _error_sleep(seconds: float) -> None:
+        if sleep_func is not None:
+            await sleep_func(seconds)
+        else:
+            await _interruptible_sleep(stop_event, seconds)
+
+    async def _dispatch_schema_alert(summary: str, details: Dict[str, Any]) -> None:
+        try:
+            from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
+            await ops_alert_service.dispatch_incident(
+                OpsIncident(
+                    alert_id="ALERT-WORKER-SCHEMA-CONTRACT",
+                    severity="P0",
+                    summary=summary,
+                    details=details,
+                )
+            )
+        except Exception as alert_err:
+            logger.warning(f"Failed to dispatch schema contract ops alert: {alert_err}")
 
     _register_shutdown_signals(stop_event)
 
@@ -825,8 +928,25 @@ async def run_failover_worker(
         f"(poll interval: {poll_idle_seconds}s, lease: {lease_seconds}s, limit: {limit}, once: {once})"
     )
 
+    # Startup gate 1 (OPS-3): production requires a configured ops alert channel.
+    validate_ops_alerting_configuration(component="failover-worker")
+
+    # Startup gate 2 (ARCH-1): refuse to start when required database RPCs are missing.
+    try:
+        contract = enforce_schema_contract(schema_probe or probe_schema_contract)
+        logger.info(f"Schema contract probe status: {contract.status}")
+    except SchemaContractViolationError as contract_err:
+        logger.critical(f"Failover worker refusing to start: {contract_err}")
+        await _dispatch_schema_alert(
+            "Failover worker refused to start: required database functions missing",
+            {"worker_id": worker_id, "missing": contract_err.missing},
+        )
+        raise
+
     # Track claimed events that are currently in-flight
     in_flight_events: Dict[str, Dict[str, Any]] = {}
+    consecutive_errors = 0
+    consecutive_schema_errors = 0
 
     try:
         while not stop_event.is_set():
@@ -857,20 +977,39 @@ async def run_failover_worker(
                     logger.warning(f"Error checking expired dispatch intent events: {q_exc}")
 
                 # Atomically claim received delivery failure events (FOR UPDATE SKIP LOCKED with lease expiry)
-                events = repository.claim_pending_delivery_failure_events(
+                events = list(repository.claim_pending_delivery_failure_events(
                     worker_id=worker_id,
                     limit=limit,
                     lease_seconds=lease_seconds,
-                )
+                ) or [])
 
-                # Atomically claim notification outbox items (FOR UPDATE SKIP LOCKED with lease expiry)
-                outbox_items = repository.claim_notification_outbox(
-                    worker_id=worker_id,
-                    limit=limit,
-                    lease_seconds=300,
-                )
+                # DB-2: register claimed leases for release IMMEDIATELY, before any other
+                # queue operation can fail, so no failure path can strand them.
+                for e in events:
+                    e_id = e.get("id")
+                    if e_id:
+                        in_flight_events[str(e_id)] = e
 
-                if not events and not outbox_items:
+                # Atomically claim notification outbox items (FOR UPDATE SKIP LOCKED with lease expiry).
+                # Isolated: an outbox failure must not block delivery-failure processing.
+                outbox_error: Optional[BaseException] = None
+                outbox_items: List[Dict[str, Any]] = []
+                try:
+                    outbox_items = list(repository.claim_notification_outbox(
+                        worker_id=worker_id,
+                        limit=limit,
+                        lease_seconds=300,
+                    ) or [])
+                except Exception as ob_exc:
+                    outbox_error = ob_exc
+                    logger.error(
+                        f"Notification outbox claim failed; continuing delivery-failure processing: "
+                        f"{sanitize_exception(ob_exc)}"
+                    )
+
+                if outbox_error is None and not events and not outbox_items:
+                    consecutive_errors = 0
+                    consecutive_schema_errors = 0
                     if once:
                         logger.info("Single-cycle failover mode: zero events and outbox items claimed. Exiting.")
                         break
@@ -882,11 +1021,6 @@ async def run_failover_worker(
                     continue
 
                 if events:
-                    for e in events:
-                        e_id = e.get("id")
-                        if e_id:
-                            in_flight_events[str(e_id)] = e
-
                     logger.info(f"Worker {worker_id} claimed {len(events)} delivery failure event(s). Processing...")
                     for event in events:
                         if stop_event.is_set():
@@ -919,12 +1053,27 @@ async def run_failover_worker(
                             break
                         await process_notification_outbox_item(item, worker_id)
 
+                # Surface the isolated outbox failure through the loop error path
+                # (alerting, backoff, schema-error accounting) after events were handled.
+                if outbox_error is not None:
+                    raise outbox_error
+
+                consecutive_errors = 0
+                consecutive_schema_errors = 0
+
                 if once:
                     logger.info("Single-cycle failover mode: batch completed. Exiting cleanly.")
                     break
 
             except Exception as exc:
-                logger.error(f"Error in failover worker loop: {exc}", exc_info=True)
+                consecutive_errors += 1
+                schema_error = is_schema_contract_error(exc)
+                consecutive_schema_errors = consecutive_schema_errors + 1 if schema_error else 0
+                logger.error(
+                    f"Error in failover worker loop (consecutive: {consecutive_errors}, "
+                    f"schema-class: {schema_error}, consecutive schema: {consecutive_schema_errors}/{schema_error_limit}): {exc}",
+                    exc_info=True,
+                )
                 # Dispatch Ops Alert (OPS-02)
                 try:
                     from app.services.alerting.ops_alert_service import ops_alert_service, OpsIncident
@@ -949,11 +1098,32 @@ async def run_failover_worker(
                             logger.warning(f"Failed to release event {rem_id}: {rel_err}")
                         in_flight_events.pop(rem_id, None)
 
+                # Schema/contract errors do not heal by retrying: exit non-zero so the platform
+                # restarts the worker and the failure is visible, instead of spinning forever.
+                if schema_error and consecutive_schema_errors >= schema_error_limit:
+                    last_error = sanitize_exception(exc)
+                    logger.critical(
+                        f"Failover worker exiting: {consecutive_schema_errors} consecutive schema contract errors. "
+                        f"Last error: {last_error}"
+                    )
+                    await _dispatch_schema_alert(
+                        "Failover worker exiting after repeated database schema contract errors",
+                        {"worker_id": worker_id, "consecutive": consecutive_schema_errors, "error": last_error[:200]},
+                    )
+                    raise SchemaContractViolationError(
+                        f"Failover worker aborted after {consecutive_schema_errors} consecutive schema contract "
+                        f"errors: {last_error}"
+                    ) from exc
+
                 if once:
                     logger.info("Single-cycle failover mode: loop exception encountered. Exiting cleanly.")
                     break
 
-                await asyncio.sleep(5)
+                delay = compute_error_backoff(consecutive_errors, backoff_base, backoff_cap, jitter_func)
+                logger.warning(
+                    f"Failover worker backing off {delay:.1f}s after {consecutive_errors} consecutive error(s)."
+                )
+                await _error_sleep(delay)
 
             # If stopped during batch processing, release remaining in-flight events
             if stop_event.is_set() and in_flight_events:

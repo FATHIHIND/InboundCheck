@@ -85,6 +85,7 @@ from app.services.billing.stripe_service import (
 )
 
 
+from tests.stripe_event_fixtures import bind_stripe_customer, complete_stripe_event
 def make_stripe_signature(payload_bytes: bytes, secret: str, timestamp: int = None) -> str:
     """Helper to generate an authentic Stripe HMAC-SHA256 signature header."""
     ts = timestamp if timestamp is not None else int(time.time())
@@ -279,11 +280,11 @@ def test_case_10_invalid_signature_cannot_activate_subscription():
         # Verify signature verification rejects missing signature
         assert svc.verify_webhook_signature(raw_bytes, "") is False
 
-        # Because is_valid is False, process_webhook_event MUST NOT be invoked
-        # Verify profile remains in 'canceled' status and 'starter' tier
-        prof = supabase_service.get_user_profile(user_id)
-        assert prof["subscription_tier"] == "starter"
-        assert prof["subscription_status"] == "canceled"
+    # Inspect the disconnected test profile outside the production settings patch;
+    # production correctly prohibits in-memory database fallback.
+    prof = supabase_service.get_user_profile(user_id)
+    assert prof["subscription_tier"] == "starter"
+    assert prof["subscription_status"] == "canceled"
 
 
 # ==============================================================================
@@ -299,8 +300,10 @@ def test_case_11_duplicate_valid_webhook_remains_idempotent():
         "subscription_status": "canceled",
     })
 
+    bind_stripe_customer(supabase_service, user_id, "cus_idemp_11")
+
     evt_id = f"evt_idemp_{int(time.time() * 1000)}"
-    valid_payload = {
+    valid_payload = complete_stripe_event({
         "id": evt_id,
         "type": "checkout.session.completed",
         "data": {
@@ -311,7 +314,7 @@ def test_case_11_duplicate_valid_webhook_remains_idempotent():
                 "metadata": {"user_id": user_id, "plan_tier": "growth"},
             }
         }
-    }
+    }, tier='growth')
     raw_bytes = json.dumps(valid_payload).encode("utf-8")
     secret = "whsec_idempotency_test_secret"
 
@@ -322,6 +325,10 @@ def test_case_11_duplicate_valid_webhook_remains_idempotent():
         sig_header = make_stripe_signature(raw_bytes, secret)
         assert svc.verify_webhook_signature(raw_bytes, sig_header) is True
 
+    # Cryptographic verification above remains production-strict. Synthetic
+    # persistence below explicitly uses the local test model, never a production
+    # database outage fallback.
+    with patch.object(settings, "ENVIRONMENT", "test"), patch.object(settings, "STAGING_MODE", False), patch.dict(os.environ, {"STAGING_MODE": "false"}):
         # First delivery: Activates subscription
         res1 = svc.process_webhook_event(valid_payload)
         assert res1["status"] == "success"

@@ -37,7 +37,7 @@ The audit covered every file, directory, configuration file, database migration,
 - **Persistence Layer:** `supabase/migrations/` (PostgreSQL schemas, RLS policies, triggers, RPC stored procedures).
 - **Worker & Job Architecture:** `backend/app/worker.py`, background scheduling, lease claims, retry backoff algorithms.
 - **Frontend Application:** `frontend/src/` (Next.js 14 App Router, `@supabase/ssr`, Tailwind CSS, middleware route guards).
-- **Deployment & Infrastructure:** `Dockerfile`, `docker-compose.yml`, `railway.json`, environment definitions.
+- **Deployment & Infrastructure:** `backend/Dockerfile`, `docker-compose.yml`, environment definitions. No Railway manifest is present in the checkout reviewed on 2026-11-04.
 - **Test Infrastructure:** `backend/tests/` (169 unit, integration, and failure-injection test cases).
 
 The audit evaluated 45 distinct operational dimensions with zero code modifications made during the inspection.
@@ -410,9 +410,9 @@ We audited `frontend/src/` for client-side security risks:
 
 ## 24. Deployment & Railway Configuration
 
-- **Railway Config:** [`railway.json`](file:///c:/Users/pc/Desktop/inboundcheck%20VERSION%201/railway.json) defines container build commands and healthcheck endpoints.
-- **Healthcheck Path:** Configured to `/health`. Because `/health` is exempted from the rate limiter, Railway liveness checks will succeed.
-- **Worker Process:** Must run as a distinct service (`python -m app.worker`). Running both web and worker in a single container is not supported by the Dockerfile.
+- **Source correction (2026-11-04):** No root or backend Railway JSON/TOML manifest is present. Earlier claims that a manifest defines build commands and a deployed healthcheck were unsupported.
+- **Observed source defaults:** `backend/Dockerfile` starts Uvicorn. `docker-compose.yml` overrides the command for dedicated audit/failover workers using `python -m app.workers.runner audit|failover`; `app.worker` is not a current module.
+- **Deployment status:** Actual Railway start command, worker selection, healthcheck and current runtime logs remain unverified (dashboard access returned 404/Login). Local startup tests do not establish deployment recovery. See [current worker source evidence](../operations/WORKER_STARTUP.md).
 
 ---
 

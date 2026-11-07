@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
   CreditCard,
@@ -22,6 +23,7 @@ import {
 import { GlassEmeraldCard } from "@/components/ui/GlassEmeraldCard";
 import { OperationalErrorCard } from "@/components/operational/OperationalErrorCard";
 import { ApiError, formatApiErrorMessage } from "@/lib/apiResource";
+import { resolveStripeRedirectUrl } from "@/lib/stripe-redirect";
 
 interface SubscriptionInfo {
   tier: "starter" | "growth" | "agency" | string;
@@ -103,7 +105,38 @@ interface InvoiceItem {
   created_at?: number;
 }
 
+const UNEXPECTED_STRIPE_DESTINATION =
+  "The payment engine returned an unexpected redirect destination. Please contact support.";
+
+function isUnexpandedSessionTemplate(sessionId: string | null): boolean {
+  return Boolean(sessionId && (sessionId.includes("{CHECKOUT_SESSION_ID}") || sessionId.includes("%7BCHECKOUT_SESSION_ID%7D")));
+}
+
+// The current query string is read as an external store so the server render and
+// hydration pass (no message) match, then the client shows the checkout outcome.
+const subscribeNoop = () => () => {};
+const getClientSearch = () => window.location.search;
+const getServerSearch = () => "";
+
+/** Success banner text derived from Stripe's return URL query parameters. */
+function deriveCheckoutSuccessMessage(search: string): string | null {
+  try {
+    const params = new URLSearchParams(search);
+    const sessionId = params.get("session_id");
+    const upgraded = params.get("upgraded");
+    const checkoutStatus = params.get("checkout");
+    if (isUnexpandedSessionTemplate(sessionId)) return null;
+    if (upgraded || checkoutStatus === "success") {
+      return `Successfully updated subscription to ${upgraded ? upgraded.toUpperCase() : "the selected"} plan.`;
+    }
+  } catch (e) {
+    console.error("Failed to parse window URL params:", e);
+  }
+  return null;
+}
+
 export default function BillingPortalPage() {
+  const router = useRouter();
   const [subInfo, setSubInfo] = useState<SubscriptionInfo>({
     tier: "starter",
     subscription_status: "active",
@@ -121,26 +154,24 @@ export default function BillingPortalPage() {
   const [portalNotice, setPortalNotice] = useState<string | null>(null);
 
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [checkoutSuccessMessage, setCheckoutSuccessMessage] = useState<string | null>(null);
+  // undefined = show the message derived from the return URL; null/string = explicitly set.
+  const [checkoutSuccessOverride, setCheckoutSuccessMessage] = useState<string | null | undefined>(undefined);
+  const urlSearch = useSyncExternalStore(subscribeNoop, getClientSearch, getServerSearch);
+  const checkoutSuccessMessage =
+    checkoutSuccessOverride !== undefined ? checkoutSuccessOverride : deriveCheckoutSuccessMessage(urlSearch);
 
   // Clean URL params if returning from checkout with unescaped or mock template strings
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
     try {
       const url = new URL(window.location.href);
-      const sessionId = url.searchParams.get("session_id");
-      const upgraded = url.searchParams.get("upgraded");
-      const checkoutStatus = url.searchParams.get("checkout");
-
-      if (sessionId || upgraded || checkoutStatus) {
-        if (sessionId && (sessionId.includes("{CHECKOUT_SESSION_ID}") || sessionId.includes("%7BCHECKOUT_SESSION_ID%7D"))) {
-          console.warn("[CHECKOUT_CLEANUP] Detected unexpanded template session_id in URL, cleaning up query string...");
-          url.searchParams.delete("session_id");
-          window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
-        } else if (upgraded || checkoutStatus === "success") {
-          setCheckoutSuccessMessage(`Successfully updated subscription to ${upgraded ? upgraded.toUpperCase() : "the selected"} plan.`);
-        }
+      if (isUnexpandedSessionTemplate(url.searchParams.get("session_id"))) {
+        console.warn("[CHECKOUT_CLEANUP] Detected unexpanded template session_id in URL, cleaning up query string...");
+        url.searchParams.delete("session_id");
+        // The template case never shows a success banner; drop the outcome params too so
+        // the URL-derived banner stays suppressed after the query string is rewritten.
+        url.searchParams.delete("upgraded");
+        url.searchParams.delete("checkout");
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
       }
     } catch (e) {
       console.error("Failed to parse window URL params:", e);
@@ -240,9 +271,7 @@ export default function BillingPortalPage() {
           headers: responseHeaders,
         });
         setCheckoutError("Your session has expired. Please sign in to upgrade your subscription.");
-        if (typeof window !== "undefined") {
-          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        }
+        router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
         return;
       }
 
@@ -276,11 +305,24 @@ export default function BillingPortalPage() {
         if (redirectUrl.includes("{CHECKOUT_SESSION_ID}") || redirectUrl.includes("%7BCHECKOUT_SESSION_ID%7D")) {
           console.warn("[CHECKOUT_WARNING] Backend returned unexpanded template redirect URL:", redirectUrl);
           const sanitizedUrl = redirectUrl.replace("{CHECKOUT_SESSION_ID}", "direct").replace("%7BCHECKOUT_SESSION_ID%7D", "direct");
-          window.location.href = sanitizedUrl;
+          const safeSanitizedUrl = resolveStripeRedirectUrl(sanitizedUrl);
+          if (safeSanitizedUrl) {
+            window.location.assign(safeSanitizedUrl);
+          } else {
+            console.error("[CHECKOUT_ERROR] Rejected non-Stripe checkout redirect destination.");
+            setCheckoutError(UNEXPECTED_STRIPE_DESTINATION);
+          }
           return;
         }
 
-        window.location.href = redirectUrl;
+        // FE-8: only navigate to Stripe's hosted Checkout origin.
+        const safeRedirectUrl = resolveStripeRedirectUrl(redirectUrl);
+        if (safeRedirectUrl) {
+          window.location.assign(safeRedirectUrl);
+        } else {
+          console.error("[CHECKOUT_ERROR] Rejected non-Stripe checkout redirect destination.");
+          setCheckoutError(UNEXPECTED_STRIPE_DESTINATION);
+        }
         return;
       }
 
@@ -319,7 +361,7 @@ export default function BillingPortalPage() {
 
       if (res.status === 401) {
         console.warn("User unauthorized for customer portal. Redirecting to login...");
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
         return;
       }
 
@@ -327,7 +369,14 @@ export default function BillingPortalPage() {
       if (res.ok) {
         const portalUrl = data.url || data.portal_url;
         if (portalUrl && data.has_customer) {
-          window.open(portalUrl, "_blank");
+          // FE-8: only open Stripe's hosted Billing Portal origin.
+          const safePortalUrl = resolveStripeRedirectUrl(portalUrl);
+          if (safePortalUrl) {
+            window.open(safePortalUrl, "_blank", "noopener,noreferrer");
+          } else {
+            console.error("[PORTAL_ERROR] Rejected non-Stripe customer portal destination.");
+            setPortalNotice(UNEXPECTED_STRIPE_DESTINATION);
+          }
           return;
         } else if (data.message) {
           setPortalNotice(data.message);

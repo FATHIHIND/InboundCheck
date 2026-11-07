@@ -2,7 +2,7 @@
 """
 InboundCheck — Production-Grade Migration Ledger Reconciliation Engine
 ----------------------------------------------------------------------
-Canonical 28-Row Invariant Architecture (Option A - Zero Drift)
+Canonical Manifest Invariant Architecture (Option A - Zero Drift)
 
 Provides deterministic, fail-closed reconciliation between local repository
 migration files and the remote Supabase `supabase_migrations.schema_migrations`
@@ -11,8 +11,8 @@ ledger table.
 Key Guarantees:
 1. Strict Preserved Baseline: Verifies exact byte-for-byte immutability of the 3 legacy rows.
 2. Complete Legacy Preservation: Forensic archival of all original statement arrays.
-3. Atomic Legacy Swap: Replaces 3 legacy rows with 28 canonical records within a single transaction.
-4. Universal Multi-Environment Parity: Local (28 files) = Staging (28 rows) = Production (28 rows).
+3. Atomic Legacy Swap: Replaces 3 legacy rows with the approved canonical records within a single transaction.
+4. Universal Multi-Environment Parity: Local migration inventory = Staging ledger = Production ledger (canonical manifest).
 5. Strict Supabase CLI Compatibility: Prevents `DbPushMissingLocalError` in `supabase db push`.
 6. Zero Target Collision: Rejects any collision before attempting insertion.
 7. Concurrency Protection: Enforces `LOCK TABLE ... ACCESS EXCLUSIVE` and strict lock timeouts.
@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Canonical Standardized Migration Definitions (version, name)
-# Dynamically derived manifest representing the approved local migration sequence.
+# Explicit manifest representing the approved local migration sequence.
 CANONICAL_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
     ("20260903000001", "complete_production_schema"),
     ("20260904000001", "fix_handle_new_user_trigger"),
@@ -66,6 +66,12 @@ CANONICAL_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
     ("20261029000001", "durable_failover_dispatch_intent_and_quarantine"),
     ("20261031000001", "harden_worker_rpc_acls_and_overloads"),
     ("20261031000002", "durable_notification_outbox_and_retry_scheduling"),
+    ("20261104000001", "atomic_stripe_billing_events"),
+    ("20261104000003", "notification_outbox_dispatch_quarantine"),
+    ("20261106000001", "p0_client_table_boundaries"),
+    ("20261106000002", "p0_durable_shopify_privacy_jobs"),
+    ("20261107000001", "p0_reconcile_worker_acls_and_outbox"),
+    ("20261107000002", "shopify_billing_columns"),
 )
 # Backward-compatible alias for existing test imports
 CANONICAL_28_MIGRATIONS = CANONICAL_MIGRATIONS

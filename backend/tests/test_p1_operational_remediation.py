@@ -440,9 +440,16 @@ async def test_ops03_successful_event_processing():
             "event_payload": {"reason": "550 5.1.1 User unknown", "order_id": order_id},
             "processing_status": "queued",
             "claimed_by": worker_id,
+            "lease_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
         }
         failover_repo.supabase._in_memory_delivery_failure_events[event_id] = dict(event)
 
+        from app.services.failover.omnichannel_service import telegram_alert_service
+        telegram_alert_service.update_config(user_id, {
+            "is_enabled": True,
+            "telegram_bot_token": "123456:RegressionSyntheticToken",
+            "telegram_chat_id": "-1001234567890",
+        })
         with patch("app.services.failover.omnichannel_service.telegram_alert_service.send_telegram_alert", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = {"success": True, "data": {"result": {"message_id": 888777}}}
 
@@ -468,8 +475,8 @@ async def test_ops03_successful_event_processing():
 async def test_ops03_processing_exception_recovery():
     """
     Verify processing exception recovery:
-    When an unhandled exception occurs during event processing,
-    the event is released back to 'received' and the exception is propagated.
+    An exception after durable dispatch intent has an unknown external outcome.
+    Keep the intent and quarantine on expiry; never automatically resend.
     """
     worker_id = "worker-exc-501"
     user_id = "user-exc-501"
@@ -495,11 +502,15 @@ async def test_ops03_processing_exception_recovery():
             with pytest.raises(RuntimeError, match="Transient dispatch network crash"):
                 await process_delivery_failure_event(event, worker_id)
 
-            # CRITICAL CHECK: Event must be released back to 'received' with lease cleared
+            # Dispatch may have been accepted: no automatic release is safe.
             stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
-            assert stored["processing_status"] == "received", "Event must be returned to received on processing exception"
-            assert stored["claimed_by"] is None
-            assert stored["lease_until"] is None
+            assert stored["processing_status"] == "dispatching"
+            assert stored["claimed_by"] == worker_id
+            stored["lease_until"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+            resolutions = failover_repo.quarantine_expired_dispatch_intent_events()
+            assert any(r["event_id"] == event_id and r["resolution"] == "quarantined_ambiguous" for r in resolutions)
+            assert stored["processing_status"] == "quarantined"
+            assert failover_repo.claim_pending_delivery_failure_events("replacement-worker") == []
 
         failover_repo.supabase._in_memory_delivery_failure_events.clear()
 

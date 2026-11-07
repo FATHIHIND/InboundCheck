@@ -13,7 +13,7 @@ import time
 from typing import Dict, Any, Optional, Tuple, List
 import httpx
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from fastapi import HTTPException, status
 from cryptography.fernet import Fernet
@@ -247,6 +247,49 @@ class ShopifyService:
         ).decode("utf-8")
 
         return hmac.compare_digest(hmac_header, computed_hmac)
+
+    def verify_webhook_envelope(self, body: bytes, headers, expected_topic: str) -> Dict[str, Any]:
+        """Verify raw signature, route topic and signed shop assertions before effects.
+
+        Shopify's HMAC authenticates the body, NOT delivery headers. Header shop is
+        only a routing hint; subscription identity must additionally be verified
+        through that shop's authenticated Admin API and the durable contract RPC.
+        """
+        import json
+        if not self.verify_webhook_hmac(body, headers.get("x-shopify-hmac-sha256", "")):
+            raise HTTPException(status_code=401, detail="Invalid Shopify HMAC-SHA256 signature")
+        if headers.get("x-shopify-topic") != expected_topic:
+            raise HTTPException(status_code=400, detail="Shopify topic does not match webhook route")
+        delivery_id = headers.get("x-shopify-webhook-id", "")
+        if not isinstance(delivery_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", delivery_id):
+            raise HTTPException(status_code=400, detail="Missing or invalid Shopify delivery identifier")
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (ValueError, UnicodeError):
+            raise HTTPException(status_code=400, detail="Invalid Shopify JSON payload") from None
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="Shopify payload must be an object")
+        raw_header_shop = headers.get("x-shopify-shop-domain", "")
+        if not isinstance(raw_header_shop, str) or not SHOPIFY_DOMAIN_REGEX.fullmatch(raw_header_shop.lower()):
+            raise HTTPException(status_code=400, detail="Missing or invalid Shopify shop header")
+        shop = raw_header_shop.lower()
+        # These are shop assertions in the signed body. Do not use `domain`:
+        # Shopify may use a merchant's custom storefront domain there.
+        asserted = [payload[k] for k in ("shop_domain", "myshopify_domain") if payload.get(k)]
+        nested_shop = payload.get("shop")
+        if isinstance(nested_shop, dict):
+            asserted += [nested_shop[k] for k in ("shop_domain", "myshopify_domain") if nested_shop.get(k)]
+        for value in asserted:
+            if not isinstance(value, str) or value.lower() != shop:
+                raise HTTPException(status_code=400, detail="Signed Shopify shop disagrees with delivery header")
+        if expected_topic in {"app/uninstalled", "customers/data_request", "customers/redact", "shop/redact"} and not asserted:
+            raise HTTPException(status_code=400, detail="Signed Shopify shop identity is required")
+        triggered_at = headers.get("x-shopify-triggered-at")
+        if triggered_at and not self.verify_webhook_timestamp(triggered_at):
+            raise HTTPException(status_code=400, detail="Shopify webhook timestamp outside tolerance window")
+        # This timestamp is only a delivery anomaly check, not ordering authority.
+        return {"payload": payload, "shop": shop, "delivery_id": delivery_id,
+                "payload_hash": hashlib.sha256(body).hexdigest(), "topic": expected_topic}
 
     async def exchange_token(self, shop: str, code: str) -> Dict[str, Any]:
         """

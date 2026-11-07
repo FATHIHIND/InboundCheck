@@ -31,6 +31,7 @@ from app.services.ai.content_optimizer import ai_content_service
 from app.workers.audit_worker import audit_claimed_domain
 from app.workers.failover_worker import process_delivery_failure_event
 from tests.conftest import auth_headers
+from tests.stripe_event_fixtures import bind_stripe_customer, complete_stripe_event
 
 
 # =============================================================================
@@ -118,7 +119,8 @@ async def test_stripe_webhook_duplicate_delivery_is_idempotent():
     now_ts = int(time.time())
     event_id = f"evt_stripe_{uuid.uuid4().hex}"
 
-    checkout_event = {
+    bind_stripe_customer(supabase_service, user_id, "cus_stripe_idempotent")
+    checkout_event = complete_stripe_event({
         "id": event_id,
         "type": "checkout.session.completed",
         "data": {
@@ -129,7 +131,7 @@ async def test_stripe_webhook_duplicate_delivery_is_idempotent():
                 "metadata": {"user_id": user_id, "plan_tier": "growth"}
             }
         }
-    }
+    }, tier='growth')
 
     raw_bytes = json.dumps(checkout_event).encode("utf-8")
     sig_header = f"t={now_ts},v1=mock_signature"
@@ -148,13 +150,15 @@ async def test_stripe_webhook_duplicate_delivery_is_idempotent():
 
 
 @pytest.mark.asyncio
-async def test_shopify_order_webhook_duplicate_delivery_is_idempotent():
+async def test_shopify_order_webhook_duplicate_delivery_is_idempotent(monkeypatch):
     """Verify replayed Shopify orders webhooks return already_processed without duplicating operations."""
     transport = ASGITransport(app=app)
     webhook_id = f"sh_hook_{uuid.uuid4().hex}"
     body_bytes = json.dumps({"id": 1099, "email": "buyer@test.com"}).encode("utf-8")
 
-    secret = shopify_service.api_secret or "dummy_secret"
+    # Positive HMAC delivery requires explicit server configuration, even in tests.
+    monkeypatch.setattr(shopify_service, "api_secret", "test-only-shopify-signing-secret")
+    secret = shopify_service.api_secret
     computed_hmac = base64_hmac = __import__("base64").b64encode(
         hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).digest()
     ).decode("utf-8")
@@ -282,7 +286,7 @@ async def test_stripe_webhook_rejects_payload_exceeding_1mb():
             headers={"Content-Length": str(len(large_payload)), "Stripe-Signature": "t=123,v1=abc"}
         )
         assert res.status_code == 413
-        assert "exceeds maximum limit" in res.json().get("detail", "")
+        assert res.json()["detail"] == "Payload exceeds maximum size limit"
 
 
 @pytest.mark.asyncio

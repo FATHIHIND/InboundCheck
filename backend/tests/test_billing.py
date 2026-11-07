@@ -29,6 +29,24 @@ from app.core.tier_guards import (
     is_trial_expired,
 )
 from tests.conftest import auth_headers
+from tests.stripe_event_fixtures import bind_stripe_customer, complete_stripe_event
+
+
+@pytest.fixture
+def offline_billing_dns(monkeypatch):
+    """Keep authorization tests independent of public DNS/DNSBL responses.
+
+    Exercise the real audit/scoring/API path with deterministic negative DNS
+    answers. This function-scoped external dependency stub changes neither
+    runtime timeouts nor event-loop settings nor authorization behavior.
+    """
+    import dns.asyncresolver
+    import dns.resolver
+    from unittest.mock import AsyncMock
+
+    resolve = AsyncMock(side_effect=dns.resolver.NXDOMAIN)
+    monkeypatch.setattr(dns.asyncresolver.Resolver, "resolve", resolve)
+    return resolve
 
 
 @pytest.mark.asyncio
@@ -91,7 +109,7 @@ async def test_expired_subscription_blocks_access():
 
 
 @pytest.mark.asyncio
-async def test_domain_quota_limits():
+async def test_domain_quota_limits(offline_billing_dns):
     """Verify domain caps: Starter (1 domain), Growth (3 domains), Enterprise (unlimited)."""
     transport = ASGITransport(app=app)
 
@@ -110,10 +128,13 @@ async def test_domain_quota_limits():
         r1 = await ac.post("/api/v1/domains", json={"domain": "starter-domain-1.com"})
         assert r1.status_code == 200
 
+        queries_before_rejection = offline_billing_dns.await_count
+        assert queries_before_rejection > 0
         # Add 2nd domain -> Exceeds quota -> 402
         r2 = await ac.post("/api/v1/domains", json={"domain": "starter-domain-2.com"})
         assert r2.status_code == 402
         assert "quota reached" in r2.json()["detail"].lower()
+        assert offline_billing_dns.await_count == queries_before_rejection
 
     # 2. Growth Tier user: limit 3 domains
     growth_user = "growth-quota-user"
@@ -128,10 +149,12 @@ async def test_domain_quota_limits():
             res = await ac.post("/api/v1/domains", json={"domain": f"growth-domain-{i}.com"})
             assert res.status_code == 200
 
+        queries_before_rejection = offline_billing_dns.await_count
         # 4th domain -> Exceeds quota (3) -> 402
         r4 = await ac.post("/api/v1/domains", json={"domain": "growth-domain-4.com"})
         assert r4.status_code == 402
         assert "quota reached" in r4.json()["detail"].lower()
+        assert offline_billing_dns.await_count == queries_before_rejection
 
     # 3. Agency Tier user: limit 20 domains
     agency_user = "agency-quota-user"
@@ -146,14 +169,16 @@ async def test_domain_quota_limits():
             res = await ac.post("/api/v1/domains", json={"domain": f"agency-domain-{i}.com"})
             assert res.status_code == 200
 
+        queries_before_rejection = offline_billing_dns.await_count
         # 21st domain -> Exceeds quota (20) -> 402
         r21 = await ac.post("/api/v1/domains", json={"domain": "agency-domain-21.com"})
         assert r21.status_code == 402
         assert "quota reached" in r21.json()["detail"].lower()
+        assert offline_billing_dns.await_count == queries_before_rejection
 
 
 @pytest.mark.asyncio
-async def test_tier_gates_spf_merge_and_auto_fix():
+async def test_tier_gates_spf_merge_and_auto_fix(offline_billing_dns):
     """Starter users cannot access SPF merge plan or 1-click auto-fix when trial is over."""
     transport = ASGITransport(app=app)
     starter_user = "starter-gate-user"
@@ -374,8 +399,10 @@ async def test_webhook_lifecycle_ingestion():
     user_id = "webhook-user-42"
     now_ts = int(time.time())
 
+    bind_stripe_customer(supabase_service, user_id, "cus_stripe_12345")
+
     # 1. checkout.session.completed
-    checkout_event = {
+    checkout_event = complete_stripe_event({
         "id": f"evt_checkout_{now_ts}",
         "type": "checkout.session.completed",
         "data": {
@@ -389,7 +416,7 @@ async def test_webhook_lifecycle_ingestion():
                 }
             }
         }
-    }
+    }, tier='growth')
 
     raw_bytes = json.dumps(checkout_event).encode("utf-8")
     sig_header = f"t={now_ts},v1=mock_signature"
@@ -422,17 +449,18 @@ async def test_webhook_lifecycle_ingestion():
         assert dup_res.json().get("status") == "already_processed"
 
     # 3. customer.subscription.deleted -> Downgrade
-    cancel_event = {
+    cancel_event = complete_stripe_event({
         "id": f"evt_cancel_{now_ts}",
         "type": "customer.subscription.deleted",
         "data": {
             "object": {
+                "id": "sub_stripe_67890",
                 "customer": "cus_stripe_12345",
                 "status": "canceled",
                 "metadata": {"user_id": user_id}
             }
         }
-    }
+    })
     cancel_bytes = json.dumps(cancel_event).encode("utf-8")
     cancel_sig = f"t={now_ts},v1=mock_sig_cancel"
 

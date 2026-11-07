@@ -4,6 +4,14 @@ InboundCheck - Production Runtime Environment Integrity Guard
 Fail-fast validation for backend API configurations. Enforces that all
 critical production secrets, Supabase endpoints, and Stripe credentials
 are present and not containing raw developer placeholders.
+
+OPS-3 (alerting): in production, the failover WORKER refuses to start unless an
+ops alert channel is configured (OPS_ALERT_WEBHOOK_URL, or
+OPS_ALERT_TELEGRAM_BOT_TOKEN + OPS_ALERT_TELEGRAM_CHAT_ID) while
+OPS_ALERT_REQUIRED=true (default). The API process never fails startup for
+missing alerting (REV-3: that would also take down billing / Shopify / GDPR
+webhooks); it logs CRITICAL and /ready reports `alerting: unconfigured`.
+See validate_ops_alerting_configuration().
 """
 
 from typing import List, Dict, Any, Tuple, Optional
@@ -97,7 +105,7 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
     from app.core.config import settings
 
     issues: List[str] = []
-    is_prod = settings.ENVIRONMENT.lower() in ["production", "prod"]
+    is_prod = (settings.ENVIRONMENT or "").strip().lower() in ["production", "prod"]
 
     # 1. Supabase Backend Persistence Checks
     url_valid, url_issues, _ = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
@@ -119,7 +127,7 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
         elif stripe_key.startswith("sk_test_"):
             logger.info("💳 [STRIPE_STARTUP] Stripe Billing Engine: LIVE_TEST_MODE (Stripe Test Suite Active)")
         else:
-            logger.warning(f"💳 [STRIPE_STARTUP] Stripe Billing Engine: UNKNOWN_KEY_PREFIX ({stripe_key[:7]}...)")
+            logger.warning("[STRIPE_STARTUP] Stripe Billing Engine: UNKNOWN_KEY_PREFIX (value redacted)")
     else:
         logger.warning("💳 [STRIPE_STARTUP] Stripe Billing Engine: OFFLINE_FALLBACK (No Stripe Secret Key Detected - Simulation Active)")
 
@@ -167,7 +175,7 @@ def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
     from app.core.config import settings
 
     issues: List[str] = []
-    env_clean = (settings.ENVIRONMENT or "").lower()
+    env_clean = (settings.ENVIRONMENT or "").strip().lower()
     is_prod = env_clean in ["production", "prod"]
     is_staging = env_clean == "staging"
     is_enforced = is_prod or is_staging
@@ -209,6 +217,97 @@ def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
         logger.info(f"Worker environment integrity verified for mode: {settings.ENVIRONMENT}")
 
     return is_valid, issues
+
+
+def _first_configured(*values: Optional[str]) -> str:
+    for val in values:
+        if val and str(val).strip() and not check_is_placeholder(str(val)):
+            return str(val).strip()
+    return ""
+
+
+def resolve_ops_alert_channels() -> Tuple[str, str, str]:
+    """
+    Single source of truth for ops alert channel resolution (REV-3), shared by
+    get_ops_alerting_status() and OpsAlertService: (webhook_url, bot_token, chat_id).
+
+    OPS_ALERT_WEBHOOK_URL; OPS_ALERT_TELEGRAM_BOT_TOKEN / OPS_ALERT_TELEGRAM_CHAT_ID, each
+    falling back to TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID. Empty and placeholder values
+    are skipped, so a placeholder never shadows a working fallback.
+    """
+    from app.core.config import settings
+
+    webhook = _first_configured(
+        getattr(settings, "OPS_ALERT_WEBHOOK_URL", ""), os.getenv("OPS_ALERT_WEBHOOK_URL", "")
+    )
+    bot_token = _first_configured(
+        getattr(settings, "OPS_ALERT_TELEGRAM_BOT_TOKEN", ""),
+        os.getenv("OPS_ALERT_TELEGRAM_BOT_TOKEN", ""),
+        getattr(settings, "TELEGRAM_BOT_TOKEN", ""),
+        os.getenv("TELEGRAM_BOT_TOKEN", ""),
+    )
+    chat_id = _first_configured(
+        getattr(settings, "OPS_ALERT_TELEGRAM_CHAT_ID", ""),
+        os.getenv("OPS_ALERT_TELEGRAM_CHAT_ID", ""),
+        getattr(settings, "TELEGRAM_CHAT_ID", ""),
+        os.getenv("TELEGRAM_CHAT_ID", ""),
+    )
+    return webhook, bot_token, chat_id
+
+
+def get_ops_alerting_status() -> str:
+    """
+    Return "configured" if at least one operational alert channel can deliver, else "unconfigured".
+    Uses resolve_ops_alert_channels(), exactly as OpsAlertService does.
+    """
+    webhook, bot_token, chat_id = resolve_ops_alert_channels()
+    return "configured" if (webhook or (bot_token and chat_id)) else "unconfigured"
+
+
+# REV-3: only these components refuse to start without an alert channel (OPS_ALERT_REQUIRED=true).
+_ALERTING_FAIL_CLOSED_COMPONENTS = frozenset({"failover-worker"})
+
+
+def validate_ops_alerting_configuration(component: str = "api") -> bool:
+    """
+    OPS-3 / P0-7: enforce that production has a working operational alert channel.
+
+    OPERATOR ACTION REQUIRED BEFORE DEPLOYING TO PRODUCTION: configure
+    OPS_ALERT_WEBHOOK_URL, or OPS_ALERT_TELEGRAM_BOT_TOKEN + OPS_ALERT_TELEGRAM_CHAT_ID.
+    REV-3: the API ("api") NEVER raises here; it logs CRITICAL and /ready reports
+    `alerting: unconfigured`, so billing/Shopify/GDPR webhooks keep being served.
+    The failover worker, with OPS_ALERT_REQUIRED=true (the default), REFUSES TO START
+    (RuntimeError). OPS_ALERT_REQUIRED=false is an explicit, logged worker opt-out.
+
+    Returns True when configured, False when unconfigured but allowed to continue.
+    Never includes secret values in messages.
+    """
+    from app.core.config import settings
+
+    if get_ops_alerting_status() == "configured":
+        return True
+
+    env_clean = (settings.ENVIRONMENT or "").strip().lower()
+    is_prod = env_clean in ["production", "prod"]
+    msg = (
+        f"[{component}] No operational alert channel configured: set OPS_ALERT_WEBHOOK_URL, or "
+        "OPS_ALERT_TELEGRAM_BOT_TOKEN + OPS_ALERT_TELEGRAM_CHAT_ID. P0/P1 incidents would only be logged."
+    )
+    if not is_prod:
+        logger.warning(f"Development Environment Notice: {msg}")
+        return False
+
+    if component not in _ALERTING_FAIL_CLOSED_COMPONENTS:
+        logger.critical(f"{msg} Startup permitted: the API does not fail closed on alerting "
+                        "(/ready reports alerting: unconfigured).")
+        return False
+
+    if bool(getattr(settings, "OPS_ALERT_REQUIRED", True)):
+        logger.critical(f"FAIL-FAST ABORT: {msg} (OPS_ALERT_REQUIRED=true)")
+        raise RuntimeError(f"Production Alerting Integrity Failure: {msg}")
+
+    logger.critical(f"{msg} Startup permitted because OPS_ALERT_REQUIRED=false (explicit operator opt-out).")
+    return False
 
 
 def get_deployment_commit_sha(default: str = "dev") -> str:

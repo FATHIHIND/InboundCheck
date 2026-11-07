@@ -7,7 +7,9 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.services.dns.diagnostic_engine import DNSDiagnosticEngine
 from app.services.billing_service import billing_service
+from app.services.supabase_client import supabase_service
 from tests.conftest import create_test_jwt, auth_headers
+from tests.stripe_event_fixtures import bind_stripe_customer, complete_stripe_event
 
 
 @pytest.mark.asyncio
@@ -80,8 +82,9 @@ async def test_billing_endpoints():
         assert "domain_limit" in sub_res.json()
 
         # 5. Webhook processing: checkout.session.completed with customer & subscription IDs
+        bind_stripe_customer(supabase_service, "test-user-1", "cus_test_abc123")
         unique_checkout_evt = f"evt_test_checkout_{int(time.time() * 1000)}"
-        webhook_res = await ac.post("/api/v1/billing/webhook", json={
+        webhook_res = await ac.post("/api/v1/billing/webhook", json=complete_stripe_event({
             "id": unique_checkout_evt,
             "type": "checkout.session.completed",
             "data": {
@@ -92,7 +95,7 @@ async def test_billing_endpoints():
                     "metadata": {"plan_tier": "growth", "user_id": "test-user-1"}
                 }
             }
-        })
+        }, tier='growth'))
         assert webhook_res.status_code == 200
         assert webhook_res.json()["action"] == "subscription_activated"
         assert webhook_res.json()["tier"] == "growth"
@@ -100,17 +103,18 @@ async def test_billing_endpoints():
 
         # 6. Webhook processing: customer.subscription.deleted downgrades to starter
         unique_cancel_evt = f"evt_test_cancel_{int(time.time() * 1000)}"
-        cancel_res = await ac.post("/api/v1/billing/webhook", json={
+        cancel_res = await ac.post("/api/v1/billing/webhook", json=complete_stripe_event({
             "id": unique_cancel_evt,
             "type": "customer.subscription.deleted",
             "data": {
                 "object": {
+                    "id": "sub_test_xyz789",
                     "customer": "cus_test_abc123",
                     "status": "canceled",
                     "metadata": {"user_id": "test-user-1"}
                 }
             }
-        })
+        }))
         assert cancel_res.status_code == 200
         assert cancel_res.json()["action"] == "subscription_downgraded"
 
@@ -173,17 +177,20 @@ async def test_stripe_webhook_replay_tolerance_and_idempotency():
         assert res_large.status_code == 413
 
         # 2. Valid event processing
+        bind_stripe_customer(supabase_service, "test-user-replay", "cus_test_replay")
         unique_replay_evt = f"evt_test_replay_{int(time.time() * 1000)}"
-        valid_event = {
+        valid_event = complete_stripe_event({
             "id": unique_replay_evt,
             "type": "checkout.session.completed",
             "data": {
                 "object": {
                     "client_reference_id": "test-user-replay",
+                    "customer": "cus_test_replay",
+                    "subscription": "sub_test_replay",
                     "metadata": {"plan_tier": "enterprise", "user_id": "test-user-replay"}
                 }
             }
-        }
+        }, tier='agency')
         res1 = await ac.post("/api/v1/billing/webhook", json=valid_event)
         assert res1.status_code == 200
         assert res1.json()["action"] == "subscription_activated"

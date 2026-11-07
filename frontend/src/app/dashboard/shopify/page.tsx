@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { formatApiErrorMessage } from "@/lib/apiResource";
@@ -119,30 +119,36 @@ export default function ShopifyHubPage() {
   }, [storesResource]);
   const selectedStore = activeStores.find((s) => s.id === selectedStoreId) || activeStores[0] || null;
 
-  // Re-sync selection state when stores load or change
-  useEffect(() => {
+  // Re-sync selection state when stores load or change. Adjusted during render
+  // (React "adjusting state when a prop changes") instead of in an effect.
+  const [prevActiveStores, setPrevActiveStores] = useState(activeStores);
+  if (activeStores !== prevActiveStores) {
+    setPrevActiveStores(activeStores);
     if (storesResource.state === "ready" && activeStores.length > 0) {
       if (!selectedStoreId || !activeStores.some((s) => s.id === selectedStoreId)) {
         setSelectedStoreId(activeStores[0].id);
       }
-    } else if (storesResource.state === "empty" || activeStores.length === 0) {
+    } else {
+      // Not ready (loading/error/empty) or no stores: clear selection and form.
       setSelectedStoreId(null);
       setStoreDomain("");
       setCustomDomain("");
       setSenderEmail("");
       setStoreName("");
     }
-  }, [storesResource, selectedStoreId, activeStores]);
+  }
 
-  // Synchronize form inputs whenever the selected store changes
-  useEffect(() => {
+  // Synchronize form inputs whenever the selected store changes (also during render).
+  const [prevSelectedStore, setPrevSelectedStore] = useState(selectedStore);
+  if (selectedStore !== prevSelectedStore) {
+    setPrevSelectedStore(selectedStore);
     if (selectedStore) {
       setStoreDomain(selectedStore.shop_domain || "");
       setCustomDomain(selectedStore.custom_domain || selectedStore.shop_domain.replace(".myshopify.com", ".com"));
       setSenderEmail(selectedStore.sender_email || `orders@${selectedStore.shop_domain.replace(".myshopify.com", ".com")}`);
       setStoreName(selectedStore.metadata?.name || "");
     }
-  }, [selectedStore]);
+  }
 
   // Enhanced Test Order Simulator calling backend API (development mode)
   const handleSimulateOrder = async () => {

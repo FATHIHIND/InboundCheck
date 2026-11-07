@@ -46,6 +46,23 @@ export interface DeliverabilityRiskData {
   recommendation?: string;
 }
 
+type RiskFetchResult = { data: DeliverabilityRiskData } | { error: string };
+
+async function requestRevenueRisk(domain: string): Promise<RiskFetchResult> {
+  try {
+    const queryParam = `?domain=${encodeURIComponent(domain)}`;
+    const res = await apiFetch(`/api/v1/analytics/revenue-at-risk${queryParam}`);
+    if (!res.ok) {
+      throw new Error(`Failed to load revenue risk (HTTP ${res.status})`);
+    }
+    const json: DeliverabilityRiskData = await res.json();
+    return { data: json };
+  } catch (err: any) {
+    console.error("Error fetching revenue risk:", err);
+    return { error: err?.message || "Failed to calculate revenue at risk" };
+  }
+}
+
 interface DeliverabilityRiskBannerProps {
   domain?: string;
   onOpenWizard?: () => void;
@@ -57,38 +74,54 @@ export const DeliverabilityRiskBanner: React.FC<DeliverabilityRiskBannerProps> =
   onOpenWizard,
   className = "",
 }) => {
+  const trimmedDomain = domain?.trim() ?? "";
   const [data, setData] = useState<DeliverabilityRiskData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(Boolean(trimmedDomain));
   const [_error, setError] = useState<string | null>(null);
 
+  // Reset loading/data during render when the target domain changes
+  // (React "adjusting state when a prop changes"); the effect below then fetches.
+  const [prevDomain, setPrevDomain] = useState(trimmedDomain);
+  if (trimmedDomain !== prevDomain) {
+    setPrevDomain(trimmedDomain);
+    setIsLoading(Boolean(trimmedDomain));
+    setError(null);
+    if (!trimmedDomain) {
+      setData(null);
+    }
+  }
+
+  const applyRiskResult = useCallback((result: RiskFetchResult) => {
+    if ("data" in result) {
+      setData(result.data);
+    } else {
+      setError(result.error);
+    }
+    setIsLoading(false);
+  }, []);
+
+  // Manual refresh (event handler)
   const fetchRisk = useCallback(async () => {
-    if (!domain || !domain.trim()) {
+    if (!trimmedDomain) {
       setData(null);
       setIsLoading(false);
       return;
     }
-
     setIsLoading(true);
     setError(null);
-    try {
-      const queryParam = `?domain=${encodeURIComponent(domain.trim())}`;
-      const res = await apiFetch(`/api/v1/analytics/revenue-at-risk${queryParam}`);
-      if (!res.ok) {
-        throw new Error(`Failed to load revenue risk (HTTP ${res.status})`);
-      }
-      const json: DeliverabilityRiskData = await res.json();
-      setData(json);
-    } catch (err: any) {
-      console.error("Error fetching revenue risk:", err);
-      setError(err?.message || "Failed to calculate revenue at risk");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [domain]);
+    applyRiskResult(await requestRevenueRisk(trimmedDomain));
+  }, [trimmedDomain, applyRiskResult]);
 
   useEffect(() => {
-    fetchRisk();
-  }, [fetchRisk]);
+    if (!trimmedDomain) return;
+    let ignore = false;
+    void requestRevenueRisk(trimmedDomain).then((result) => {
+      if (!ignore) applyRiskResult(result);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [trimmedDomain, applyRiskResult]);
 
   if (isLoading) {
     return (
