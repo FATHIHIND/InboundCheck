@@ -16,29 +16,23 @@ function SignupForm() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedTier, setSelectedTier] = useState<string>(queryTier);
-  const [lockedDomain, setLockedDomain] = useState<string>(queryDomain);
+  // Derived from the URL during render (no state mirroring of search params).
+  const selectedTier = queryTier === "agency" || queryTier === "growth" ? queryTier : "starter";
+  const lockedDomain = queryDomain.trim().toLowerCase();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
+  // Persist the funnel selection to browser storage (external system sync only).
   useEffect(() => {
-    if (queryDomain) {
-      const clean = queryDomain.trim().toLowerCase();
-      setLockedDomain(clean);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("inboundcheck_pending_domain", clean);
-      }
+    if (lockedDomain) {
+      localStorage.setItem("inboundcheck_pending_domain", lockedDomain);
     }
     if (queryTier) {
-      const validTier = queryTier === "agency" || queryTier === "growth" ? queryTier : "starter";
-      setSelectedTier(validTier);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("inboundcheck_selected_tier", validTier);
-      }
+      localStorage.setItem("inboundcheck_selected_tier", selectedTier);
     }
-  }, [queryDomain, queryTier]);
+  }, [lockedDomain, queryTier, selectedTier]);
 
   const handleGoogleSignUp = async () => {
     setIsGoogleLoading(true);

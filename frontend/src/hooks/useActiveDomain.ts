@@ -19,6 +19,32 @@ export interface UseActiveDomainResult {
 }
 
 /**
+ * Loads the authenticated user's registered domains, normalized.
+ * Resolves to null on network failure or a non-OK response.
+ */
+async function fetchRegisteredDomains(): Promise<string[] | null> {
+  try {
+    const res = await apiFetch("/api/v1/domains");
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => []);
+    const rawList: RawDomainItem[] = Array.isArray(json)
+      ? json
+      : Array.isArray(json?.domains)
+      ? json.domains
+      : Array.isArray(json?.data)
+      ? json.data
+      : [];
+
+    return rawList
+      .map((d) => normalizeDomainInput(d.domain_name || d.domain || ""))
+      .filter((d): d is string => Boolean(d));
+  } catch {
+    // Offline / network failure preserved
+    return null;
+  }
+}
+
+/**
  * Enterprise hook to resolve the active sending domain for diagnostic tools
  * (Inspector, Blacklist Radar, Setup Wizard).
  *
@@ -35,65 +61,60 @@ export function useActiveDomain(queryDomainParam?: string | null): UseActiveDoma
     return queryDomainParam && normalizeDomainInput(queryDomainParam) ? "query" : "none";
   });
   const [registeredDomains, setRegisteredDomains] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // The registry is fetched on mount, so the hook starts in the loading state.
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const isMountedRef = useRef(true);
 
-  const loadRegistry = useCallback(async () => {
-    // If an explicit query domain is provided, we can still load registered domains
-    // but the active domain is already firmly established by the query.
+  // When the explicit query domain changes, adopt it immediately during render
+  // (React "adjusting state when a prop changes" pattern) instead of in an effect.
+  const [prevQueryDomainParam, setPrevQueryDomainParam] = useState(queryDomainParam);
+  if (queryDomainParam !== prevQueryDomainParam) {
+    setPrevQueryDomainParam(queryDomainParam);
+    // A new query re-runs the registry fetch effect below.
     setIsLoading(true);
-    try {
-      const res = await apiFetch("/api/v1/domains");
-      if (res.ok && isMountedRef.current) {
-        const json = await res.json().catch(() => []);
-        const rawList: RawDomainItem[] = Array.isArray(json)
-          ? json
-          : Array.isArray(json?.domains)
-          ? json.domains
-          : Array.isArray(json?.data)
-          ? json.data
-          : [];
-
-        const domainNames = rawList
-          .map((d) => normalizeDomainInput(d.domain_name || d.domain || ""))
-          .filter((d): d is string => Boolean(d));
-
-        setRegisteredDomains(domainNames);
-
-        // Resolve active domain candidate
-        const candidate = resolveActiveDomainCandidate(queryDomainParam, domainNames);
-        setActiveDomain(candidate.domain);
-        setResolutionSource(candidate.source);
-      }
-    } catch {
-      // Offline / network failure preserved
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
-    }
-  }, [queryDomainParam]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
     const cleanQuery = queryDomainParam ? normalizeDomainInput(queryDomainParam) : "";
     if (cleanQuery) {
       setActiveDomain(cleanQuery);
       setResolutionSource("query");
     }
+  }
 
-    loadRegistry();
+  // Applies a fetched registry (null = request failed / non-OK, state preserved).
+  const applyRegistry = useCallback((domainNames: string[] | null) => {
+    if (!isMountedRef.current) return;
+    if (domainNames) {
+      setRegisteredDomains(domainNames);
+
+      // Resolve active domain candidate
+      const candidate = resolveActiveDomainCandidate(queryDomainParam, domainNames);
+      setActiveDomain(candidate.domain);
+      setResolutionSource(candidate.source);
+    }
+    setIsLoading(false);
+  }, [queryDomainParam]);
+
+  const refreshRegistry = useCallback(async () => {
+    setIsLoading(true);
+    applyRegistry(await fetchRegisteredDomains());
+  }, [applyRegistry]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    // If an explicit query domain is provided, we still load registered domains
+    // but the active domain is already firmly established by the query.
+    // State is only updated from the async callback once the request settles.
+    void fetchRegisteredDomains().then(applyRegistry);
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [queryDomainParam, loadRegistry]);
+  }, [applyRegistry]);
 
   return {
     activeDomain,
     resolutionSource,
     isLoading,
     registeredDomains,
-    refreshRegistry: loadRegistry,
+    refreshRegistry,
   };
 }

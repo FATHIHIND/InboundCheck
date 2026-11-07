@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Sparkles, ShieldAlert, ArrowRight, Loader2, Zap, ShieldCheck, Building2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { AccessibleDialog } from "@/components/ui/AccessibleDialog";
+import { resolveStripeRedirectUrl } from "@/lib/stripe-redirect";
 
 interface ObsidianPaywallModalProps {
   onPlanSelected?: (planTier: string) => void;
@@ -80,28 +82,32 @@ const TIERS: TierDefinition[] = [
   },
 ];
 
+// The pending domain is read from browser-only sources, so there is nothing to subscribe to;
+// the server snapshot is empty to keep the hydration pass identical to the server HTML.
+const subscribeNoop = () => () => {};
+const getServerPendingDomain = () => "";
+
+// Retrieve pending or queried domain for seamless funnel persistence
+function getClientPendingDomain(): string {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlDomain = urlParams.get("domain");
+    const sessionDomain = sessionStorage.getItem("inboundcheck_pending_domain");
+    const localDomain = localStorage.getItem("inboundcheck_pending_domain");
+    const resolved = urlDomain || sessionDomain || localDomain || "";
+    return resolved.trim().toLowerCase();
+  } catch {
+    // Suppress storage exceptions in private mode
+    return "";
+  }
+}
+
 export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywallModalProps) {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [targetDomain, setTargetDomain] = useState<string>("");
-
-  // Retrieve pending or queried domain for seamless funnel persistence
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlDomain = urlParams.get("domain");
-      const sessionDomain = sessionStorage.getItem("inboundcheck_pending_domain");
-      const localDomain = localStorage.getItem("inboundcheck_pending_domain");
-      const resolved = urlDomain || sessionDomain || localDomain || "";
-      if (resolved) {
-        setTargetDomain(resolved.trim().toLowerCase());
-      }
-    } catch {
-      // Suppress storage exceptions in private mode
-    }
-  }, []);
+  const targetDomain = useSyncExternalStore(subscribeNoop, getClientPendingDomain, getServerPendingDomain);
+  const router = useRouter();
 
   const handleCheckout = async (planTier: string) => {
     setLoadingTier(planTier);
@@ -129,7 +135,7 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
       });
 
       if (res.status === 401) {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
         return;
       }
 
@@ -137,7 +143,13 @@ export function ObsidianPaywallModal({ onPlanSelected, onClose }: ObsidianPaywal
       if (res.ok) {
         const checkoutUrl = data.url || data.checkout_url;
         if (checkoutUrl) {
-          window.location.href = checkoutUrl;
+          // FE-8: only navigate to Stripe's hosted Checkout origin.
+          const safeCheckoutUrl = resolveStripeRedirectUrl(checkoutUrl);
+          if (safeCheckoutUrl) {
+            window.location.assign(safeCheckoutUrl);
+            return;
+          }
+          setErrorMessage("Checkout returned an unexpected payment destination. Please contact support.");
           return;
         }
       }

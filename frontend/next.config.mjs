@@ -35,6 +35,8 @@ const contentSecurityPolicy = [
   "form-action 'self' https://accounts.google.com",
   "base-uri 'self'",
   "object-src 'none'",
+  // FE-2: forbid any origin from framing the app (clickjacking defence).
+  "frame-ancestors 'none'",
 ].join("; ");
 
 const permissionsPolicy = "camera=(), microphone=(), geolocation=(), browsing-topics=()";
@@ -95,6 +97,11 @@ const nextConfig = {
           {
             key: "X-Content-Type-Options",
             value: "nosniff",
+          },
+          {
+            // Legacy fallback for browsers that ignore CSP frame-ancestors.
+            key: "X-Frame-Options",
+            value: "DENY",
           },
           {
             key: "Referrer-Policy",

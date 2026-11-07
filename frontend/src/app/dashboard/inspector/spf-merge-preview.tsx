@@ -57,6 +57,33 @@ export interface SpfMergePlanResponse {
   expires_at: string;
 }
 
+type SpfPlanResult = { plan: SpfMergePlanResponse } | { error: string };
+
+async function requestSpfMergePlan(domain: string, qualifier: "~all" | "-all"): Promise<SpfPlanResult> {
+  try {
+    const res = await apiFetch("/api/v1/dns/spf-merge-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        domain,
+        preferred_qualifier: qualifier,
+      }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `Failed to calculate merge plan (HTTP ${res.status})`);
+    }
+
+    const data: SpfMergePlanResponse = await res.json();
+    return { plan: data };
+  } catch (err: unknown) {
+    console.error("SPF Merge Plan Error:", err);
+    const msg = err instanceof Error ? err.message : "Failed to generate SPF merge plan";
+    return { error: msg };
+  }
+}
+
 interface SpfMergePreviewProps {
   domain: string;
   onApplied?: () => void;
@@ -69,9 +96,11 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
   className = "",
 }) => {
   const [plan, setPlan] = useState<SpfMergePlanResponse | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [preferredQualifier, setPreferredQualifier] = useState<"~all" | "-all">("~all");
+  const trimmedDomain = domain ? domain.trim() : "";
+  const canPlan = trimmedDomain.length >= 3;
+  const [isLoading, setIsLoading] = useState<boolean>(canPlan);
   const [copied, setCopied] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
   const [applySuccess, setApplySuccess] = useState<boolean>(false);
@@ -94,44 +123,50 @@ export const SpfMergePreview: React.FC<SpfMergePreviewProps> = ({
     checkProvider();
   }, []);
 
+  const applyPlanResult = useCallback((result: SpfPlanResult) => {
+    if ("plan" in result) {
+      setPlan(result.plan);
+    } else {
+      setError(result.error);
+    }
+    setIsLoading(false);
+  }, []);
+
+  // Manual (re)generation from event handlers.
   const generatePlan = useCallback(
     async (qualifier: "~all" | "-all" = preferredQualifier) => {
-      if (!domain || domain.trim().length < 3) return;
+      if (!canPlan) return;
       setIsLoading(true);
       setError(null);
       setApplySuccess(false);
-
-      try {
-        const res = await apiFetch("/api/v1/dns/spf-merge-plan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            domain: domain.trim(),
-            preferred_qualifier: qualifier,
-          }),
-        });
-
-        if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.detail || `Failed to calculate merge plan (HTTP ${res.status})`);
-        }
-
-        const data: SpfMergePlanResponse = await res.json();
-        setPlan(data);
-      } catch (err: unknown) {
-        console.error("SPF Merge Plan Error:", err);
-        const msg = err instanceof Error ? err.message : "Failed to generate SPF merge plan";
-        setError(msg);
-      } finally {
-        setIsLoading(false);
-      }
+      applyPlanResult(await requestSpfMergePlan(trimmedDomain, qualifier));
     },
-    [domain, preferredQualifier]
+    [canPlan, trimmedDomain, preferredQualifier, applyPlanResult]
   );
 
+  // Enter the loading state during render whenever the plan inputs change
+  // (React "adjusting state when a prop changes"); the effect below fetches.
+  const planKey = canPlan ? `${trimmedDomain}|${preferredQualifier}` : "";
+  const [prevPlanKey, setPrevPlanKey] = useState(planKey);
+  if (planKey !== prevPlanKey) {
+    setPrevPlanKey(planKey);
+    if (planKey) {
+      setIsLoading(true);
+      setError(null);
+      setApplySuccess(false);
+    }
+  }
+
   useEffect(() => {
-    generatePlan();
-  }, [domain, generatePlan]);
+    if (!canPlan) return;
+    let ignore = false;
+    void requestSpfMergePlan(trimmedDomain, preferredQualifier).then((result) => {
+      if (!ignore) applyPlanResult(result);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [canPlan, trimmedDomain, preferredQualifier, applyPlanResult]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);

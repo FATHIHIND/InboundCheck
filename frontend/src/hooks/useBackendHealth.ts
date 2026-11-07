@@ -24,115 +24,118 @@ export function useBackendHealth(pollIntervalMs: number = 60000) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
 
-  const checkHealth = useCallback(async (retryCount = 0) => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+  const checkHealth = useCallback((initialRetryCount = 0) => {
+    const run = async (retryCount: number): Promise<void> => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    let isTimeout = false;
-    // Extended 15-second timeout ceiling to handle cold-starts and network latency
-    const timeoutId = setTimeout(() => {
-      isTimeout = true;
-      controller.abort();
-    }, 15000);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      let isTimeout = false;
+      // Extended 15-second timeout ceiling to handle cold-starts and network latency
+      const timeoutId = setTimeout(() => {
+        isTimeout = true;
+        controller.abort();
+      }, 15000);
 
-    try {
-      // Primary health endpoint is /api/v1/health, fallback to /health if 404 or missing
-      let response: Response;
       try {
-        response = await apiFetch("/api/v1/health", {
-          signal: controller.signal,
-        });
-        if (!response.ok && response.status === 404) {
+        // Primary health endpoint is /api/v1/health, fallback to /health if 404 or missing
+        let response: Response;
+        try {
+          response = await apiFetch("/api/v1/health", {
+            signal: controller.signal,
+          });
+          if (!response.ok && response.status === 404) {
+            response = await apiFetch("/health", {
+              signal: controller.signal,
+            });
+          }
+        } catch (err: any) {
+          const isSoftAbort =
+            err?.name === "AbortError" ||
+            (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError") ||
+            (typeof err?.message === "string" && err.message.toLowerCase().includes("aborted"));
+
+          if (isSoftAbort && !isTimeout) {
+            // Do not switch UI to degraded/unavailable on soft aborts
+            return;
+          }
+
+          // Fallback to root /health probe if /api/v1/health route was unreachable
           response = await apiFetch("/health", {
             signal: controller.signal,
           });
         }
+
+        clearTimeout(timeoutId);
+
+        const result: BackendHealthData = await response.json().catch(() => ({
+          status: response.ok ? "healthy" : "unavailable",
+          service: "InboundCheck API Engine",
+          version: "1.0.0",
+        }));
+
+        // Trace logging for state transitions
+        console.log("[Health Badge Response]", {
+          statusCode: response.status,
+          ok: response.ok,
+          payload: result,
+        });
+
+        if (!isMountedRef.current) return;
+
+        if (!response.ok) {
+          setStatus(response.status >= 500 ? "unavailable" : "degraded");
+          setData(result);
+          return;
+        }
+
+        // Contract validation: accept "healthy", "operational", "ok", or "up" as operational
+        const rawStatus = (typeof result.status === "string" ? result.status : "").toLowerCase();
+        if (rawStatus === "degraded" || rawStatus === "warning") {
+          setStatus("degraded");
+        } else {
+          setStatus("healthy");
+        }
+
+        setData(result);
+        setLastChecked(new Date());
       } catch (err: any) {
-        const isSoftAbort =
+        clearTimeout(timeoutId);
+
+        const isAbort =
           err?.name === "AbortError" ||
           (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError") ||
           (typeof err?.message === "string" && err.message.toLowerCase().includes("aborted"));
 
-        if (isSoftAbort && !isTimeout) {
-          // Do not switch UI to degraded/unavailable on soft aborts
+        if (isAbort && !isTimeout) {
+          // Soft abort from StrictMode remount or component unmount: do not set unavailable
           return;
         }
 
-        // Fallback to root /health probe if /api/v1/health route was unreachable
-        response = await apiFetch("/health", {
-          signal: controller.signal,
-        });
+        console.warn("[Health Badge Error] Health probe failed:", err);
+
+        // Attempt clean retry with exponential backoff on transient failure
+        if (retryCount < 2 && isMountedRef.current) {
+          const delay = Math.pow(2, retryCount) * 1000;
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              void run(retryCount + 1);
+            }
+          }, delay);
+          return;
+        }
+
+        if (isMountedRef.current) {
+          setStatus("unavailable");
+          setData(null);
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      clearTimeout(timeoutId);
-
-      const result: BackendHealthData = await response.json().catch(() => ({
-        status: response.ok ? "healthy" : "unavailable",
-        service: "InboundCheck API Engine",
-        version: "1.0.0",
-      }));
-
-      // Trace logging for state transitions
-      console.log("[Health Badge Response]", {
-        statusCode: response.status,
-        ok: response.ok,
-        payload: result,
-      });
-
-      if (!isMountedRef.current) return;
-
-      if (!response.ok) {
-        setStatus(response.status >= 500 ? "unavailable" : "degraded");
-        setData(result);
-        return;
-      }
-
-      // Contract validation: accept "healthy", "operational", "ok", or "up" as operational
-      const rawStatus = (typeof result.status === "string" ? result.status : "").toLowerCase();
-      if (rawStatus === "degraded" || rawStatus === "warning") {
-        setStatus("degraded");
-      } else {
-        setStatus("healthy");
-      }
-
-      setData(result);
-      setLastChecked(new Date());
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-
-      const isAbort =
-        err?.name === "AbortError" ||
-        (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError") ||
-        (typeof err?.message === "string" && err.message.toLowerCase().includes("aborted"));
-
-      if (isAbort && !isTimeout) {
-        // Soft abort from StrictMode remount or component unmount: do not set unavailable
-        return;
-      }
-
-      console.warn("[Health Badge Error] Health probe failed:", err);
-
-      // Attempt clean retry with exponential backoff on transient failure
-      if (retryCount < 2 && isMountedRef.current) {
-        const delay = Math.pow(2, retryCount) * 1000;
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            void checkHealth(retryCount + 1);
-          }
-        }, delay);
-        return;
-      }
-
-      if (isMountedRef.current) {
-        setStatus("unavailable");
-        setData(null);
-      }
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    };
+    return run(initialRetryCount);
   }, []);
 
   useEffect(() => {

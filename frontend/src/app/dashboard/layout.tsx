@@ -67,10 +67,13 @@ export default function DashboardLayout({
     loadUserAndSubscription();
   }, [pathname]);
 
-  // Automatically close mobile menu on route change
-  useEffect(() => {
+  // Automatically close mobile menu on route change (adjusted during render,
+  // React "adjusting state when a prop changes", instead of in an effect)
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setMobileMenuOpen(false);
-  }, [pathname]);
+  }
 
   // Close mobile menu via Escape key
   useEffect(() => {

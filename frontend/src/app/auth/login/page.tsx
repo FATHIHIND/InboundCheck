@@ -1,32 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Mail, Lock, ArrowRight, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { getClientAuthCallbackUrl } from "@/lib/auth-origin";
+import { useStoredValue } from "@/hooks/useStoredValue";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
+  // Saved preference (hydration-safe), overridden once the user toggles the checkbox.
+  const savedRememberMe = useStoredValue("inboundcheck_remember_me");
+  const [rememberMeChoice, setRememberMe] = useState<boolean | null>(null);
+  const rememberMe = rememberMeChoice ?? (savedRememberMe !== null ? savedRememberMe !== "false" : true);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [showResendAction, setShowResendAction] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedPref = localStorage.getItem("inboundcheck_remember_me");
-      if (savedPref !== null) {
-        setRememberMe(savedPref !== "false");
-      }
-    }
-  }, []);
 
   const handleRememberMeChange = (checked: boolean) => {
     setRememberMe(checked);

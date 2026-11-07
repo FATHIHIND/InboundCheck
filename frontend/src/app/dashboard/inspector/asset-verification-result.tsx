@@ -56,11 +56,15 @@ export const AssetVerificationResult: React.FC<AssetVerificationResultProps> = (
   const [error, setError] = useState<string | null>(null);
   const [copiedHash, setCopiedHash] = useState<boolean>(false);
 
-  React.useEffect(() => {
+  // Adopt a new non-empty initialUrl prop during render (React "adjusting state
+  // when a prop changes") rather than syncing it in an effect.
+  const [prevInitialUrl, setPrevInitialUrl] = useState<string>(initialUrl);
+  if (initialUrl !== prevInitialUrl) {
+    setPrevInitialUrl(initialUrl);
     if (initialUrl) {
       setUrlInput(initialUrl);
     }
-  }, [initialUrl]);
+  }
 
   const handleVerify = async () => {
     if (!domain || domain.trim().length < 3) return;

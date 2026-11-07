@@ -14,6 +14,16 @@ test('production CSP forbids eval while retaining static hydration compatibility
  assert.ok(policy.includes("script-src 'self' 'unsafe-inline'"));
  for(const directive of ["object-src 'none'", "base-uri 'self'", "default-src 'self'"]) assert.ok(policy.includes(directive));
 });
+test('CSP frame-ancestors and X-Frame-Options both forbid framing (FE-2 clickjacking)', async()=>{
+ for(const mode of ['production','development']) {
+  const directives=(await csp(mode)).split(';').map(s=>s.trim());
+  assert.ok(directives.includes("frame-ancestors 'none'"), mode+": frame-ancestors 'none'");
+ }
+ const {default:config}=await import('../next.config.mjs?mode=frame');
+ const [route]=await config.headers();
+ assert.equal(route.source,'/:path*');
+ assert.equal(route.headers.find(h=>h.key==='X-Frame-Options')?.value,'DENY');
+});
 test('development CSP explicitly permits Next development eval only', async()=>{
  assert.ok((await csp('development')).includes("'unsafe-eval'"));
 });
