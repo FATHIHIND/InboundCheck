@@ -488,7 +488,11 @@ async def test_null_binding_downgrade_lookup_failure_returns_503(merchant):
 # ---------------------------------------------------------------------------
 
 def _registered_callback_path() -> str:
-    paths = {getattr(r, "path", "") for r in app.routes}
+    # Use the generated OpenAPI paths rather than walking app.routes: FastAPI
+    # >= 0.16x keeps included routers as nested `_IncludedRouter` entries
+    # instead of flattening them, so a top-level app.routes scan finds nothing
+    # on the locked runtime (it only worked on older local FastAPI versions).
+    paths = set(app.openapi()["paths"])
     matches = [p for p in paths if p.endswith("/shopify/billing/callback")]
     assert len(matches) == 1, matches
     return matches[0]
