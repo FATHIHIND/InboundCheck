@@ -18,13 +18,13 @@ from app.services.failover.omnichannel_service import (
     telegram_alert_service,
     TelegramIncidentContext,
     TelegramDispatchResult,
+    sanitize_log_message,
 )
 
 omnichannel_service = telegram_alert_service
 logger = logging.getLogger("FailoverWorker")
 
 from app.core.config import settings
-from app.core.env_guard import sanitize_log_message
 
 # Strict failover eligibility for Telegram incident alerts:
 # Permanent delivery failures (hard bounces, drop blocks, rejections) are alerted.
