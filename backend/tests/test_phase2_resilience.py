@@ -268,11 +268,14 @@ async def test_ai_content_optimizer_resilience_to_external_llm_timeout():
 @pytest.mark.asyncio
 async def test_telegram_alert_service_resilience_to_telegram_500():
     """Verify that a 500 error from Telegram Bot API is captured as a clean error without crashing."""
+    # Synthetic test-only credential, deliberately not shaped like a Telegram bot token
+    # (the previous fixture matched GitHub secret-scanning alert #1). Only the HTTP
+    # 500 handling is under test; the HTTP call is mocked.
     telegram_alert_service.update_config(
         "test-resilience-user",
         {
             "is_enabled": True,
-            "telegram_bot_token": "9876543210:AAH8Fj90qWz1x9_liveTestTokenSafe123",
+            "telegram_bot_token": "stage42c-synthetic-telegram-credential-resilience",
             "telegram_chat_id": "-100987654321",
         }
     )
