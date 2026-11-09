@@ -174,8 +174,24 @@ async def test_non_eligible_events_do_not_invoke_telegram(event_type: str):
         mock_dispatch.assert_not_called()
 
 
+def _claim_with_lease(monkeypatch, key, event, worker_id):
+    """Stage 4.2 / T3 (C-1): seed an isolated 'received' event and claim it through the
+    repository API, so it carries claimed_by + lease_until exactly as the worker loop sees it.
+    The in-memory store is replaced per test so the global claim cannot pick up other tests' rows."""
+    from app.services.failover.failover_repository import failure_event_repository
+
+    store = {}
+    monkeypatch.setattr(supabase_service, "_in_memory_delivery_failure_events", store)
+    store[key] = {**event, "processing_status": "received"}
+    claimed = failure_event_repository.claim_pending_delivery_failure_events(worker_id, limit=5)
+    assert [c["id"] for c in claimed] == [event["id"]]
+    assert claimed[0]["claimed_by"] == worker_id
+    assert claimed[0]["lease_until"]
+    return store, {**event, **claimed[0]}
+
+
 @pytest.mark.asyncio
-async def test_successful_dispatch_writes_log_and_marks_processed():
+async def test_successful_dispatch_writes_log_and_marks_processed(monkeypatch):
     """Verify successful dispatch writes complete failover_logs record and marks event processed."""
     user_id = str(uuid.uuid4())
     evt_id = str(uuid.uuid4())
@@ -193,11 +209,7 @@ async def test_successful_dispatch_writes_log_and_marks_processed():
 
     # Seed in-memory event so we can check state transitions
     key = str(("postmark", evt_id))
-    supabase_service._in_memory_delivery_failure_events[key] = {
-        "id": evt_id,
-        "processing_status": "queued",
-        "claimed_by": worker_id,
-    }
+    store, claimed_event = _claim_with_lease(monkeypatch, key, event, worker_id)
 
     with patch("app.workers.failover_worker.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_dispatch:
         mock_dispatch.return_value = {
@@ -206,8 +218,9 @@ async def test_successful_dispatch_writes_log_and_marks_processed():
             "telegram_message_id": "tg_msg_success_123",
             "success": True,
         }
-        res = await process_failover_event(event, worker_id)
+        res = await process_failover_event(claimed_event, worker_id)
         assert res is True
+        mock_dispatch.assert_awaited_once()
 
     # 1. Verify log attributes
     logs = supabase_service.get_failover_logs(user_id=user_id)
@@ -223,13 +236,13 @@ async def test_successful_dispatch_writes_log_and_marks_processed():
     assert log["delivery_failure_event_id"] == evt_id
 
     # 2. Verify source event marked processed
-    cached_evt = supabase_service._in_memory_delivery_failure_events.get(key)
+    cached_evt = store.get(key)
     assert cached_evt is not None
     assert cached_evt["processing_status"] == "processed"
 
 
 @pytest.mark.asyncio
-async def test_telegram_failure_marks_event_failed():
+async def test_telegram_failure_marks_event_failed(monkeypatch):
     """Verify that when Telegram dispatch fails, event is marked failed."""
     user_id = str(uuid.uuid4())
     evt_id = str(uuid.uuid4())
@@ -246,11 +259,7 @@ async def test_telegram_failure_marks_event_failed():
     worker_id = str(uuid.uuid4())
 
     key = str(("ses", evt_id))
-    supabase_service._in_memory_delivery_failure_events[key] = {
-        "id": evt_id,
-        "processing_status": "queued",
-        "claimed_by": worker_id,
-    }
+    store, claimed_event = _claim_with_lease(monkeypatch, key, event, worker_id)
 
     with patch("app.workers.failover_worker.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_dispatch:
         mock_dispatch.return_value = {
@@ -259,10 +268,11 @@ async def test_telegram_failure_marks_event_failed():
             "error_message": "Bot blocked by user or invalid chat ID",
             "success": False,
         }
-        res = await process_failover_event(event, worker_id)
+        res = await process_failover_event(claimed_event, worker_id)
         assert res is False
+        mock_dispatch.assert_awaited_once()
 
-    cached_evt = supabase_service._in_memory_delivery_failure_events.get(key)
+    cached_evt = store.get(key)
     assert cached_evt is not None
     assert cached_evt["processing_status"] == "failed"
     assert "Bot blocked" in (cached_evt.get("processing_error") or "")

@@ -100,15 +100,34 @@ def test_polymorphic_generate_input_bounds_enforced():
         assert len(res_valid_boundary.json().get("variants", [])) == 3
 
 
-def test_bloc_b_telegram_alert_engine():
-    """Test Bloc B: Telegram Real-Time Bot Alert Engine Config, Dispatch, & Test Ping."""
+def test_bloc_b_telegram_alert_engine(monkeypatch):
+    """Test Bloc B: Telegram Real-Time Bot Alert Engine Config, Dispatch, & Test Ping.
+
+    Stage 4.2 / T3 (C-4): /failover/dispatch is queue-first. It persists the incident to
+    the durable notification outbox and returns status='queued' + job_id; delivery happens
+    later in the outbox worker. The former assertions (dispatched=True, channel='telegram'
+    in the HTTP response) predate that design. This test now asserts the queue contract,
+    idempotent re-submission, a single worker-driven send, and tenant isolation.
+    """
+    import asyncio
+    import uuid as _uuid
+    from app.workers.failover_worker import process_notification_outbox_item
+
+    # Fresh tenant per run (the module-level client shares "test-user-1" across tests),
+    # and an isolated outbox so the claim below only sees this test's job.
+    tenant_id = f"v3-tenant-{_uuid.uuid4()}"
+    other_tenant_id = f"v3-other-{_uuid.uuid4()}"
+    tenant = TestClient(app, headers=auth_headers(tenant_id))
+    other = TestClient(app, headers=auth_headers(other_tenant_id))
+    monkeypatch.setattr(supabase_service, "_in_memory_notification_outbox", {})
+
     # 1. Fetch Telegram Alert Config
-    cfg_res = client.get("/api/v1/failover/config")
+    cfg_res = tenant.get("/api/v1/failover/config")
     assert cfg_res.status_code == 200
     assert cfg_res.json().get("config", {}).get("primary_channel") == "telegram"
 
     # 2. Update Telegram Alert Config
-    update_res = client.post(
+    update_res = tenant.post(
         "/api/v1/failover/config",
         json={
             "is_enabled": True,
@@ -122,28 +141,43 @@ def test_bloc_b_telegram_alert_engine():
     )
     assert update_res.status_code == 200
 
-    # 3. Trigger Real-Time Incident Alert with mock successful Telegram dispatch
-    with patch.object(
-        omnichannel_service,
-        "send_telegram_alert",
-        new=AsyncMock(return_value={"success": True, "simulated": False, "data": {"ok": True}})
-    ):
-        dispatch_res = client.post(
-            "/api/v1/failover/dispatch",
-            json={
-                "order_id": "#10505",
-                "customer_email": "sarah@gmail.com",
-                "trigger_reason": "email_spam_detected",
-                "domain_name": "brandshop.com",
-                "store_name": "BrandShop DTC"
-            }
-        )
+    dispatch_body = {
+        "order_id": "#10505",
+        "customer_email": "sarah@gmail.com",
+        "trigger_reason": "email_spam_detected",
+        "domain_name": "brandshop.com",
+        "store_name": "BrandShop DTC"
+    }
+    send = AsyncMock(return_value={"success": True, "simulated": False, "data": {"ok": True, "result": {"message_id": 4242}}})
+    with patch.object(omnichannel_service, "send_telegram_alert", new=send):
+        # 3. Dispatch is queued durably, never sent synchronously in the request.
+        dispatch_res = tenant.post("/api/v1/failover/dispatch", json=dispatch_body)
         assert dispatch_res.status_code == 200
-        assert dispatch_res.json().get("dispatched") is True
-        assert dispatch_res.json().get("channel") == "telegram"
+        body = dispatch_res.json()
+        assert body.get("success") is True
+        assert body.get("status") == "queued"
+        assert body.get("job_id")
+        assert body.get("idempotent") is False
+        send.assert_not_called()
+
+        # 3b. Re-submitting the same incident is idempotent (same job, no second job).
+        replay_res = tenant.post("/api/v1/failover/dispatch", json=dispatch_body)
+        assert replay_res.status_code == 200
+        assert replay_res.json().get("idempotent") is True
+        assert replay_res.json().get("job_id") == body["job_id"]
+        send.assert_not_called()
+
+        # 3c. The outbox worker claims the single job and sends exactly once.
+        claimed = supabase_service.claim_notification_outbox("v3-worker", limit=10)
+        assert [str(c.get("id")) for c in claimed] == [body["job_id"]]
+        assert str(claimed[0].get("user_id")) == tenant_id
+        assert asyncio.run(process_notification_outbox_item(claimed[0], "v3-worker")) is True
+        send.assert_awaited_once()
+        assert send.call_args.kwargs.get("chat_id") == "@inboundcheck_alerts"
+        assert supabase_service.claim_notification_outbox("v3-worker", limit=10) == []
 
         # 4. Trigger Interactive Test Ping
-        ping_res = client.post(
+        ping_res = tenant.post(
             "/api/v1/settings/telegram/test",
             json={
                 "bot_token": "test_token",
@@ -154,10 +188,13 @@ def test_bloc_b_telegram_alert_engine():
         assert ping_res.status_code == 200
         assert ping_res.json().get("success") is True
 
-    # 5. Fetch Dispatch Logs
-    logs_res = client.get("/api/v1/failover/logs")
+    # 5. Fetch Dispatch Logs: the tenant sees its incident, another tenant sees none of it.
+    logs_res = tenant.get("/api/v1/failover/logs")
     assert logs_res.status_code == 200
     assert len(logs_res.json().get("logs", [])) > 0
+    other_logs = other.get("/api/v1/failover/logs")
+    assert other_logs.status_code == 200
+    assert all(str(l.get("user_id")) != tenant_id for l in other_logs.json().get("logs", []))
 
 
 @pytest.mark.asyncio

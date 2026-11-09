@@ -420,8 +420,7 @@ async def test_uncorrelated_delayed_registration_retry():
         "provider_message_id": msg_id,
         "event_type": "bounce",
         "user_id": None,
-        "processing_status": "queued",
-        "claimed_by": worker_id,
+        "processing_status": "received",
         "event_payload": {
             "order_id": "#1010",
             "allow_delayed_retry": True,
@@ -430,8 +429,14 @@ async def test_uncorrelated_delayed_registration_retry():
     }
     supabase_service._in_memory_delivery_failure_events[evt_id] = dict(evt)
 
+    # Stage 4.2 / T3 (C-1): claim through the repository API so the event carries a real
+    # lease (claimed_by + lease_until), exactly as the worker loop does.
+    claimed_1 = repository.claim_pending_delivery_failure_events(worker_id, limit=10)
+    assert [c["id"] for c in claimed_1] == [evt_id]
+    assert claimed_1[0]["lease_until"]
+
     # 1. Attempt 1: Message not yet in registry -> Worker releases lease
-    processed_1 = await process_delivery_failure_event(evt, worker_id)
+    processed_1 = await process_delivery_failure_event(dict(claimed_1[0]), worker_id)
     assert processed_1 is False
 
     stored_after_1 = supabase_service._in_memory_delivery_failure_events[evt_id]
@@ -451,12 +456,16 @@ async def test_uncorrelated_delayed_registration_retry():
         message_type="order_receipt",
     )
 
-    # 3. Attempt 2: Worker claims and re-processes event
-    evt["event_payload"] = stored_after_1["event_payload"]
-    evt["processing_status"] = "queued"
-    evt["claimed_by"] = worker_id
-    supabase_service._in_memory_delivery_failure_events[evt_id] = dict(evt)
-    processed_2 = await process_delivery_failure_event(evt, worker_id)
+    # 3. Attempt 2: Worker re-claims (fresh lease) and re-processes event. Previously the
+    # test hand-seeded 'queued' + claimed_by without a lease, which the durable
+    # dispatch-intent guard correctly refuses.
+    claimed_2 = repository.claim_pending_delivery_failure_events(worker_id, limit=10)
+    assert [c["id"] for c in claimed_2] == [evt_id]
+    assert claimed_2[0]["processing_status"] == "queued"
+    assert claimed_2[0]["claimed_by"] == worker_id
+    assert claimed_2[0]["lease_until"]
+    assert claimed_2[0]["event_payload"]["correlation_attempts"] == 1
+    processed_2 = await process_delivery_failure_event(dict(claimed_2[0]), worker_id)
     assert processed_2 is True
 
     stored_after_2 = supabase_service._in_memory_delivery_failure_events[evt_id]
