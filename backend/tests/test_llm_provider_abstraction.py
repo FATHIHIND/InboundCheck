@@ -303,25 +303,37 @@ def test_api_endpoint_backward_compatibility():
 # 8. Provider-Routing Invariant Regression Tests (Phase 2.4B Step 9D)
 # =============================================================================
 
-def test_content_optimizer_resolves_agent_router_when_enabled():
+# Synthetic, test-only credential (Stage 4.2 / T1, root cause C-4). The provider
+# factory intentionally refuses to build the router without a key, so the
+# positive test must supply one; the negative test below keeps that refusal covered.
+_SYNTHETIC_AGENT_ROUTER_KEY = "test-only-synthetic-agent-router-key"
+
+
+def test_content_optimizer_resolves_agent_router_when_enabled(monkeypatch):
     """
-    TEST 1 — AGENT_ROUTER_ENABLED=true with no explicit provider
+    TEST 1 — AGENT_ROUTER_ENABLED=true with a configured key and no explicit provider
     => provider property must resolve to AgentRouterLLMProvider.
     """
     from app.services.ai.provider import AgentRouterLLMProvider
 
-    # Temporarily override AGENT_ROUTER_ENABLED on settings object
-    original = settings.AGENT_ROUTER_ENABLED
-    try:
-        settings.AGENT_ROUTER_ENABLED = True
-        service = AIContentOptimizer()  # no explicit provider
-        resolved = service.provider
-        assert isinstance(resolved, AgentRouterLLMProvider), (
-            f"Expected AgentRouterLLMProvider when AGENT_ROUTER_ENABLED=True, "
-            f"got {type(resolved).__name__}"
-        )
-    finally:
-        settings.AGENT_ROUTER_ENABLED = original
+    monkeypatch.setattr(settings, "AGENT_ROUTER_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_ROUTER_API_KEY", _SYNTHETIC_AGENT_ROUTER_KEY)
+    service = AIContentOptimizer()  # no explicit provider
+    resolved = service.provider
+    assert isinstance(resolved, AgentRouterLLMProvider), (
+        f"Expected AgentRouterLLMProvider when AGENT_ROUTER_ENABLED=True, "
+        f"got {type(resolved).__name__}"
+    )
+
+
+def test_content_optimizer_enabled_router_without_key_is_disabled(monkeypatch):
+    """Enabled but unkeyed router must fail closed to DisabledLLMProvider, never call out."""
+    monkeypatch.setattr(settings, "AGENT_ROUTER_ENABLED", True)
+    monkeypatch.setattr(settings, "AGENT_ROUTER_API_KEY", "")
+    monkeypatch.setattr(settings, "LLM_API_KEY", "")
+    service = AIContentOptimizer()
+    resolved = service.provider
+    assert isinstance(resolved, DisabledLLMProvider)
 
 
 def test_content_optimizer_resolves_heuristic_fallback_when_disabled():
