@@ -40,137 +40,13 @@ from datetime import datetime, timezone, timedelta
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-# Mock third-party dependencies if not installed globally in sandbox runtime
-if "cryptography" not in sys.modules:
-    class MockInvalidToken(Exception):
-        pass
-
-    class MockFernet:
-        def __init__(self, key):
-            self.key = key
-
-        def encrypt(self, data: bytes) -> bytes:
-            encoded = base64.urlsafe_b64encode(b"simulated_fernet:" + data)
-            return encoded
-
-        def decrypt(self, token: bytes) -> bytes:
-            try:
-                decoded = base64.urlsafe_b64decode(token)
-                if not decoded.startswith(b"simulated_fernet:"):
-                    raise MockInvalidToken("Invalid token prefix")
-                return decoded[len(b"simulated_fernet:"):]
-            except Exception as e:
-                raise MockInvalidToken(str(e))
-
-    mock_crypto = MagicMock()
-    mock_fernet_mod = MagicMock()
-    mock_fernet_mod.Fernet = MockFernet
-    mock_fernet_mod.InvalidToken = MockInvalidToken
-    sys.modules["cryptography"] = mock_crypto
-    sys.modules["cryptography.fernet"] = mock_fernet_mod
-
-if "fastapi" not in sys.modules:
-    class HTTPException(Exception):
-        def __init__(self, status_code: int, detail: Any = None):
-            self.status_code = status_code
-            self.detail = detail
-            super().__init__(f"HTTPException(status_code={status_code}, detail={detail})")
-
-    class APIRouter:
-        def __init__(self, *args, **kwargs):
-            pass
-        def get(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-        def post(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-        def put(self, *args, **kwargs):
-            def decorator(fn): return fn
-            return decorator
-
-    class Status:
-        HTTP_200_OK = 200
-        HTTP_400_BAD_REQUEST = 400
-        HTTP_401_UNAUTHORIZED = 401
-        HTTP_403_FORBIDDEN = 403
-        HTTP_404_NOT_FOUND = 404
-        HTTP_500_INTERNAL_SERVER_ERROR = 500
-        HTTP_503_SERVICE_UNAVAILABLE = 503
-
-    def Depends(fn=None):
-        return fn
-
-    def Header(default=None, alias=None):
-        return default
-
-    fastapi_mock = MagicMock()
-    fastapi_mock.HTTPException = HTTPException
-    fastapi_mock.APIRouter = APIRouter
-    fastapi_mock.status = Status
-    fastapi_mock.Depends = Depends
-    fastapi_mock.Header = Header
-    sys.modules["fastapi"] = fastapi_mock
-
-if "pydantic" not in sys.modules:
-    class BaseModel:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-        def dict(self):
-            return self.__dict__
-
-    def Field(*args, **kwargs):
-        return kwargs.get("default", None)
-
-    pydantic_mock = MagicMock()
-    pydantic_mock.BaseModel = BaseModel
-    pydantic_mock.Field = Field
-    sys.modules["pydantic"] = pydantic_mock
-
-if "pydantic_settings" not in sys.modules:
-    class BaseSettings:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-    class SettingsConfigDict(dict):
-        pass
-    pyd_set_mock = MagicMock()
-    pyd_set_mock.BaseSettings = BaseSettings
-    pyd_set_mock.SettingsConfigDict = SettingsConfigDict
-    sys.modules["pydantic_settings"] = pyd_set_mock
-
-if "supabase" not in sys.modules:
-    sys.modules["supabase"] = MagicMock()
-if "jwt" not in sys.modules:
-    sys.modules["jwt"] = MagicMock()
-if "dns" not in sys.modules:
-    dns_mock = MagicMock()
-    dns_mock.__path__ = []
-    sys.modules["dns"] = dns_mock
-
-if "httpx" not in sys.modules:
-    class TimeoutException(Exception): pass
-    class ReadTimeout(TimeoutException): pass
-    class ConnectTimeout(TimeoutException): pass
-    class NetworkError(Exception): pass
-    class ConnectError(NetworkError): pass
-    class AsyncClient:
-        def __init__(self, *args, **kwargs): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *args): pass
-        async def post(self, *args, **kwargs): pass
-
-    httpx_mock = MagicMock()
-    httpx_mock.TimeoutException = TimeoutException
-    httpx_mock.ReadTimeout = ReadTimeout
-    httpx_mock.ConnectTimeout = ConnectTimeout
-    httpx_mock.NetworkError = NetworkError
-    httpx_mock.ConnectError = ConnectError
-    httpx_mock.AsyncClient = AsyncClient
-    sys.modules["httpx"] = httpx_mock
-else:
-    import httpx
+# Stage 4.2 / T4 (C-3): the former module-level fallbacks that installed stand-ins for
+# cryptography, fastapi, pydantic, pydantic_settings, supabase, jwt, dns and httpx in
+# sys.modules were removed. When this module was collected before those packages were
+# imported (e.g. run on its own), they replaced real packages process-wide and broke
+# collection ("__spec__" errors). The pinned test image ships the real dependencies.
+import httpx  # noqa: F401  (kept: tests patch httpx-level behaviour)
+from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.services.supabase_client import supabase_service
@@ -812,11 +688,15 @@ def test_notification_health_metrics_accuracy():
     _reset_test_state()
     user_id = str(uuid.uuid4())
 
-    # Add 2 outbox items (1 queued, 1 processed)
-    repository.enqueue_notification_outbox(user_id, "telegram", "key_h1", {"order_id": "#H1"})
+    # Add 2 outbox items (1 queued, 1 processed).
+    # Stage 4.2 / T4 (C-4): the claim used to run with limit=10 after both items were
+    # enqueued, so it claimed both and none stayed 'queued'. Enqueue, claim and complete
+    # the processed item first, then enqueue the item that must remain queued.
     rec2 = repository.enqueue_notification_outbox(user_id, "telegram", "key_h2", {"order_id": "#H2"})
     rec2_claimed = repository.claim_notification_outbox("w1", 10)
+    assert [str(r["id"]) for r in rec2_claimed] == [str(rec2["id"])]
     repository.complete_notification_outbox(rec2["id"], "w1")
+    repository.enqueue_notification_outbox(user_id, "telegram", "key_h1", {"order_id": "#H1"})
 
     # Add 1 delivery failure event
     supabase_service._in_memory_delivery_failure_events["evt_h1"] = {
@@ -848,7 +728,10 @@ def test_zero_pii_in_outbox_payload_and_logs():
         store_name="BrandShop DTC",
     )
 
-    res = asyncio.run(trigger_failover_dispatch(payload=req, user_id=user_id))
+    # Stage 4.2 / T4: when the endpoint function is called directly (not through FastAPI)
+    # the Header(...) default is a FieldInfo object, not None; HTTP requests always
+    # inject the real value. Pass None explicitly; HTTP coverage is in the tests below.
+    res = asyncio.run(trigger_failover_dispatch(payload=req, user_id=user_id, idempotency_header=None))
     job_id = res["job_id"]
 
     # Verify outbox item contains zero customer phone or email
@@ -869,6 +752,80 @@ def test_zero_pii_in_outbox_payload_and_logs():
     assert "@" not in payload_str
     assert "+1" not in payload_str
 
+
+
+# =====================================================================
+# TEST 21-22 (Stage 4.2 / T4): HTTP-level dispatch with and without Idempotency-Key
+# =====================================================================
+def _http_client_for(user_id):
+    from app.main import app
+    from tests.conftest import auth_headers
+    return TestClient(app, headers=auth_headers(user_id))
+
+
+_HTTP_DISPATCH_BODY = {
+    "order_id": "#HTTP_PII",
+    "customer_email": "shopper@customer-mail.com",
+    "trigger_reason": "hard_bounce",
+    "domain_name": "brandshop.com",
+    "store_name": "BrandShop DTC",
+}
+
+
+def _assert_outbox_payload_has_no_pii(job_id):
+    item = next(v for v in supabase_service._in_memory_notification_outbox.values() if str(v.get("id")) == str(job_id))
+    payload_str = json.dumps(item["payload"])
+    assert "customer_email" not in item["payload"]
+    assert "shopper@customer-mail.com" not in payload_str
+    assert "@" not in payload_str
+
+
+def test_http_dispatch_with_idempotency_key_header():
+    _reset_test_state()
+    user_id = str(uuid.uuid4())
+    client = _http_client_for(user_id)
+    key = f"client-key-{uuid.uuid4()}"
+
+    with patch.object(omnichannel_service, "send_telegram_alert", new_callable=AsyncMock) as mock_send:
+        r1 = client.post("/api/v1/failover/dispatch", json=_HTTP_DISPATCH_BODY, headers={"Idempotency-Key": key})
+        assert r1.status_code == 200
+        b1 = r1.json()
+        assert b1["status"] == "queued"
+        assert b1["idempotency_key"] == key
+        assert b1["idempotent"] is False
+
+        r2 = client.post("/api/v1/failover/dispatch", json=_HTTP_DISPATCH_BODY, headers={"Idempotency-Key": key})
+        assert r2.status_code == 200
+        assert r2.json()["idempotent"] is True
+        assert r2.json()["job_id"] == b1["job_id"]
+        mock_send.assert_not_called()
+
+    _assert_outbox_payload_has_no_pii(b1["job_id"])
+    assert len(supabase_service._in_memory_notification_outbox) == 1
+
+
+def test_http_dispatch_without_idempotency_key_header():
+    _reset_test_state()
+    user_id = str(uuid.uuid4())
+    client = _http_client_for(user_id)
+
+    with patch.object(omnichannel_service, "send_telegram_alert", new_callable=AsyncMock) as mock_send:
+        r1 = client.post("/api/v1/failover/dispatch", json=_HTTP_DISPATCH_BODY)
+        assert r1.status_code == 200
+        b1 = r1.json()
+        assert b1["status"] == "queued"
+        # Server-derived key, scoped to the authenticated tenant.
+        assert b1["idempotency_key"].startswith(f"dispatch_{user_id}_")
+        assert b1["idempotent"] is False
+
+        r2 = client.post("/api/v1/failover/dispatch", json=_HTTP_DISPATCH_BODY)
+        assert r2.json()["idempotent"] is True
+        assert r2.json()["job_id"] == b1["job_id"]
+        mock_send.assert_not_called()
+
+    _assert_outbox_payload_has_no_pii(b1["job_id"])
+    item = next(iter(supabase_service._in_memory_notification_outbox.values()))
+    assert str(item["user_id"]) == user_id
 
 if __name__ == "__main__":
     tests = [
