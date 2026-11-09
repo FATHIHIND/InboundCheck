@@ -337,7 +337,9 @@ def test_case_10b_route_rejects_forged_signature_without_state_change():
     }
     raw_bytes = json.dumps(forged).encode("utf-8")
 
-    with patch.object(settings, "ENVIRONMENT", "test"), patch.object(settings, "STAGING_MODE", False),             patch.object(stripe_service, "webhook_secret", "whsec_route_guard_secret"),             patch.object(ops_alert_service, "dispatch_incident", AsyncMock(return_value=None)):
+    with patch.object(settings, "ENVIRONMENT", "test"), patch.object(settings, "STAGING_MODE", False), \
+            patch.object(stripe_service, "webhook_secret", "whsec_route_guard_secret"), \
+            patch.object(ops_alert_service, "dispatch_incident", AsyncMock(return_value=None)):
         client = TestClient(app)
         res = client.post(
             "/api/v1/billing/webhook",
@@ -349,6 +351,8 @@ def test_case_10b_route_rejects_forged_signature_without_state_change():
             },
         )
         assert res.status_code == 400
+        # 400 is also used for processing errors; pin it to the signature-rejection branch.
+        assert res.json()["detail"].startswith("Invalid Stripe webhook signature")
         prof = supabase_service.get_user_profile(user_id)
         assert prof["subscription_tier"] == "starter"
         assert prof["subscription_status"] == "canceled"
@@ -374,7 +378,8 @@ def test_case_13_production_without_database_fails_closed():
         }},
     }
     svc = StripeService()
-    with patch.object(settings, "ENVIRONMENT", "production"), patch.object(settings, "STAGING_MODE", False),             patch.object(supabase_service, "_client", None):
+    with patch.object(settings, "ENVIRONMENT", "production"), patch.object(settings, "STAGING_MODE", False), \
+            patch.object(supabase_service, "_client", None):
         with pytest.raises(DatabaseUnavailableError):
             svc.process_webhook_event(event)
         with pytest.raises(DatabaseUnavailableError):
