@@ -529,7 +529,9 @@ async def test_ops03_unconfigured_tenant_fails_closed_without_sending(monkeypatc
             mock_send.assert_not_called()
 
         stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
-        assert stored["processing_status"] != "processed"
+        # Pin the outcome to the credential guard, not some other early exit.
+        assert stored["processing_status"] == "failed"
+        assert "must be explicitly configured" in (stored.get("processing_error") or "")
         delivered = [l for l in failover_repo.supabase.get_failover_logs(user_id) if l.get("status") == "delivered"]
         assert delivered == []
 

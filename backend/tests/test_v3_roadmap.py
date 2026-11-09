@@ -191,10 +191,13 @@ def test_bloc_b_telegram_alert_engine(monkeypatch):
     # 5. Fetch Dispatch Logs: the tenant sees its incident, another tenant sees none of it.
     logs_res = tenant.get("/api/v1/failover/logs")
     assert logs_res.status_code == 200
-    assert len(logs_res.json().get("logs", [])) > 0
+    tenant_logs = logs_res.json().get("logs", [])
+    assert len(tenant_logs) > 0
+    assert any(l.get("order_id") == "#10505" for l in tenant_logs)
     other_logs = other.get("/api/v1/failover/logs")
     assert other_logs.status_code == 200
-    assert all(str(l.get("user_id")) != tenant_id for l in other_logs.json().get("logs", []))
+    # A brand-new tenant must see nothing at all (not merely "nothing with tenant_id").
+    assert other_logs.json().get("logs", []) == []
 
 
 @pytest.mark.asyncio

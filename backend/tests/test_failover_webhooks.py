@@ -408,6 +408,11 @@ async def test_delivery_failure_without_tenant_telegram_config_fails_closed(monk
         assert await process_failover_event(event, "worker-test") is False
     send.assert_not_called()
 
+    # Pin the outcome to the credential guard, not some other early exit.
+    stored = next(e for e in supabase_service._in_memory_delivery_failure_events.values() if str(e.get("id")) == str(event["id"]))
+    assert stored["processing_status"] == "failed"
+    assert "must be explicitly configured" in (stored.get("processing_error") or "")
+
     delivered = [l for l in supabase_service.get_failover_logs(user_id=user_id) if l.get("provider_status") == "delivered"]
     assert delivered == []
 
