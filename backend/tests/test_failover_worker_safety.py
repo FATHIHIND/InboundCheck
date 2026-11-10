@@ -142,8 +142,11 @@ async def test_runner_forwards_once_and_limit():
 @pytest.mark.asyncio
 async def test_mock_telegram_dispatch_does_not_invoke_http_client():
     """When mock mode is enabled, dispatch must simulate delivery without calling httpx."""
-    with patch.dict("os.environ", {"ENVIRONMENT": "staging"}), \
-         patch.object(settings, "ENVIRONMENT", "staging"):
+    # Stage 4.2 / T3 (C-2): run under ENVIRONMENT=test, where the in-memory config store is
+    # permitted. Under staging the config lookup correctly requires the database and fails
+    # closed before the mock dispatcher is reached; that is asserted separately below.
+    with patch.dict("os.environ", {"ENVIRONMENT": "test"}), \
+         patch.object(settings, "ENVIRONMENT", "test"):
         telegram_alert_service.enable_mock_mode()
         assert telegram_alert_service.is_mock_mode is True
 
@@ -161,6 +164,27 @@ async def test_mock_telegram_dispatch_does_not_invoke_http_client():
             assert res.provider_status == "simulated"
             assert res.telegram_message_id is not None
             assert res.telegram_message_id.startswith("mock_tg_")
+            mock_post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mock_dispatch_in_staging_without_database_fails_closed():
+    """Staging without a database must raise, never fall back to memory or call httpx."""
+    from app.services.supabase_client import DatabaseUnavailableError
+
+    with patch.dict("os.environ", {"ENVIRONMENT": "staging"}), \
+         patch.object(settings, "ENVIRONMENT", "staging"), \
+         patch.object(supabase_service, "_client", None):
+        telegram_alert_service.enable_mock_mode()
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            with pytest.raises(DatabaseUnavailableError):
+                await telegram_alert_service.dispatch_alert(
+                    user_id="user_mock_staging",
+                    order_id="#9998",
+                    domain_name="example.com",
+                    failure_type="bounce",
+                    failure_reason="Mailbox full",
+                )
             mock_post.assert_not_called()
 
 

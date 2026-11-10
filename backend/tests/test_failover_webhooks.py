@@ -337,11 +337,19 @@ async def test_event_normalizers_and_failover_eligibility():
     assert norm_kl[0].is_failover_eligible("delivery_update") is True
 
 
-@pytest.mark.asyncio
-async def test_delivery_failure_generates_telegram_dispatch_log():
-    """An eligible event is recorded as a Telegram-only merchant incident."""
-    user_id = f"telegram-worker-{uuid.uuid4()}"
-    message_id = f"pm-message-{uuid.uuid4()}"
+# Stage 4.2 / T3 (C-1, C-2): synthetic test-only tenant Telegram credentials (no
+# placeholder substrings; deliberately not shaped like a real Telegram bot token so
+# secret scanners cannot flag them) and an isolated in-memory event store per test.
+_SYNTHETIC_TG_TOKEN = "stage42-synthetic-telegram-credential-webhooks"
+_SYNTHETIC_TG_CHAT = "-1004242424243"
+
+
+def _record_claimed_event(monkeypatch, user_id, message_id):
+    import app.services.failover.omnichannel_service as omni
+    from app.services.failover.failover_repository import failure_event_repository
+
+    monkeypatch.setattr(omni, "_mock_failover_configs", {})
+    monkeypatch.setattr(supabase_service, "_in_memory_delivery_failure_events", {})
     supabase_service.register_transactional_message(
         user_id=user_id,
         order_id="#11001",
@@ -357,13 +365,28 @@ async def test_delivery_failure_generates_telegram_dispatch_log():
         user_id=user_id,
         event_payload={"details": "550 5.1.1 mailbox unavailable", "domain_name": "brandshop.com"},
     )
+    claimed = failure_event_repository.claim_pending_delivery_failure_events("worker-test", limit=5)
+    assert [c["id"] for c in claimed] == [event["id"]]
+    assert claimed[0]["lease_until"]
+    return omni, {**event, **claimed[0]}
 
-    with patch.object(
-        omnichannel_service,
-        "send_telegram_alert",
-        new=AsyncMock(return_value={"success": True, "data": {"ok": True}}),
-    ):
+
+@pytest.mark.asyncio
+async def test_delivery_failure_generates_telegram_dispatch_log(monkeypatch):
+    """An eligible event is recorded as a Telegram-only merchant incident."""
+    user_id = f"telegram-worker-{uuid.uuid4()}"
+    message_id = f"pm-message-{uuid.uuid4()}"
+    omni, event = _record_claimed_event(monkeypatch, user_id, message_id)
+    omni.omnichannel_service.update_config(user_id, {
+        "is_enabled": True,
+        "telegram_bot_token": _SYNTHETIC_TG_TOKEN,
+        "telegram_chat_id": _SYNTHETIC_TG_CHAT,
+    })
+
+    send = AsyncMock(return_value={"success": True, "data": {"ok": True}})
+    with patch.object(omnichannel_service, "send_telegram_alert", new=send):
         assert await process_failover_event(event, "worker-test") is True
+    send.assert_awaited_once()
 
     logs = supabase_service.get_failover_logs(user_id=user_id)
     assert len(logs) == 1
@@ -371,6 +394,27 @@ async def test_delivery_failure_generates_telegram_dispatch_log():
     assert logs[0]["provider"] == "telegram"
     assert logs[0]["provider_status"] == "delivered"
     assert logs[0]["delivery_failure_event_id"] == event["id"]
+
+
+@pytest.mark.asyncio
+async def test_delivery_failure_without_tenant_telegram_config_fails_closed(monkeypatch):
+    """Negative: with no tenant Telegram credentials nothing is sent and nothing is 'delivered'."""
+    user_id = f"telegram-worker-{uuid.uuid4()}"
+    message_id = f"pm-message-{uuid.uuid4()}"
+    _, event = _record_claimed_event(monkeypatch, user_id, message_id)
+
+    send = AsyncMock(return_value={"success": True, "data": {"ok": True}})
+    with patch.object(omnichannel_service, "send_telegram_alert", new=send):
+        assert await process_failover_event(event, "worker-test") is False
+    send.assert_not_called()
+
+    # Pin the outcome to the credential guard, not some other early exit.
+    stored = next(e for e in supabase_service._in_memory_delivery_failure_events.values() if str(e.get("id")) == str(event["id"]))
+    assert stored["processing_status"] == "failed"
+    assert "must be explicitly configured" in (stored.get("processing_error") or "")
+
+    delivered = [l for l in supabase_service.get_failover_logs(user_id=user_id) if l.get("provider_status") == "delivered"]
+    assert delivered == []
 
 
 @pytest.mark.asyncio

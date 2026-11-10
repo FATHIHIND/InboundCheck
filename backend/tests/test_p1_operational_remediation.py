@@ -416,8 +416,34 @@ async def test_ops03_stale_queued_event_recovery():
         failover_repo.supabase._in_memory_delivery_failure_events.clear()
 
 
+# Stage 4.2 / T3 helpers (root causes C-1, C-2). Synthetic, test-only Telegram
+# credentials. Deliberately NOT shaped like a real Telegram bot token (<digits>:<35 chars>)
+# so secret scanners cannot flag them; no placeholder substrings, so the real
+# credential guard still accepts them.
+_SYNTHETIC_TG_TOKEN = "stage42-synthetic-telegram-credential-p1"
+_SYNTHETIC_TG_CHAT = "-1004242424242"
+
+
+def _isolate_telegram_configs(monkeypatch):
+    import app.services.failover.omnichannel_service as omni
+    monkeypatch.setattr(omni, "_mock_failover_configs", {})
+    return omni
+
+
+def _seed_and_claim(event, worker_id):
+    """Seed a 'received' event and claim it through the repository API (real lease)."""
+    failover_repo.supabase._in_memory_delivery_failure_events[event["id"]] = {
+        **event, "processing_status": "received",
+    }
+    claimed = failover_repo.claim_pending_delivery_failure_events(worker_id=worker_id, limit=5, lease_seconds=900)
+    assert [c["id"] for c in claimed] == [event["id"]]
+    assert claimed[0]["claimed_by"] == worker_id
+    assert claimed[0]["lease_until"]
+    return {**event, **claimed[0]}
+
+
 @pytest.mark.asyncio
-async def test_ops03_successful_event_processing():
+async def test_ops03_successful_event_processing(monkeypatch):
     """
     Verify successful end-to-end processing of an eligible bounce event:
     dispatch is called, incident log is created, and status transitions to processed.
@@ -427,9 +453,17 @@ async def test_ops03_successful_event_processing():
     event_id = "evt-success-401"
     order_id = "ORD-SUCCESS-401"
 
+    omni = _isolate_telegram_configs(monkeypatch)
     with patch.object(failover_repo.supabase, "_client", None):
         failover_repo.supabase._in_memory_delivery_failure_events.clear()
         failover_repo.supabase._in_memory_failover_logs = {}
+
+        # C-2: the tenant must have its own Telegram configuration; there is no global fallback.
+        omni.omnichannel_service.update_config(user_id, {
+            "is_enabled": True,
+            "telegram_bot_token": _SYNTHETIC_TG_TOKEN,
+            "telegram_chat_id": _SYNTHETIC_TG_CHAT,
+        })
 
         event = {
             "id": event_id,
@@ -438,17 +472,21 @@ async def test_ops03_successful_event_processing():
             "esp_provider": "postmark",
             "event_type": "bounce",
             "event_payload": {"reason": "550 5.1.1 User unknown", "order_id": order_id},
-            "processing_status": "queued",
-            "claimed_by": worker_id,
         }
-        failover_repo.supabase._in_memory_delivery_failure_events[event_id] = dict(event)
+        # C-1: claim through the repository so the event carries a real lease.
+        claimed_event = _seed_and_claim(event, worker_id)
 
         with patch("app.services.failover.omnichannel_service.telegram_alert_service.send_telegram_alert", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = {"success": True, "data": {"result": {"message_id": 888777}}}
 
-            result = await process_delivery_failure_event(event, worker_id)
+            result = await process_delivery_failure_event(claimed_event, worker_id)
             assert result is True
             mock_send.assert_called_once()
+            # The tenant's own chat is targeted, never a global default.
+            sent_values = list(mock_send.call_args.args) + list(mock_send.call_args.kwargs.values())
+            assert _SYNTHETIC_TG_CHAT in sent_values
+            # The tenant's own (decrypted) credential is the one sent.
+            assert _SYNTHETIC_TG_TOKEN in sent_values
 
             # Verify event marked processed
             stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
@@ -465,11 +503,78 @@ async def test_ops03_successful_event_processing():
 
 
 @pytest.mark.asyncio
+async def test_ops03_unconfigured_tenant_fails_closed_without_sending(monkeypatch):
+    """Negative (C-2): a tenant with no Telegram credentials must never trigger an HTTP send."""
+    worker_id = "worker-noconfig-402"
+    user_id = "user-noconfig-402"
+    event_id = "evt-noconfig-402"
+
+    _isolate_telegram_configs(monkeypatch)
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+        failover_repo.supabase._in_memory_failover_logs = {}
+        event = {
+            "id": event_id,
+            "user_id": user_id,
+            "order_id": "ORD-NOCONFIG-402",
+            "esp_provider": "postmark",
+            "event_type": "bounce",
+            "event_payload": {"reason": "550 5.1.1 User unknown"},
+        }
+        claimed_event = _seed_and_claim(event, worker_id)
+
+        with patch("app.services.failover.omnichannel_service.telegram_alert_service.send_telegram_alert", new_callable=AsyncMock) as mock_send:
+            result = await process_delivery_failure_event(claimed_event, worker_id)
+            assert result is False
+            mock_send.assert_not_called()
+
+        stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
+        # Pin the outcome to the credential guard, not some other early exit.
+        assert stored["processing_status"] == "failed"
+        assert "must be explicitly configured" in (stored.get("processing_error") or "")
+        delivered = [l for l in failover_repo.supabase.get_failover_logs(user_id) if l.get("status") == "delivered"]
+        assert delivered == []
+
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+        failover_repo.supabase._in_memory_failover_logs = {}
+
+
+@pytest.mark.asyncio
+async def test_ops03_intent_refused_without_lease():
+    """Negative (C-1): a hand-seeded 'queued' event with no lease must never be dispatched."""
+    worker_id = "worker-nolease-403"
+    event_id = "evt-nolease-403"
+    with patch.object(failover_repo.supabase, "_client", None):
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+        event = {
+            "id": event_id,
+            "user_id": "user-nolease-403",
+            "order_id": "ORD-NOLEASE-403",
+            "esp_provider": "postmark",
+            "event_type": "bounce",
+            "event_payload": {"reason": "550 5.1.1 User unknown"},
+            "processing_status": "queued",
+            "claimed_by": worker_id,
+        }
+        failover_repo.supabase._in_memory_delivery_failure_events[event_id] = dict(event)
+
+        with patch("app.services.failover.omnichannel_service.telegram_alert_service.dispatch_alert", new_callable=AsyncMock) as mock_dispatch:
+            result = await process_delivery_failure_event(event, worker_id)
+            assert result is False
+            mock_dispatch.assert_not_called()
+
+        assert failover_repo.supabase._in_memory_delivery_failure_events[event_id]["processing_status"] == "queued"
+        failover_repo.supabase._in_memory_delivery_failure_events.clear()
+
+
+@pytest.mark.asyncio
 async def test_ops03_processing_exception_recovery():
     """
-    Verify processing exception recovery:
-    When an unhandled exception occurs during event processing,
-    the event is released back to 'received' and the exception is propagated.
+    Verify processing exception recovery after a durable dispatch intent:
+    when dispatch raises after the intent was recorded, the outcome is ambiguous, so the
+    event is NOT returned to 'received' (that could duplicate an alert). It stays
+    'dispatching' under its lease, the exception propagates, and once the lease expires
+    the quarantine sweep marks it 'quarantined' and it is never reclaimed.
     """
     worker_id = "worker-exc-501"
     user_id = "user-exc-501"
@@ -495,11 +600,26 @@ async def test_ops03_processing_exception_recovery():
             with pytest.raises(RuntimeError, match="Transient dispatch network crash"):
                 await process_delivery_failure_event(event, worker_id)
 
-            # CRITICAL CHECK: Event must be released back to 'received' with lease cleared
-            stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
-            assert stored["processing_status"] == "received", "Event must be returned to received on processing exception"
-            assert stored["claimed_by"] is None
-            assert stored["lease_until"] is None
+        # Stage 4.2 / T3 (C-4): the former expectation ('received', lease cleared) predates
+        # the durable dispatch-intent design and would allow a duplicate alert.
+        stored = failover_repo.supabase._in_memory_delivery_failure_events[event_id]
+        assert stored["processing_status"] == "dispatching"
+        assert stored["claimed_by"] == worker_id
+        assert stored.get("dispatch_intent_at")
+
+        # While the lease is live, no other worker can reclaim it.
+        assert failover_repo.claim_pending_delivery_failure_events(worker_id="other-worker-501", limit=5) == []
+
+        # After the lease expires, the sweep quarantines it as ambiguous (no incident log).
+        stored["lease_until"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+        swept = failover_repo.quarantine_expired_dispatch_intent_events(limit=10)
+        assert {"event_id": event_id, "resolution": "quarantined_ambiguous"} in swept
+        assert stored["processing_status"] == "quarantined"
+        assert "AMBIGUOUS_EXTERNAL_DISPATCH" in stored["processing_error"]
+
+        # A quarantined event is never reclaimed for dispatch.
+        assert failover_repo.claim_pending_delivery_failure_events(worker_id="other-worker-501", limit=5) == []
+        assert stored["processing_status"] == "quarantined"
 
         failover_repo.supabase._in_memory_delivery_failure_events.clear()
 

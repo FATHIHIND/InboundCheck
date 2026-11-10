@@ -147,17 +147,70 @@ async def test_stripe_webhook_duplicate_delivery_is_idempotent():
         assert res2.json()["idempotent"] is True
 
 
+_SYNTHETIC_SHOPIFY_SECRET = "test-only-synthetic-shopify-secret"
+
+
+def _shopify_hmac(secret: str, body: bytes) -> str:
+    import base64
+    return base64.b64encode(hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()).decode("utf-8")
+
+
+@pytest.fixture
+def _silence_shopify_ops_alert(monkeypatch):
+    from app.services.alerting.ops_alert_service import ops_alert_service
+    monkeypatch.setattr(ops_alert_service, "dispatch_incident", AsyncMock(return_value=None))
+
+
 @pytest.mark.asyncio
-async def test_shopify_order_webhook_duplicate_delivery_is_idempotent():
+async def test_shopify_order_webhook_rejects_wrong_hmac(monkeypatch, _silence_shopify_ops_alert):
+    """A signature made with any other key must be rejected even when a secret is configured."""
+    monkeypatch.setattr(shopify_service, "api_secret", _SYNTHETIC_SHOPIFY_SECRET)
+    body_bytes = json.dumps({"id": 2001}).encode("utf-8")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/v1/shopify/webhooks/orders",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Shopify-Webhook-Id": f"sh_hook_{uuid.uuid4().hex}",
+                "X-Shopify-Hmac-Sha256": _shopify_hmac("attacker-chosen-secret", body_bytes),
+            },
+        )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("environment", ["test", "production"])
+async def test_shopify_order_webhook_without_secret_fails_closed(monkeypatch, _silence_shopify_ops_alert, environment):
+    """With no secret configured, outside development, every webhook is rejected."""
+    monkeypatch.setattr(shopify_service, "api_secret", "")
+    monkeypatch.setattr(settings, "ENVIRONMENT", environment)
+    body_bytes = json.dumps({"id": 2002}).encode("utf-8")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/v1/shopify/webhooks/orders",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Shopify-Webhook-Id": f"sh_hook_{uuid.uuid4().hex}",
+                "X-Shopify-Hmac-Sha256": _shopify_hmac("dummy_secret", body_bytes),
+            },
+        )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_shopify_order_webhook_duplicate_delivery_is_idempotent(monkeypatch):
     """Verify replayed Shopify orders webhooks return already_processed without duplicating operations."""
+    # Stage 4.2 / T1 (C-5): configure a synthetic test-only secret and sign with the same
+    # value. Previously the test signed with "dummy_secret" while the service had no
+    # secret, so the (correct) fail-closed verifier rejected it.
+    monkeypatch.setattr(shopify_service, "api_secret", _SYNTHETIC_SHOPIFY_SECRET)
     transport = ASGITransport(app=app)
     webhook_id = f"sh_hook_{uuid.uuid4().hex}"
     body_bytes = json.dumps({"id": 1099, "email": "buyer@test.com"}).encode("utf-8")
 
-    secret = shopify_service.api_secret or "dummy_secret"
-    computed_hmac = base64_hmac = __import__("base64").b64encode(
-        hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).digest()
-    ).decode("utf-8")
+    computed_hmac = _shopify_hmac(_SYNTHETIC_SHOPIFY_SECRET, body_bytes)
 
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # First arrival
@@ -215,11 +268,14 @@ async def test_ai_content_optimizer_resilience_to_external_llm_timeout():
 @pytest.mark.asyncio
 async def test_telegram_alert_service_resilience_to_telegram_500():
     """Verify that a 500 error from Telegram Bot API is captured as a clean error without crashing."""
+    # Synthetic test-only credential, deliberately not shaped like a Telegram bot token
+    # (the previous fixture matched GitHub secret-scanning alert #1). Only the HTTP
+    # 500 handling is under test; the HTTP call is mocked.
     telegram_alert_service.update_config(
         "test-resilience-user",
         {
             "is_enabled": True,
-            "telegram_bot_token": "9876543210:AAH8Fj90qWz1x9_liveTestTokenSafe123",
+            "telegram_bot_token": "stage42c-synthetic-telegram-credential-resilience",
             "telegram_chat_id": "-100987654321",
         }
     )

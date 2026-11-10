@@ -3426,17 +3426,37 @@ class SupabaseService:
                         "p_max_attempts": int(max_attempts),
                     },
                 ).execute()
-                if res.data and len(res.data) > 0:
-                    row = res.data[0]
-                    # Keep in-memory cache synchronized
-                    for evt in self._in_memory_delivery_failure_events.values():
-                        if str(evt.get("id")) == str(event_id):
-                            evt["processing_status"] = row.get("new_status")
-                            evt["claimed_by"] = None
-                            evt["lease_until"] = None
-                            evt["next_attempt_at"] = row.get("scheduled_for")
-                            evt["last_retry_at"] = now.isoformat()
-                    return row
+                data = res.data
+                # Two contracts are supported (DB2-2):
+                #  - live production: RETURNS boolean (TRUE = owner's retry/dead-letter
+                #    transition committed; FALSE = caller does not own the lease);
+                #  - repository 20261031000002: RETURNS TABLE -> list of row objects
+                #    (empty list = caller does not own the lease).
+                # Everything else is rejected (fail closed) and never treated as success.
+                if data is True:
+                    return {
+                        "event_id": str(event_id),
+                        "new_status": "scheduled_or_terminal",
+                        "attempt_count": None,
+                        "scheduled_for": next_iso,
+                        "contract": "boolean",
+                    }
+                if data is False or data is None or (isinstance(data, list) and len(data) == 0):
+                    return None
+                if not (isinstance(data, list) and isinstance(data[0], dict)):
+                    raise TypeError(
+                        f"unexpected schedule_delivery_failure_retry response type: {type(data).__name__}"
+                    )
+                row = data[0]
+                # Keep in-memory cache synchronized
+                for evt in self._in_memory_delivery_failure_events.values():
+                    if str(evt.get("id")) == str(event_id):
+                        evt["processing_status"] = row.get("new_status")
+                        evt["claimed_by"] = None
+                        evt["lease_until"] = None
+                        evt["next_attempt_at"] = row.get("scheduled_for")
+                        evt["last_retry_at"] = now.isoformat()
+                return row
             except Exception as e:
                 logger.warning(f"Could not execute schedule_delivery_failure_retry RPC: {e}")
                 if not self._allow_in_memory_fallback():

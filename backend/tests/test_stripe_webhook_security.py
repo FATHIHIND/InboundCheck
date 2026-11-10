@@ -24,57 +24,21 @@ import hmac
 import hashlib
 from unittest.mock import patch, MagicMock
 
-# Gracefully handle sandbox environments where third-party packages are not installed globally
-try:
-    import pytest
-except ImportError:
-    pytest = None
+import pytest
 
 # Ensure backend directory is in path
 from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-# Mock third-party dependencies if missing in current runtime
-for mod in ["pydantic", "pydantic_settings", "pydantic_core", "httpx", "supabase", "fastapi"]:
-    if mod not in sys.modules:
-        sys.modules[mod] = MagicMock()
-
-# Setup clean mock settings if app.core.config cannot be loaded normally
-try:
-    from app.core.config import settings
-except Exception:
-    class MockSettings:
-        ENVIRONMENT = "test"
-        STAGING_MODE = False
-        STRIPE_SECRET_KEY = "mock_secret_key"
-        STRIPE_WEBHOOK_SECRET = ""
-        STRIPE_PRICE_STARTER = "price_starter"
-        STRIPE_PRICE_GROWTH = "price_growth"
-        STRIPE_PRICE_AGENCY = "price_agency"
-        FRONTEND_URL = "http://localhost:3000"
-    mock_cfg = MagicMock()
-    mock_cfg.settings = MockSettings()
-    sys.modules["app.core.config"] = mock_cfg
-    from app.core.config import settings
-
-# Setup clean mock supabase if supabase_client cannot be loaded normally
-try:
-    from app.services.supabase_client import supabase_service
-except Exception:
-    mock_sb = MagicMock()
-    mock_sb.is_connected = False
-    mock_sb._in_memory_profiles = {}
-    def _mock_get_profile(uid):
-        return mock_sb._in_memory_profiles.get(uid, {})
-    def _mock_update_profile(uid, payload):
-        p = mock_sb._in_memory_profiles.setdefault(uid, {})
-        p.update(payload)
-        return p
-    mock_sb.get_user_profile = _mock_get_profile
-    mock_sb.update_user_profile = _mock_update_profile
-    sys.modules["app.services.supabase_client"] = MagicMock(supabase_service=mock_sb)
-    from app.services.supabase_client import supabase_service
+# Stage 4.2 / T2: the former module-level fallbacks that replaced pydantic, fastapi,
+# httpx and supabase (and app.core.config / supabase_client) with MagicMock objects
+# were removed. When this module was collected first in a fresh interpreter they
+# silently swapped real packages for mocks process-wide, so the security
+# assertions below ran against stand-ins. The pinned test image ships the real
+# dependencies; a missing dependency must now fail loudly instead.
+from app.core.config import settings
+from app.services.supabase_client import supabase_service
 
 from app.services.billing.stripe_service import (
     StripeService,
@@ -279,11 +243,15 @@ def test_case_10_invalid_signature_cannot_activate_subscription():
         # Verify signature verification rejects missing signature
         assert svc.verify_webhook_signature(raw_bytes, "") is False
 
-        # Because is_valid is False, process_webhook_event MUST NOT be invoked
-        # Verify profile remains in 'canceled' status and 'starter' tier
-        prof = supabase_service.get_user_profile(user_id)
-        assert prof["subscription_tier"] == "starter"
-        assert prof["subscription_status"] == "canceled"
+    # Stage 4.2 / T2 (C-7): the profile is read OUTSIDE the production patch. Under
+    # ENVIRONMENT=production with no database the read correctly fails closed
+    # (DatabaseUnavailableError, covered by test_case_13), so asserting state there
+    # tested the guard rather than the forged-signature outcome.
+    # Because is_valid is False, process_webhook_event MUST NOT be invoked
+    # Verify profile remains in 'canceled' status and 'starter' tier
+    prof = supabase_service.get_user_profile(user_id)
+    assert prof["subscription_tier"] == "starter"
+    assert prof["subscription_status"] == "canceled"
 
 
 # ==============================================================================
@@ -315,13 +283,18 @@ def test_case_11_duplicate_valid_webhook_remains_idempotent():
     raw_bytes = json.dumps(valid_payload).encode("utf-8")
     secret = "whsec_idempotency_test_secret"
 
-    with patch.object(settings, "ENVIRONMENT", "production"), patch.object(settings, "STAGING_MODE", False):
-        svc = StripeService()
-        svc.webhook_secret = secret
+    svc = StripeService()
+    svc.webhook_secret = secret
 
+    # Signature verification runs under the production rules (no test bypass).
+    with patch.object(settings, "ENVIRONMENT", "production"), patch.object(settings, "STAGING_MODE", False):
         sig_header = make_stripe_signature(raw_bytes, secret)
         assert svc.verify_webhook_signature(raw_bytes, sig_header) is True
 
+    # Stage 4.2 / T2 (C-7): stateful processing runs under ENVIRONMENT=test, where the
+    # in-memory store is permitted. Production without a database must fail closed;
+    # that is asserted separately in test_case_13.
+    with patch.object(settings, "ENVIRONMENT", "test"), patch.object(settings, "STAGING_MODE", False):
         # First delivery: Activates subscription
         res1 = svc.process_webhook_event(valid_payload)
         assert res1["status"] == "success"
@@ -333,6 +306,88 @@ def test_case_11_duplicate_valid_webhook_remains_idempotent():
         assert res2["status"] == "already_processed"
         assert res2["idempotent"] is True
         assert res2["event_id"] == evt_id
+
+
+# ==============================================================================
+# TEST CASE 10b: Route-level forged signature is rejected and changes nothing
+# ==============================================================================
+def test_case_10b_route_rejects_forged_signature_without_state_change():
+    """A forged Stripe-Signature on the real HTTP route returns 400 and never activates."""
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.services.alerting.ops_alert_service import ops_alert_service
+
+    user_id = "user_victim_sec_test_10b"
+    supabase_service.update_user_profile(user_id, {
+        "email": "victim10b@test.com",
+        "subscription_tier": "starter",
+        "tier": "starter",
+        "subscription_status": "canceled",
+    })
+    forged = {
+        "id": f"evt_forged_route_{int(time.time() * 1000)}",
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "client_reference_id": user_id,
+            "customer": "cus_forged_10b",
+            "subscription": "sub_forged_10b",
+            "metadata": {"user_id": user_id, "plan_tier": "agency"},
+        }},
+    }
+    raw_bytes = json.dumps(forged).encode("utf-8")
+
+    with patch.object(settings, "ENVIRONMENT", "test"), patch.object(settings, "STAGING_MODE", False), \
+            patch.object(stripe_service, "webhook_secret", "whsec_route_guard_secret"), \
+            patch.object(ops_alert_service, "dispatch_incident", AsyncMock(return_value=None)):
+        client = TestClient(app)
+        res = client.post(
+            "/api/v1/billing/webhook",
+            content=raw_bytes,
+            headers={
+                "Content-Type": "application/json",
+                # Signed with a different key than the configured webhook secret.
+                "Stripe-Signature": make_stripe_signature(raw_bytes, "whsec_attacker_key"),
+            },
+        )
+        assert res.status_code == 400
+        # 400 is also used for processing errors; pin it to the signature-rejection branch.
+        assert res.json()["detail"].startswith("Invalid Stripe webhook signature")
+        prof = supabase_service.get_user_profile(user_id)
+        assert prof["subscription_tier"] == "starter"
+        assert prof["subscription_status"] == "canceled"
+        assert stripe_service.is_event_processed(forged["id"]) is False
+
+
+# ==============================================================================
+# TEST CASE 13: Production without a database fails closed (never in-memory)
+# ==============================================================================
+def test_case_13_production_without_database_fails_closed():
+    """A valid event in production with no database raises instead of silently using memory."""
+    from app.services.supabase_client import DatabaseUnavailableError
+
+    user_id = "user_prod_no_db_13"
+    event = {
+        "id": f"evt_prod_nodb_{int(time.time() * 1000)}",
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "client_reference_id": user_id,
+            "customer": "cus_nodb_13",
+            "subscription": "sub_nodb_13",
+            "metadata": {"user_id": user_id, "plan_tier": "growth"},
+        }},
+    }
+    svc = StripeService()
+    with patch.object(settings, "ENVIRONMENT", "production"), patch.object(settings, "STAGING_MODE", False), \
+            patch.object(supabase_service, "_client", None):
+        with pytest.raises(DatabaseUnavailableError):
+            svc.process_webhook_event(event)
+        with pytest.raises(DatabaseUnavailableError):
+            supabase_service.get_user_profile(user_id)
+
+    # Nothing was activated or recorded as processed in the fallback store.
+    assert user_id not in supabase_service._in_memory_profiles
+    assert svc.is_event_processed(event["id"]) is False
 
 
 # ==============================================================================

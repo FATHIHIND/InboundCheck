@@ -10,18 +10,74 @@ from app.services.dns.record_generator import DNSRecordGenerator
 from app.schemas.dns import GenerateRecordRequest
 
 
-@pytest.mark.asyncio
-async def test_dns_diagnostic_audit():
-    engine = DNSDiagnosticEngine()
-    # Test with a well-known public domain (e.g. google.com)
-    summary, raw, exec_ms = await engine.audit_domain("google.com")
+# ---------------------------------------------------------------------------
+# Hermetic DNS fixture (Stage 4.2 / T1, root cause C-6).
+# The audit used to query google.com live; with no network every record came
+# back "missing". The engine is now driven by a deterministic in-memory zone so
+# the test exercises the real parsing and scoring code without network access.
+# ---------------------------------------------------------------------------
+import dns.rdata
+import dns.rdataclass
+import dns.rdatatype
+import dns.resolver
 
-    assert summary.mx.status in ["optimal", "warning"]
+_AUDIT_DOMAIN = "brandshop-fixture.com"
+
+_FAKE_ZONE = {
+    (_AUDIT_DOMAIN, "MX"): ["10 mx1.brandshop-fixture.com.", "20 mx2.brandshop-fixture.com."],
+    (_AUDIT_DOMAIN, "TXT"): ['"v=spf1 include:shops.shopify.com include:_spf.google.com ~all"'],
+    ("_dmarc." + _AUDIT_DOMAIN, "TXT"): ['"v=DMARC1; p=quarantine; pct=100; rua=mailto:dmarc@brandshop-fixture.com"'],
+    (_AUDIT_DOMAIN, "A"): ["93.184.216.34"],
+    (_AUDIT_DOMAIN, "NS"): ["ns1.brandshop-fixture.com.", "ns2.brandshop-fixture.com."],
+    ("mx1.brandshop-fixture.com", "A"): ["93.184.216.35"],
+    ("mx2.brandshop-fixture.com", "A"): ["93.184.216.36"],
+}
+
+
+class _FakeResolver:
+    """Minimal async stand-in for dns.asyncresolver.Resolver.resolve()."""
+
+    def __init__(self, zone):
+        self._zone = zone
+        self.queries = []
+
+    async def resolve(self, qname, rdtype, *args, **kwargs):
+        name = str(qname).rstrip(".").lower()
+        type_name = dns.rdatatype.to_text(rdtype) if not isinstance(rdtype, str) else rdtype
+        self.queries.append((name, type_name))
+        texts = self._zone.get((name, type_name))
+        if not texts:
+            raise dns.resolver.NoAnswer()
+        return [
+            dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.from_text(type_name), t)
+            for t in texts
+        ]
+
+
+def _engine_with_zone(monkeypatch, zone):
+    engine = DNSDiagnosticEngine()
+    fake = _FakeResolver(zone)
+    monkeypatch.setattr(engine, "_get_resolver", lambda: fake)
+    return engine, fake
+
+
+@pytest.mark.asyncio
+async def test_dns_diagnostic_audit(monkeypatch):
+    engine, fake = _engine_with_zone(monkeypatch, _FAKE_ZONE)
+    summary, raw, exec_ms = await engine.audit_domain(_AUDIT_DOMAIN, include_reputation=False)
+
+    # The fake resolver, not the network, answered every query.
+    assert fake.queries
+    assert summary.mx.status == "optimal"
+    assert summary.mx.record_count == 2
+    assert [r.host for r in summary.mx.records] == ["mx1.brandshop-fixture.com", "mx2.brandshop-fixture.com"]
     assert summary.spf.status in ["optimal", "warning"]
+    assert summary.spf.all_mechanism == "~all"
+    assert summary.dmarc.policy == "quarantine"
     assert exec_ms > 0
 
     score, status, breakdown, issues, fixes = DeliverabilityScorer.calculate_health_score(
-        "google.com",
+        _AUDIT_DOMAIN,
         summary
     )
 
@@ -29,6 +85,32 @@ async def test_dns_diagnostic_audit():
     assert status in ["optimal", "warning", "critical"]
     assert breakdown.spf_max == 25
     assert breakdown.dmarc_max == 35
+
+
+@pytest.mark.asyncio
+async def test_dns_diagnostic_audit_single_mx_is_warning(monkeypatch):
+    zone = dict(_FAKE_ZONE)
+    zone[(_AUDIT_DOMAIN, "MX")] = ["10 mx1.brandshop-fixture.com."]
+    engine, _ = _engine_with_zone(monkeypatch, zone)
+
+    summary, _, _ = await engine.audit_domain(_AUDIT_DOMAIN, include_reputation=False)
+
+    assert summary.mx.record_count == 1
+    assert summary.mx.status == "warning"
+
+
+@pytest.mark.asyncio
+async def test_dns_diagnostic_audit_no_records_is_missing_not_optimal(monkeypatch):
+    """An empty zone (NoAnswer everywhere) must never be reported as healthy."""
+    engine, _ = _engine_with_zone(monkeypatch, {})
+
+    summary, _, _ = await engine.audit_domain(_AUDIT_DOMAIN, include_reputation=False)
+
+    assert summary.mx.record_count == 0
+    assert summary.mx.status not in ["optimal", "warning"]
+    assert summary.spf.status not in ["optimal", "warning"]
+    score, status, *_ = DeliverabilityScorer.calculate_health_score(_AUDIT_DOMAIN, summary)
+    assert status == "critical"
 
 
 def test_record_generator():
