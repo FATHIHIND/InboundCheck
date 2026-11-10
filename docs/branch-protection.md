@@ -24,9 +24,15 @@ A red dependency audit is a release blocker to investigate. It's not a reason to
 
 Every job runs on pull requests and pushes with no path filters, so a required check is never silently skipped. Tokens have only `contents: read`, and checkout doesn't persist credentials. There is no privileged pull-request event, deployment job, environment approval, OIDC permission, or use of production settings.
 
+**Supply chain:**
+- Every third-party action is pinned to a full, immutable commit SHA, with its release in a trailing comment: `actions/checkout` v4.4.0 and `actions/setup-python` v5.6.0. A moved or hijacked tag therefore can't change what CI runs.
+- To update an action, resolve the new release tag to its commit SHA and review the upstream diff. Then update the SHA and the comment together.
+- `test_release_gate_regression.py` fails if any `uses:` line isn't pinned to a 40-character SHA.
+
 ## What each check proves
 
-**`source-safety`**
+**`source-safety`** (Ubuntu, Python 3.11)
+- Installs the verification tools only from the CI-tools hash lock (see "CI-tools lock" below).
 - Checks Git-tracked paths and content for dotenv or credential files and for some recognisable credential formats. It reports file names and rule names, never the matched values.
 - Checks that every direct requirement in `backend/requirements.txt` is pinned at the same version in the hash lock, and that every lock entry is hashed.
 - Parses each canonical migration with `pglast==8.7`. The manifest (`CANONICAL_MIGRATIONS` in `scripts/reconcile_migration_ledger.py`) is read with the Python AST and literal evaluation; the module is never imported. The physical files in `supabase/migrations/` must match the ordered, unique manifest exactly, so a migration ID and its SQL file must be added together.
@@ -46,7 +52,36 @@ Every job runs on pull requests and pushes with no path filters, so a required c
 - Runs `pip-audit` on the backend lock as it resolves for the Linux/Python 3.11 runtime, including Linux-only packages such as `uvloop`. Windows-only entries such as `colorama` aren't audited, because the lock's markers exclude them on Linux.
 - Runs Bandit on the backend application source (medium and high severity).
 - `pip-audit` queries an advisory service from CI, and a service error fails the check. Bandit runs offline.
-- The audit tools are installed separately from the application's runtime dependencies.
+- `pip-audit` and Bandit install only from the CI-tools hash lock, separately from the application's runtime dependencies.
+
+## CI-tools lock
+
+The verification tools (`pglast==8.7`, `pip-audit==2.9.0`, `bandit==1.8.6`) are listed in `ci/requirements-ci-tools.in`. Their full transitive closure is pinned with SHA-256 hashes in `ci/requirements-ci-tools.lock`: 31 packages, including `pip` itself, which `pip-api` needs. None of these tools is in `backend/requirements.txt` or `backend/requirements.lock`, and a regression test enforces that separation.
+
+Both tool-using jobs install with:
+
+~~~text
+python -m pip install --require-hashes --only-binary=:all: -r ci/requirements-ci-tools.lock
+~~~
+
+So every downloaded file must match a reviewed hash, and nothing is built from source.
+
+The lock was resolved for CPython 3.11 on Linux, which is why both tool jobs use Python 3.11. Each pinned version carries the hashes of every file PyPI publishes for it, across platforms and source distributions. On Linux/CPython 3.11, though, pip selects only `cp311` manylinux or pure-Python wheels, and `--only-binary=:all:` enforces that.
+
+To update the tools, with approval:
+1. Edit the `.in` file.
+2. Regenerate the lock in an isolated `python:3.11-slim` container, working from the `ci/` directory so the `# via` comments stay stable:
+
+   ~~~text
+   pip install pip-tools==7.4.1
+   cd ci
+   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+       --output-file=requirements-ci-tools.lock requirements-ci-tools.in
+   ~~~
+
+   Then restore the hand-written header comment.
+3. Review the diff.
+4. In a fresh container, confirm that `pip install --require-hashes --only-binary=:all:` and `pip check` succeed.
 
 ## Backend lock
 
@@ -68,13 +103,16 @@ A lock freezes versions; it doesn't make old dependencies secure.
 
 ## Local commands
 
-Use an existing reviewed Python environment that has the backend lock installed. Don't source a dotenv file.
+Use an existing reviewed Python environment that has the backend lock installed. Don't source a dotenv file. The migration validator, `pip-audit` and Bandit need the CI-tools lock, installed in a separate verifier environment such as a disposable `python:3.11-slim` container.
 
 ~~~text
 python scripts/check_release_safety.py
-python scripts/validate_migration_sources.py      # requires pglast==8.7 in the verifier environment
 python scripts/safe_backend_tests.py tests/test_release_gate_regression.py -q
 python scripts/safe_backend_tests.py -q
+# verifier environment (CI-tools lock installed):
+python scripts/validate_migration_sources.py
+python -m pip_audit --strict --disable-pip --no-deps --require-hashes -r backend/requirements.lock
+python -m bandit -r backend/app -ll
 ~~~
 
 The source-safety check covers the current Git-tracked tree, not past commits or every possible secret format. If a real credential was ever committed, rotate it and review the history separately.
