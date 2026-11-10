@@ -1,0 +1,92 @@
+name: Release gates
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  source-safety:
+    name: source-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install explicit source verifier (not application runtime)
+        run: python -m pip install pglast==8.7
+      - run: python scripts/check_release_safety.py
+      - run: python scripts/validate_migration_sources.py
+
+  backend-safe:
+    name: backend-safe
+    # The universal hash lock covers the Windows Python 3.12 test target;
+    # the separate Linux job checks the Docker Python 3.11 runtime target.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install reviewed hash-pinned dependency closure
+        run: python -m pip install --require-hashes -r backend/requirements.lock -r backend/requirements.txt
+      - run: python -m pip check
+      - name: Run backend suite without dotenv, external network or live staging lifecycle
+        run: python scripts/safe_backend_tests.py -q
+
+  backend-linux-runtime:
+    name: backend-linux-runtime
+    # Match backend/Dockerfile (python:3.11-slim) and validate the full Linux
+    # dependency closure; fail closed if any dependency lacks a reviewed pin/hash.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check actual runtime dependency closure with mandatory hashes
+        run: python -m pip install --require-hashes -r backend/requirements.lock -r backend/requirements.txt
+      - run: python -m pip check
+      - name: Run safe suite on the actual runtime target
+        run: python scripts/safe_backend_tests.py -q
+
+  dependency-security:
+    name: dependency-security
+    # pip-audit evaluates lock markers for the host platform; audit the Linux
+    # Python 3.11 runtime closure (includes Linux-only packages such as uvloop).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated audit tooling (no application imports)
+        run: python -m pip install pip-audit==2.9.0 bandit==1.8.6
+      - name: Audit locked backend runtime closure for Linux/3.11 (fail closed on advisory service failure)
+        run: python -m pip_audit --strict --disable-pip --no-deps --require-hashes -r backend/requirements.lock
+      - name: Static backend security scan (medium and high severity)
+        if: ${{ !cancelled() }}
+        run: python -m bandit -r backend/app -ll
