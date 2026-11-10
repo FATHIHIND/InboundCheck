@@ -1,0 +1,6 @@
+# CI-only verification tools for .github/workflows/release-gates.yml.
+# NOT application runtime dependencies (see backend/requirements.txt).
+# Regenerate ci/requirements-ci-tools.lock from this file with hashes (see docs/branch-protection.md).
+pglast==8.7
+pip-audit==2.9.0
+bandit==1.8.6

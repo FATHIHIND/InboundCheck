@@ -101,8 +101,11 @@ class DNSDiagnosticEngine:
         resolver.lifetime = self.timeout * 2
         return resolver
 
+    # SSRF deny-list: these are targets we REFUSE to resolve, never bind addresses.
+    # Bandit B104 flags the "0.0.0.0" literal as a bind-all-interfaces risk; that
+    # rule does not apply to a blocklist entry, so it is suppressed on that line only.
     BLOCKED_DOMAINS = [
-        "localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "metadata.google.internal"
+        "localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "metadata.google.internal"  # nosec B104
     ]
     BLOCKED_SUFFIXES = [".local", ".internal", ".lan", ".home", ".corp", ".onion", ".arpa"]
 
