@@ -148,6 +148,30 @@ def _all_workflow_files():
     return files
 
 
+def test_every_workflow_file_parses_as_yaml_and_release_gates_has_the_four_jobs():
+    # Text-only checks cannot see YAML syntax errors; GitHub runs zero jobs for an unparsable file.
+    import yaml
+    workflows = sorted((ROOT / ".github/workflows").glob("*.yml")) + sorted((ROOT / ".github/workflows").glob("*.yaml"))
+    assert workflows, "no workflow files found"
+    parsed = {}
+    for workflow in workflows:
+        try:
+            document = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:  # report location only, not file content
+            mark = getattr(exc, "problem_mark", None)
+            where = f"line {mark.line + 1}, column {mark.column + 1}" if mark else "unknown position"
+            pytest.fail(f"{workflow.name}: invalid YAML at {where}")
+        assert isinstance(document, dict) and isinstance(document.get("jobs"), dict), f"{workflow.name}: no jobs mapping"
+        parsed[workflow.name] = document
+    jobs = parsed["release-gates.yml"]["jobs"]
+    assert set(jobs) == {"source-safety", "backend-safe", "backend-linux-runtime", "dependency-security"}
+    for name, job in jobs.items():
+        assert job.get("name") == name and job.get("steps"), name
+    tool_install = "python -m pip install --require-hashes --only-binary=:all: -r ci/requirements-ci-tools.lock"
+    for name in ("source-safety", "dependency-security"):
+        assert tool_install in [step.get("run") for step in jobs[name]["steps"]], name
+
+
 def test_every_action_is_pinned_to_a_full_commit_sha_with_version_comment():
     # Any `uses` key in any workflow file (block, flow or quoted form) must be a SHA pin.
     import re
