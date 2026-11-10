@@ -56,3 +56,6 @@ supabase/.temp/
 
 # Short Windows path for credential-free local release verification artifacts.
 /.phase5-verification/
+
+# Local browser-automation tool output (Playwright MCP snapshots/logs); never commit.
+/.playwright-mcp/
