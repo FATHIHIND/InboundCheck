@@ -123,6 +123,89 @@ def test_ci_checks_linux_actual_runtime_and_keeps_direct_requirements():
     assert "python scripts/safe_backend_tests.py -q" in section
 
 
+def _workflow_text():
+    return (ROOT / ".github/workflows/release-gates.yml").read_text(encoding="utf-8")
+
+
+def _locked_entries(path):
+    """Return {name: (version, hashes)}; every non-comment entry must be pinned and hashed."""
+    import re
+    entries = {}
+    logical = path.read_text(encoding="utf-8").replace("\\\n", " ")
+    for line in logical.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([^\s;]+)(?:\s*;[^#]+?)?\s+((?:--hash=sha256:[a-f0-9]{64}\s*)+)(?:#.*)?", line)
+        assert match, f"{path.name}: unpinned or unhashed entry"
+        entries[match[1].lower().replace("_", "-")] = (match[2], set(match[3].split()))
+    return entries
+
+
+def _all_workflow_files():
+    files = sorted((ROOT / ".github/workflows").glob("*.y*ml"))
+    assert files, "no workflow files found"
+    return files
+
+
+def test_every_action_is_pinned_to_a_full_commit_sha_with_version_comment():
+    # Any `uses` key in any workflow file (block, flow or quoted form) must be a SHA pin.
+    import re
+    pinned = re.compile(r"-?\s*uses:\s*[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+")
+    seen = 0
+    for workflow in _all_workflow_files():
+        for line in workflow.read_text(encoding="utf-8").splitlines():
+            if re.search(r"""\buses\b["']?\s*:""", line):
+                seen += 1
+                assert pinned.fullmatch(line.strip()), f"{workflow.name}: {line.strip()}"
+    assert seen, "workflow must use actions"
+
+
+def test_ci_tools_install_only_from_the_hash_lock():
+    import re
+    installer = re.compile(r"\b(?:pip3?|uv\s+pip|pipx)\s+(?:install|download|sync)\b")
+    installs = [line.strip() for workflow in _all_workflow_files()
+                for line in workflow.read_text(encoding="utf-8").splitlines() if installer.search(line)]
+    assert installs
+    for line in installs:
+        assert "--require-hashes" in line, line
+        assert re.search(r"\s-r\s+\S+\.(?:lock|txt)\b", line), line  # never a bare `pip install name==version`
+    tool_installs = [line for line in installs if "ci/requirements-ci-tools.lock" in line]
+    # Exactly the source-safety and dependency-security jobs; update deliberately if a tool job is added.
+    assert len(tool_installs) == 2
+    for line in tool_installs:
+        assert "--only-binary=:all:" in line
+        assert "backend/requirements" not in line
+
+
+def test_ci_tools_lock_is_fully_hashed_and_separate_from_runtime():
+    import re
+    lock = _locked_entries(ROOT / "ci/requirements-ci-tools.lock")
+    direct = {}
+    for line in (ROOT / "ci/requirements-ci-tools.in").read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            name, version = re.fullmatch(r"([A-Za-z0-9_.-]+)==(\S+)", line).groups()
+            direct[name.lower()] = version
+    assert direct == {"pglast": "8.7", "pip-audit": "2.9.0", "bandit": "1.8.6"}
+    for name, version in direct.items():
+        assert lock[name][0] == version
+    assert all(hashes for _, hashes in lock.values())
+
+    def normalize(name):  # PEP 503
+        return re.sub(r"[-_.]+", "-", name).lower()
+
+    runtime_direct = set()
+    for line in (ROOT / "backend/requirements.txt").read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            runtime_direct.add(normalize(re.match(r"[A-Za-z0-9_.-]+", line).group(0)))
+    runtime_lock = {normalize(name) for name in _locked_entries(ROOT / "backend/requirements.lock")}
+    for tool in map(normalize, direct):
+        assert tool not in runtime_direct
+        assert tool not in runtime_lock
+
+
 @pytest.mark.skipif(os.environ.get("INBOUNDCHECK_SAFE_TEST_RUNNER") != "1",
                     reason="audit-hook isolation is installed only by scripts/safe_backend_tests.py")
 def test_safe_runner_denies_native_udp_socket_creation_before_io():
