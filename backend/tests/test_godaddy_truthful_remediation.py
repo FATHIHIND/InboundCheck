@@ -211,3 +211,16 @@ def test_inspector_does_not_offer_godaddy_direct_auto_insert():
     content = inspector_file.read_text(encoding="utf-8")
     assert "Auto-Insert to GoDaddy" not in content
     assert 'Auto-Insert to {activeProviderName === "godaddy" ? "GoDaddy" : "Cloudflare"}' not in content
+
+
+@pytest.fixture(autouse=True)
+def _cloudflare_lookups_stubbed(monkeypatch):
+    """Zone and record lookups never reach the network in this module.
+
+    Mutations still go through the real CloudflareClient and httpx transport, which
+    individual tests intercept at httpx.AsyncClient.post/put.
+    """
+    from unittest.mock import AsyncMock as _AsyncMock
+    from app.services.dns.auto_fixer import dns_auto_fixer_service as _svc
+    monkeypatch.setattr(_svc.cloudflare, "get_zone_by_domain", _AsyncMock(return_value={"zone_id": "zone-stub-000"}))
+    monkeypatch.setattr(_svc.cloudflare, "get_dns_record", _AsyncMock(return_value=None))
