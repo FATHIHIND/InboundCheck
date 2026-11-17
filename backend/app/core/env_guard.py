@@ -103,7 +103,8 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
     url_valid, url_issues, _ = validate_supabase_url(settings.SUPABASE_URL, is_prod=is_prod)
     issues.extend(url_issues)
 
-    service_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY
+    # Only the service-role key is accepted. The public anon key must never stand in for it.
+    service_key = settings.SUPABASE_SERVICE_ROLE_KEY
     if not service_key or check_is_placeholder(service_key):
         issues.append("SUPABASE_SERVICE_ROLE_KEY is unconfigured or placeholder.")
 
