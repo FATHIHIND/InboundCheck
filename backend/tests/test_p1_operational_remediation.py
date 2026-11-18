@@ -177,8 +177,11 @@ async def test_ops02_alert_dispatch_failure_does_not_break_application():
     """
     transport = ASGITransport(app=app)
 
-    # Patch dispatch_incident to raise an unhandled exception
-    with patch.object(ops_alert_service, "dispatch_incident", side_effect=RuntimeError("Telegram network catastrophic failure")):
+    # Patch dispatch_incident to raise an unhandled exception. Pin the Shopify webhook secret so the
+    # invalid-HMAC assertion does not depend on the developer's environment (dev mode accepts
+    # unsigned webhooks when no secret is configured).
+    with patch.object(ops_alert_service, "dispatch_incident", side_effect=RuntimeError("Telegram network catastrophic failure")), \
+         patch("app.services.shopify.shopify_service.shopify_service.api_secret", "test-shopify-webhook-secret"):
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             # 1. Test Stripe webhook with invalid signature
             stripe_res = await ac.post(
@@ -815,7 +818,8 @@ async def test_ops04_dns_auto_fix_fails_closed_on_cloudflare_error():
             assert result["applied"] is False
             assert result["fix_entry"]["status"] == "failed"
             assert "error" in result
-            assert "Cloudflare API rejected" in result["error"]
+            # Real CloudflareClient wording for an HTTP 403 rejection on insertion.
+            assert "Cloudflare rejected record insertion (HTTP 403)" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -938,3 +942,16 @@ async def test_ops04_successful_remediation_preserved():
             data = res.json()
             assert data["applied"] is True
             assert data["fix_entry"]["status"] == "applied"
+
+
+@pytest.fixture(autouse=True)
+def _cloudflare_lookups_stubbed(monkeypatch):
+    """Zone and record lookups never reach the network in this module.
+
+    Mutations still go through the real CloudflareClient and httpx transport, which
+    individual tests intercept at httpx.AsyncClient.post/put.
+    """
+    from unittest.mock import AsyncMock as _AsyncMock
+    from app.services.dns.auto_fixer import dns_auto_fixer_service as _svc
+    monkeypatch.setattr(_svc.cloudflare, "get_zone_by_domain", _AsyncMock(return_value={"zone_id": "zone-stub-000"}))
+    monkeypatch.setattr(_svc.cloudflare, "get_dns_record", _AsyncMock(return_value=None))

@@ -27,7 +27,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import httpx
-from unittest.mock import MagicMock, AsyncMock
 
 from app.core.config import settings
 from app.core.encryption import (
@@ -313,11 +312,8 @@ class DNSAutoFixerService:
         op_id = f"fix_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:6]}"
         fingerprint = self._compute_fingerprint(user_id, clean_domain, clean_host, clean_type, clean_value)
 
-        # Determine if running in simulation test mode (no live server token, non-production)
-        is_simulated = (not is_production) and (not settings.CLOUDFLARE_API_TOKEN and ("test" in token.lower() or "mock" in token.lower()))
-
         # -------------------------------------------------------------
-        # STEP 2: VALIDATE — Dynamic Zone Discovery & Existing Record Check
+        # STEP 2: VALIDATE — Zone Resolution & Existing Record Check
         # -------------------------------------------------------------
         zone_id: Optional[str] = None
         existing_record: Optional[Dict[str, Any]] = None
@@ -327,21 +323,16 @@ class DNSAutoFixerService:
             zone_id = user_cred["zone_id"]
 
         try:
-            if not zone_id and not is_simulated:
+            if not zone_id:
                 zone_info = await self.cloudflare.get_zone_by_domain(token, clean_domain)
                 if zone_info and zone_info.get("zone_id"):
                     zone_id = zone_info["zone_id"]
 
+            # Fail closed: never mutate a guessed or hard-coded zone.
             if not zone_id:
-                zone_id = "023e105f4ecef8ad9ca31a8372d0c353"
+                raise RuntimeError("Cloudflare zone could not be resolved for this domain.")
 
-            # Check if record already exists (safely catch if GET is unmocked in legacy tests)
-            if not is_simulated:
-                try:
-                    existing_record = await self.cloudflare.get_dns_record(token, zone_id, clean_type, clean_host)
-                except Exception as ex:
-                    logger.debug(f"Target record lookup skipped or failed in test harness: {ex}")
-                    existing_record = None
+            existing_record = await self.cloudflare.get_dns_record(token, zone_id, clean_type, clean_host)
 
         except Exception as exc:
             safe_err = re.sub(r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+", r"\1=[REDACTED]", str(exc), flags=re.IGNORECASE)
@@ -439,57 +430,11 @@ class DNSAutoFixerService:
         apply_error: Optional[str] = None
         effective_token = token or settings.CLOUDFLARE_API_TOKEN
 
-        # Check if legacy httpx post was explicitly mocked (e.g. in test_p1_operational_remediation.py)
-        is_httpx_mocked = isinstance(httpx.AsyncClient.post, (AsyncMock, MagicMock)) or isinstance(httpx.AsyncClient.put, (AsyncMock, MagicMock))
-
-        if is_httpx_mocked:
-            try:
-                # Use httpx.AsyncClient directly to ensure seamless compatibility with test patches
-                async with httpx.AsyncClient(timeout=8.0) as client:
-                    if existing_record and existing_record.get("id"):
-                        res = await client.put(
-                            f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{existing_record['id']}",
-                            headers={"Authorization": f"Bearer {effective_token}", "Content-Type": "application/json"},
-                            json={
-                                "type": clean_type,
-                                "name": clean_host,
-                                "content": clean_value,
-                                "ttl": ttl,
-                                "proxied": False,
-                            }
-                        )
-                    else:
-                        res = await client.post(
-                            f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
-                            headers={"Authorization": f"Bearer {effective_token}", "Content-Type": "application/json"},
-                            json={
-                                "type": clean_type,
-                                "name": clean_host,
-                                "content": clean_value,
-                                "ttl": ttl,
-                                "proxied": False,
-                            }
-                        )
-
-                    if res.status_code in (200, 201):
-                        data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
-                        applied_record = data.get("result") or {
-                            "id": f"rec_{int(datetime.now(timezone.utc).timestamp())}",
-                            "name": clean_host,
-                            "content": clean_value,
-                            "type": clean_type,
-                            "ttl": ttl,
-                            "proxied": False,
-                        }
-                    else:
-                        safe_res = re.sub(r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+", r"\1=[REDACTED]", res.text, flags=re.IGNORECASE)
-                        apply_error = f"Cloudflare API rejected record creation (HTTP {res.status_code}): {safe_res[:200]}"
-
-            except Exception as exc:
-                safe_err = re.sub(r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+", r"\1=[REDACTED]", str(exc), flags=re.IGNORECASE)
-                apply_error = f"Cloudflare API communication error: {safe_err[:200]}"
-
-        elif settings.CLOUDFLARE_API_TOKEN or not is_simulated or isinstance(getattr(self.cloudflare, "create_dns_record", None), (AsyncMock, MagicMock)):
+        # Only the real Cloudflare transport is used. There is no test-double detection
+        # and no simulated success: without any API token the mutation is refused.
+        if not effective_token:
+            apply_error = "Cloudflare API Token is not configured in server environment."
+        else:
             try:
                 if existing_record and existing_record.get("id"):
                     applied_record = await self.cloudflare.update_dns_record(
@@ -516,19 +461,10 @@ class DNSAutoFixerService:
                 safe_err = re.sub(r"(token|key|secret|password|bearer)[=:\s]+[A-Za-z0-9_\-\.]+", r"\1=[REDACTED]", str(exc), flags=re.IGNORECASE)
                 apply_error = f"Cloudflare API communication error: {safe_err[:200]}"
 
-
-        elif not is_production:
-            # Dev/Test simulation without configured server token
-            applied_record = {
-                "id": f"rec_sim_{int(datetime.now(timezone.utc).timestamp())}",
-                "name": clean_host,
-                "content": clean_value,
-                "type": clean_type,
-                "ttl": ttl,
-                "proxied": False,
-            }
-        else:
-            apply_error = "Cloudflare API Token is not configured in server environment."
+        # A success must carry a real provider record id; never report applied without one.
+        if not apply_error and applied_record is not None and not applied_record.get("id"):
+            apply_error = "Cloudflare response did not include a record id; the change cannot be verified."
+            applied_record = None
 
         if apply_error or not applied_record:
             logger.error(f"DNS auto-fix mutation failed for {clean_host}: {apply_error}")
@@ -661,10 +597,9 @@ class DNSAutoFixerService:
         rollback_success = False
         rollback_error: Optional[str] = None
         is_production = settings.ENVIRONMENT.lower() in ("production", "prod")
-        is_simulated = (not is_production) and (not settings.CLOUDFLARE_API_TOKEN and ("test" in token.lower() or "mock" in token.lower()))
-
-        if is_simulated and not target_record_id.startswith("cf_rec_"):
-            rollback_success = True
+        # A rollback always calls Cloudflare; it never reports success without a token.
+        if not (token or settings.CLOUDFLARE_API_TOKEN):
+            rollback_error = "Cloudflare API Token is not configured in server environment."
         else:
             try:
                 if snapshot_before.get("exists") is False:

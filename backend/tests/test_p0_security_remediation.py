@@ -224,3 +224,16 @@ async def test_readiness_probe_fails_503_during_production_db_outage(monkeypatch
             # Also verify /api/v1/health readiness probe
             res_v1 = await ac.get("/api/v1/health")
             assert res_v1.status_code == 503
+
+
+@pytest.fixture(autouse=True)
+def _cloudflare_lookups_stubbed(monkeypatch):
+    """Zone and record lookups never reach the network in this module.
+
+    Mutations still go through the real CloudflareClient and httpx transport, which
+    individual tests intercept at httpx.AsyncClient.post/put.
+    """
+    from unittest.mock import AsyncMock as _AsyncMock
+    from app.services.dns.auto_fixer import dns_auto_fixer_service as _svc
+    monkeypatch.setattr(_svc.cloudflare, "get_zone_by_domain", _AsyncMock(return_value={"zone_id": "zone-stub-000"}))
+    monkeypatch.setattr(_svc.cloudflare, "get_dns_record", _AsyncMock(return_value=None))

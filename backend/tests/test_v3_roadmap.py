@@ -265,27 +265,41 @@ def test_bloc_c_auto_dns_fixer():
     )
     assert cred_res.status_code == 200
 
-    # 2. Apply 1-Click Auto-Fix
-    apply_res = client.post(
-        "/api/v1/dns/auto-fix/apply",
-        json={
-            "domain_name": "brandshop.com",
-            "provider_name": "cloudflare",
-            "record_type": "TXT",
-            "host": "_dmarc.brandshop.com",
-            "record_value": "v=DMARC1; p=quarantine; pct=100; rua=mailto:dmarc-reports@brandshop.com;"
-        }
-    )
+    # 2. Apply 1-Click Auto-Fix through the real Cloudflare transport, with a realistic
+    #    HTTP response (no network). The record id must come from Cloudflare's response.
+    from unittest.mock import MagicMock
+    from app.services.dns.auto_fixer import dns_auto_fixer_service as _svc
+    cf_created = MagicMock(status_code=200, headers={"content-type": "application/json"}, text="{}")
+    cf_created.json.return_value = {
+        "success": True,
+        "result": {"id": "rec_cf_bloc_c_1", "type": "TXT", "name": "_dmarc.brandshop.com",
+                   "content": "v=DMARC1", "ttl": 3600, "proxied": False},
+    }
+    with patch.object(_svc.cloudflare, "get_dns_record", AsyncMock(return_value=None)), \
+         patch("app.services.dns.auto_fixer.httpx.AsyncClient.post", new_callable=AsyncMock, return_value=cf_created):
+        apply_res = client.post(
+            "/api/v1/dns/auto-fix/apply",
+            json={
+                "domain_name": "brandshop.com",
+                "provider_name": "cloudflare",
+                "record_type": "TXT",
+                "host": "_dmarc.brandshop.com",
+                "record_value": "v=DMARC1; p=quarantine; pct=100; rua=mailto:dmarc-reports@brandshop.com;"
+            }
+        )
     assert apply_res.status_code == 200
+    assert apply_res.json().get("fix_entry", {}).get("target_record_id") == "rec_cf_bloc_c_1"
     assert apply_res.json().get("applied") is True
     fix_id = apply_res.json().get("fix_entry", {}).get("id")
 
     # 3. Rollback Fix
     if fix_id:
-        rb_res = client.post(
-            "/api/v1/dns/auto-fix/rollback",
-            json={"fix_id": fix_id}
-        )
+        with patch.object(_svc.cloudflare, "delete_dns_record", AsyncMock(return_value=True)) as delete_mock:
+            rb_res = client.post(
+                "/api/v1/dns/auto-fix/rollback",
+                json={"fix_id": fix_id}
+            )
+        delete_mock.assert_awaited_once()
         assert rb_res.status_code == 200
         assert rb_res.json().get("rolled_back") is True
 
