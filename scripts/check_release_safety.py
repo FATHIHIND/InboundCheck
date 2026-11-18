@@ -15,6 +15,13 @@ SECRET_RULES = {
     "stripe-secret": re.compile(rb"\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{20,}"),
     "github-token": re.compile(rb"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})"),
     "aws-access-id": re.compile(rb"\bAKIA[A-Z0-9]{16}\b"),
+    # Shopify Admin/API tokens (shpat_, shpss_, shpca_, shppa_) used by the Shopify integration.
+    "shopify-token": re.compile(rb"\bshp(?:at|ss|ca|pa)_[A-Za-z0-9]{32,}\b"),
+    # Provider API keys in the sk-/sk-ant-/sk-proj- family (LLM providers used by the AI features).
+    # Test fixtures use the "sk-super-" prefix (redaction tests); real provider keys never do.
+    "llm-api-key": re.compile(rb"\bsk-(?!super-)(?:proj-|ant-)?[A-Za-z0-9_\-]{32,}"),
+    # Google API keys.
+    "google-api-key": re.compile(rb"\bAIza[0-9A-Za-z_\-]{35}\b"),
 }
 
 
