@@ -212,7 +212,9 @@ class CloudflareClient:
                 data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
 
                 if res.status_code in (200, 201) and data.get("success"):
-                    rec = data.get("result", {})
+                    rec = data.get("result") or {}
+                    if not rec.get("id"):
+                        raise CloudflareAPIError("Cloudflare reported success without a record id.")
                     return {
                         "id": rec.get("id"),
                         "type": rec.get("type"),
@@ -271,7 +273,9 @@ class CloudflareClient:
                 data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
 
                 if res.status_code in (200, 201) and data.get("success"):
-                    rec = data.get("result", {})
+                    rec = data.get("result") or {}
+                    if not rec.get("id"):
+                        raise CloudflareAPIError("Cloudflare reported success without a record id.")
                     return {
                         "id": rec.get("id"),
                         "type": rec.get("type"),

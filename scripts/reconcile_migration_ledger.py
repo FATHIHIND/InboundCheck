@@ -2,7 +2,7 @@
 """
 InboundCheck — Production-Grade Migration Ledger Reconciliation Engine
 ----------------------------------------------------------------------
-Canonical 28-Row Invariant Architecture (Option A - Zero Drift)
+Canonical Manifest Invariant Architecture (Option A - Zero Drift)
 
 Provides deterministic, fail-closed reconciliation between local repository
 migration files and the remote Supabase `supabase_migrations.schema_migrations`
@@ -11,8 +11,10 @@ ledger table.
 Key Guarantees:
 1. Strict Preserved Baseline: Verifies exact byte-for-byte immutability of the 3 legacy rows.
 2. Complete Legacy Preservation: Forensic archival of all original statement arrays.
-3. Atomic Legacy Swap: Replaces 3 legacy rows with 28 canonical records within a single transaction.
-4. Universal Multi-Environment Parity: Local (28 files) = Staging (28 rows) = Production (28 rows).
+3. Atomic Legacy Swap: Replaces 3 legacy rows with the approved canonical records within a single transaction.
+4. Manifest Parity: the canonical manifest equals the local migration inventory. Remote ledgers are
+   NOT guaranteed to match it; do not run this tool against an environment until its ledger has been
+   reviewed against the manifest (see docs/branch-protection.md).
 5. Strict Supabase CLI Compatibility: Prevents `DbPushMissingLocalError` in `supabase db push`.
 6. Zero Target Collision: Rejects any collision before attempting insertion.
 7. Concurrency Protection: Enforces `LOCK TABLE ... ACCESS EXCLUSIVE` and strict lock timeouts.
@@ -33,7 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Canonical Standardized Migration Definitions (version, name)
-# Dynamically derived manifest representing the approved local migration sequence.
+# Explicit manifest representing the approved local migration sequence.
 CANONICAL_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
     ("20260903000001", "complete_production_schema"),
     ("20260904000001", "fix_handle_new_user_trigger"),
