@@ -252,25 +252,21 @@ async def shopify_billing_callback(
         )
         raise HTTPException(status_code=400, detail="Missing required shop parameter")
 
+    # Fail closed: the tenant must be named explicitly. Do not infer it from
+    # process-local state (the in-memory store registry is not shared across
+    # workers or pods), and do not proceed to verification or activation.
     resolved_user_id = user_id
     if not resolved_user_id:
-        # Resolve user by store domain in persistent/in-memory store registry
-        for uid, stores in getattr(supabase_service, "_in_memory_stores", {}).items():
-            if any(s.get("shop_domain") == clean_shop for s in stores):
-                resolved_user_id = uid
-                break
-
-    if not resolved_user_id:
         logger.warning(
-            "Shopify billing callback rejected: unknown user for shop",
+            "Shopify billing callback rejected: missing user_id",
             extra={
                 "event_type": "security_billing_callback_rejected",
                 "shop": clean_shop,
-                "reason": "unresolved_user",
+                "reason": "missing_user_id",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
-        raise HTTPException(status_code=404, detail="Store owner not found")
+        raise HTTPException(status_code=400, detail="Missing required user_id parameter")
 
     # Verify store ownership server-side
     stores = supabase_service.get_user_stores(resolved_user_id)
