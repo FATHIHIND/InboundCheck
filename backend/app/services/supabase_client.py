@@ -16,7 +16,7 @@ from datetime import datetime, date, timezone, timedelta
 from supabase import create_client, Client
 
 from app.core.config import settings
-from app.core.env_guard import validate_supabase_url, sanitize_exception
+from app.core.env_guard import validate_supabase_url, sanitize_exception, check_is_placeholder
 
 logger = logging.getLogger("SupabaseService")
 
@@ -111,8 +111,12 @@ class SupabaseService:
                     f"CRITICAL ISOLATION BREACH: Production SUPABASE_URL contains staging reference '{EXPECTED_STAGING_REF}'."
                 )
 
-        raw_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_KEY
+        # The public anon key (SUPABASE_KEY) is never a valid backend credential.
+        raw_key = settings.SUPABASE_SERVICE_ROLE_KEY
         clean_key = raw_key.strip(" ") if raw_key else ""
+        # A placeholder is an unconfigured credential: treat it exactly like a missing key.
+        if clean_key and check_is_placeholder(clean_key):
+            clean_key = ""
 
         if url_valid and clean_url and clean_key:
             try:
