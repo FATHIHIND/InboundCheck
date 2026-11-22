@@ -14,6 +14,27 @@ import re
 
 logger = logging.getLogger("EnvGuard")
 
+
+def is_running_on_railway() -> bool:
+    """Detect either Railway deployment marker without importing settings."""
+    return bool((os.getenv("RAILWAY_SERVICE_NAME") or "").strip() or (os.getenv("RAILWAY_GIT_COMMIT_SHA") or "").strip())
+
+
+def normalize_railway_environment(value: Any) -> Any:
+    """Keep local behavior; validate and canonicalize deployed modes before imports."""
+    if not is_running_on_railway():
+        return value
+    if not isinstance(value, str):
+        raise RuntimeError("Railway ENVIRONMENT must be production, prod, or staging.")
+    normalized = value.strip().lower()
+    if normalized not in ("production", "prod", "staging"):
+        raise RuntimeError("Railway ENVIRONMENT must be production, prod, or staging.")
+    return normalized
+
+
+def assert_not_development_mode_on_railway(environment: Optional[str]) -> None:
+    normalize_railway_environment(environment)
+
 PLACEHOLDER_SUBSTRINGS = [
     "your_",
     "your-project",
@@ -96,6 +117,8 @@ def validate_runtime_environment() -> Tuple[bool, List[str]]:
     """
     from app.core.config import settings
 
+    assert_not_development_mode_on_railway(settings.ENVIRONMENT)
+
     issues: List[str] = []
     is_prod = settings.ENVIRONMENT.lower() in ["production", "prod"]
 
@@ -166,6 +189,8 @@ def validate_worker_runtime_environment() -> Tuple[bool, List[str]]:
     Raises RuntimeError in production if critical database credentials are missing.
     """
     from app.core.config import settings
+
+    assert_not_development_mode_on_railway(settings.ENVIRONMENT)
 
     issues: List[str] = []
     env_clean = (settings.ENVIRONMENT or "").lower()

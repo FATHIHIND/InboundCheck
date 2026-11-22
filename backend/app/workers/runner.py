@@ -52,6 +52,9 @@ async def main(
         os.environ.get("ENVIRONMENT", "").strip().lower() == "staging"
         or any(arg.startswith("--staging") for arg in sys.argv)
     )
+    if not is_staging_authorized:
+        from app.core.config import settings
+        is_staging_requested = is_staging_requested or settings.ENVIRONMENT.strip().lower() == "staging"
 
     if is_staging_requested and not is_staging_authorized:
         from app.core.staging_guard import StagingIsolationError
