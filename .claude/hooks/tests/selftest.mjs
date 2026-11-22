@@ -113,7 +113,7 @@ expect('content secret (stripe live key) -> deny', write(P('.claude/reports/s.md
 expect('content secret (jwt literal) -> deny', write(P('.claude/reports/s.md'), {}, { content: 'eyJhbGciOiJIUzI1NiJ9abcdef.eyJzdWIiOiIxMjM0NTY3ODkwIn0abcd.abcdefghijklmn' }), 'deny'); // inboundcheck:allow-fake-secret
 expect('content secret (private key) -> deny', write(P('.claude/reports/s.md'), {}, { content: '-----BEGIN ' + 'PRIVATE KEY-----' }), 'deny');
 expect('content secret (dsn with password) -> deny', write(P('.claude/reports/s.md'), {}, { content: 'u = "postgres' + 'ql://app:hunter22@db.example.com/x"' }), 'deny');
-expect('content fake fixture with marker -> allow', write(P('.claude/reports/s.md'), {}, { content: 'k = "sk_test_abcdefghijklmnop1234"  # inboundcheck:allow-fake-secret' }), 'allow');
+expect('content fake fixture with marker -> allow', write(P('.claude/reports/s.md'), {}, { content: 'k = "sk_test_' + 'abcdefghijklmnop1234"  # inboundcheck:allow-fake-secret' }), 'allow');
 expect('content normal code -> allow', write(P('.claude/reports/s.md'), {}, { content: 'def f():\n    return 1\n' }), 'allow');
 expect('Edit new_string secret -> deny', hook('guard-write.mjs', { tool_name: 'Edit', tool_input: { file_path: P('.claude/reports/e.md'), old_string: 'a', new_string: 'whsec_' + 'abcdefghijklmnopqrst' } }).decision, 'deny');
 
