@@ -592,17 +592,25 @@ class StripeService:
                 )
                 if cust_email and supabase_service.is_connected and supabase_service._client:
                     try:
+                        clean_email = cust_email.strip()
+                        escaped_email = clean_email.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                         res = (
                             supabase_service._client.table("profiles")
-                            .select("id")
-                            .ilike("email", cust_email.strip())
+                            .select("id,email")
+                            .ilike("email", escaped_email)
                             .execute()
                         )
-                        if res.data and len(res.data) > 0:
-                            user_id = res.data[0]["id"]
-                            logger.info(f"Resolved user_id '{user_id}' from customer email '{cust_email}'")
+                        exact = [
+                            row for row in (res.data or [])
+                            if str(row.get("email") or "").strip().lower() == clean_email.lower()
+                        ]
+                        if len(exact) == 1:
+                            user_id = exact[0]["id"]
+                            logger.info("Resolved checkout customer email to a unique profile")
+                        elif len(exact) > 1:
+                            logger.warning("Checkout customer email matched multiple profiles; payment not bound by email")
                     except Exception as e:
-                        logger.error(f"Failed to lookup user by customer email {cust_email}: {e}")
+                        logger.error(f"Failed to lookup user by checkout customer email: {type(e).__name__}")
 
             # Fallback 2: Resolve user_id by existing stripe_customer_id
             if not user_id and customer_id:
