@@ -25,6 +25,7 @@ import logging
 from fastapi import Depends, HTTPException, status
 
 from app.core.security import get_current_user_id
+from app.core.tier_guards import verify_active_subscription_or_trial
 from app.services.supabase_client import supabase_service
 from app.core.tier_guards import is_trial_expired
 
@@ -138,5 +139,24 @@ async def get_current_ai_policy(
     FastAPI route dependency: Resolves the authenticated user's authoritative AI plan policy.
     Extracts user_id from the cryptographically verified JWT Bearer token.
     Ignores any client-supplied body, query, or header parameters.
+
+    NOTE: This resolves the plan only; it does NOT check that the subscription is active. Use it
+    for read-only reporting (for example usage views). Paid actions must use
+    get_enforced_ai_policy instead.
     """
     return resolve_ai_plan(user_id)
+
+
+async def get_enforced_ai_policy(
+    user_id: str = Depends(get_current_user_id),
+    profile: Dict[str, Any] = Depends(verify_active_subscription_or_trial),
+) -> AIPlanPolicy:
+    """
+    FastAPI route dependency for PAID AI actions (template analysis, variant generation).
+
+    Reuses the central entitlement guard: only `active` and unexpired `trialing` accounts pass;
+    expired, canceled, past_due, incomplete and unrecognized statuses raise HTTP 402 before any
+    rate-limit, quota, concurrency or LLM work starts. The plan is resolved from the same
+    server-side profile the guard validated, never from client input.
+    """
+    return resolve_ai_plan(user_id, profile=profile)
