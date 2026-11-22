@@ -153,8 +153,14 @@ async def shopify_auth_callback(
                 resolved_sub = claims.get("sub") or claims.get("user_id")
                 if resolved_sub:
                     user_id = str(resolved_sub)
-            except Exception:
-                pass
+            except Exception as auth_err:
+                logger.warning(f"App Store install callback: session token rejected ({type(auth_err).__name__})")
+
+        if user_id == "shopify_app_store_install":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sign in to InboundCheck to complete the Shopify installation",
+            )
 
     try:
         clean_shop = shopify_service.clean_shop_domain(shop)
