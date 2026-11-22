@@ -224,7 +224,8 @@ async def test_telegram_alert_failure_and_integrity():
             text="Test alert"
         )
         assert res["success"] is False
-        assert "Connection timed out" in res["error"]
+        assert "Telegram unexpected error" in res["error"]
+        assert "Connection timed out" not in res["error"]
 
     # 3. /settings/telegram/test Endpoint returns success=False on dispatch failure
     with patch.object(

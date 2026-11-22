@@ -334,7 +334,7 @@ def test_permanent_telegram_4xx_marks_dead_letter():
         updated = supabase_service._in_memory_notification_outbox[f"{user_id}:perm_4xx_test"]
         assert updated["status"] == "dead_letter"
         assert updated["processed_at"] is not None
-        assert "Unauthorized" in updated["last_error"]
+        assert updated["last_error"] == "Telegram delivery failed"
 
 
 # =====================================================================

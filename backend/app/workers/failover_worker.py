@@ -20,6 +20,7 @@ from app.services.failover.omnichannel_service import (
     TelegramDispatchResult,
     sanitize_log_message,
 )
+from app.services.failover.telegram_result import safe_telegram_delivery_result
 
 omnichannel_service = telegram_alert_service
 logger = logging.getLogger("FailoverWorker")
@@ -544,7 +545,9 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
 
         target_chat_id = getattr(result, "target_chat_id", None) or (result.get("target_chat_id") if isinstance(result, dict) else None)
         provider_msg_id = getattr(result, "telegram_message_id", None) or (result.get("telegram_message_id") or result.get("log_id") if isinstance(result, dict) else None)
-        err_msg = getattr(result, "error_message", None) or (result.get("error_message") or result.get("error") if isinstance(result, dict) else None)
+        credential_error = "Telegram Bot Token and Chat ID must be explicitly configured and cannot be placeholder values."
+        raw_error = getattr(result, "error_message", None) or (result.get("error_message") if isinstance(result, dict) else None)
+        err_msg = credential_error if raw_error == credential_error else "Telegram delivery failed"
         is_simulated = getattr(result, "simulated", False) or (result.get("simulated") if isinstance(result, dict) else False)
         provider_status = getattr(result, "provider_status", None) or (result.get("provider_status") if isinstance(result, dict) else None)
         if not provider_status:
@@ -560,7 +563,7 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                     domain_name=incident.domain_name or "unknown",
                     store_name=incident.store_name or "unknown",
                     triggered_reason=incident.failure_reason or incident.failure_type or "unknown",
-                    target_chat_id=target_chat_id,
+                    target_chat_id=None,
                     provider_status=provider_status,
                     provider_message_id=provider_msg_id,
                     is_simulated=is_simulated,
@@ -569,13 +572,12 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 if _is_telegram_incident_unique_violation(log_err):
                     logger.warning(
                         f"Incident log for event {event_id} already exists via unique constraint "
-                        f"idx_failover_logs_one_telegram_incident_per_event: {log_err}. "
+                        f"idx_failover_logs_one_telegram_incident_per_event ({type(log_err).__name__}). "
                         f"Proceeding to mark event processed."
                     )
                 else:
                     logger.error(
-                        f"Failed to record incident log for event {event_id} after successful Telegram dispatch: {log_err}",
-                        exc_info=True,
+                        f"Failed to record incident log for event {event_id} after successful Telegram dispatch ({type(log_err).__name__})",
                     )
                     raise
 
@@ -585,9 +587,9 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 worker_id=worker_id,
             )
             if is_simulated:
-                logger.info(f"[SIMULATED] Successfully processed delivery failure incident {event_id} for order {incident.order_id}")
+                logger.info(f"[SIMULATED] Successfully processed delivery failure incident {event_id}")
             else:
-                logger.info(f"Successfully processed delivery failure incident {event_id} for order {incident.order_id}")
+                logger.info(f"Successfully processed delivery failure incident {event_id}")
             return True
         else:
             logger.warning(f"Telegram dispatch failed for event {event_id}: {err_msg}")
@@ -638,12 +640,12 @@ async def process_delivery_failure_event(event: Dict[str, Any], worker_id: str) 
                 )
                 return False
     except Exception as exc:
-        logger.error(f"Unexpected exception processing event {event_id}: {exc}", exc_info=True)
+        logger.error(f"Unexpected exception processing event {event_id} ({type(exc).__name__})")
         if not dispatch_succeeded:
             try:
                 repository.release_claimed_delivery_failure_event(event_id, worker_id)
             except Exception as rel_err:
-                logger.warning(f"Could not release event {event_id} after processing exception: {rel_err}")
+                logger.warning(f"Could not release event {event_id} after processing exception ({type(rel_err).__name__})")
         else:
             logger.warning(
                 f"Suppressing release_claimed_delivery_failure_event for event {event_id} because "
@@ -736,8 +738,9 @@ async def process_notification_outbox_item(
         text=alert_text,
     )
 
-    is_success = bool(dispatch_res.get("success", False))
-    is_sim = bool(dispatch_res.get("simulated", False))
+    delivery_result = safe_telegram_delivery_result(dispatch_res)
+    is_success = delivery_result["success"]
+    is_sim = delivery_result["simulated"]
 
     if is_success or is_sim:
         repository.complete_notification_outbox(outbox_id=outbox_id, worker_id=worker_id)
@@ -752,23 +755,23 @@ async def process_notification_outbox_item(
                 domain_name=clean_domain,
                 store_name=clean_store,
                 triggered_reason=clean_reason,
-                target_chat_id=chat_id,
+                target_chat_id=None,
                 customer_email=None,
                 customer_phone=None,
-                dispatch_payload=dispatch_res,
+                dispatch_payload=delivery_result,
                 is_simulated=is_sim,
             )
         except Exception as log_err:
-            logger.warning(f"Outbox {outbox_id}: completed but log recording had warning: {log_err}")
+            logger.warning(f"Outbox {outbox_id}: completed but log recording failed ({type(log_err).__name__})")
         return True
     else:
-        err_msg = dispatch_res.get("error") or "Outbox Telegram dispatch failed"
-        is_retryable = bool(dispatch_res.get("retryable", False))
+        err_msg = delivery_result["error"]
+        is_retryable = delivery_result["retryable"]
         attempt_count = int(item.get("attempt_count") or 1)
         max_attempts = int(item.get("max_attempts") or 5)
 
         if is_retryable and attempt_count < max_attempts:
-            ra = dispatch_res.get("retry_after")
+            ra = delivery_result.get("retry_after")
             if ra is not None:
                 try:
                     delay_sec = min(max(int(ra), 5), 900)
