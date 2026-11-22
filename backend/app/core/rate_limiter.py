@@ -90,6 +90,9 @@ def is_ip_trusted_proxy(ip_str: str) -> bool:
     return False
 
 
+UNKNOWN_CLIENT_IP = "unknown"
+
+
 def get_trusted_client_ip(request: Request) -> str:
     """
     Safely resolve the client IP address enforcing strict anti-spoofing verification:
@@ -98,7 +101,13 @@ def get_trusted_client_ip(request: Request) -> str:
     - If direct peer IS a trusted proxy:
       Prefer valid CF-Connecting-IP, then rightmost untrusted hop in X-Forwarded-For.
     """
-    direct_peer = request.client.host if request.client else "127.0.0.1"
+    raw_peer = request.client.host if request.client else None
+    if not raw_peer:
+        return UNKNOWN_CLIENT_IP
+    try:
+        direct_peer = str(ipaddress.ip_address(raw_peer.strip()))
+    except ValueError:
+        return UNKNOWN_CLIENT_IP
 
     # Anti-spoofing check: If immediate socket peer is not a trusted proxy, ignore all forwarded headers
     if not is_ip_trusted_proxy(direct_peer):
