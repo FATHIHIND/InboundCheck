@@ -7,6 +7,11 @@ description: Discovers and invokes agent skills. Use when starting a session, or
 
 ## Overview
 
+For InboundCheck, read `.agent/references/engineering-os.md` and use the existing
+project Definition of Done at `.claude/references/definition-of-done.md`.
+This explicit project reference replaces unresolved user-level references for this project.
+No user-level configuration is modified.
+
 Agent Skills is a collection of engineering workflow skills organized by development phase. Each skill encodes a specific process that senior engineers follow. This meta-skill helps you discover and apply the right skill for your current task.
 
 ## Skill Discovery

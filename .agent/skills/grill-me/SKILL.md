@@ -1,33 +1,15 @@
 ---
 name: grill-me
-description: A relentless interview to sharpen a plan, decision, or architecture. Asks the whole frontier of unresolved decisions in structured rounds with recommended answers, mapping dependencies before asking downstream questions.
+description: Resolve one material undecided scope, security, architecture or release question with a recommended default. Skip interviews when the task is clear and approved.
 disable-model-invocation: true
 ---
 
-# Grill-Me (Frontier Design Tree Protocol)
+# Grill Me
 
-Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
-
-Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
-
-Format a round like so:
-
-```markdown
-❓ **Q1** - **<question title>**: <question body, explaining the trade-offs and options>
-
-➡️ **Recommended Answer:** <your recommended answer and rationale>
-
----
-
-❓ **Q2** - **<question title>**: <question body, explaining the trade-offs and options>
-
-➡️ **Recommended Answer:** <your recommended answer and rationale>
-```
-
-Word each question so "yes" accepts your recommended answer.
-
-Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
-
-Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, code, tests, tools), inspect the repository first; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the investigation to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
-
-The session is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding.
+Inspect repository facts and settled owner decisions first. Keep a decision frontier
+internally; ask only ONE unresolved material question at a time, with a recommended
+default and its tradeoff. Wait for the answer before dependent work.
+Do not repeat settled questions or delay clear approved implementation with routine
+interviews. Continue independent authorized work. Never infer security, publication
+or deployment permission from a design answer. Stop interviewing when material
+decisions are settled; no additional confirmation is needed for already approved work.

@@ -32,6 +32,11 @@
 
 ## 2. Core Operating Rules for Autonomous Agents
 
+Read [.agent/references/engineering-os.md](.agent/references/engineering-os.md) for
+scope, verification levels, evidence reuse, resume and cross-host enforcement boundaries.
+The full suites below remain mandatory release gates. During approved governance-only
+development, use the focused governance harness; do not claim release readiness from it.
+
 1. **Skill-First Execution:** Never implement non-trivial changes directly without consulting the relevant skill in `.agent/skills/`.
 2. **Zero-Exception Verification Bar:**
    - **Frontend:** Must pass `npm run build` in `frontend/` with 0 TypeScript and Webpack errors.
@@ -166,7 +171,7 @@ When an agent receives a prompt, it must follow the internal lifecycle mapping:
 ### Frontend Compilation & Test Check
 ```powershell
 # Always run inside the frontend directory
-Set-Location "c:\Users\pc\Desktop\inboundcheck VERSION 1\frontend"
+Set-Location (Join-Path (git rev-parse --show-toplevel) "frontend")
 node --loader ./tests/loader.mjs --test tests/*.test.ts
 npm run build
 ```
@@ -174,14 +179,14 @@ npm run build
 ### Backend Test Suite Check
 ```powershell
 # Always run inside the backend directory
-Set-Location "c:\Users\pc\Desktop\inboundcheck VERSION 1\backend"
+Set-Location (Join-Path (git rev-parse --show-toplevel) "backend")
 py -m pytest tests/test_seed_verifier.py tests/test_delivery_failure_ingestion.py tests/test_failover_worker_safety.py tests/test_failover_webhooks.py tests/test_dns_diagnostic.py tests/test_claim_truthfulness.py tests/test_shopify_compliance.py tests/test_shopify_lifecycle_webhooks.py
 ```
 
 ### Docker Compose Container Health & Readiness
 ```powershell
 # Run from repository root
-Set-Location "c:\Users\pc\Desktop\inboundcheck VERSION 1"
+Set-Location (git rev-parse --show-toplevel)
 docker-compose up --build -d
 # Liveness probe
 curl http://localhost:8000/health
