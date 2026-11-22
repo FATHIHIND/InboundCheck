@@ -22,7 +22,7 @@ from fastapi import Request, HTTPException, status, Depends
 from app.core.config import settings
 from app.core.security import get_current_user_id
 from app.services.supabase_client import supabase_service
-from app.services.ai.plan_policy import AIPlanPolicy, get_current_ai_policy
+from app.services.ai.plan_policy import AIPlanPolicy, get_enforced_ai_policy
 
 logger = logging.getLogger("RateLimiter")
 
@@ -297,7 +297,7 @@ user_manual_audit_limiter = EndpointRateLimiter(
 
 async def rate_limit_ai_tier(
     user_id: str = Depends(get_current_user_id),
-    ai_policy: AIPlanPolicy = Depends(get_current_ai_policy),
+    ai_policy: AIPlanPolicy = Depends(get_enforced_ai_policy),
 ) -> str:
     """Dependency: Enforce plan-aware rate limits per user on AI content optimization endpoints."""
     await ai_rate_limiter.check_async(

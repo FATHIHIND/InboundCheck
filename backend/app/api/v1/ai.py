@@ -19,7 +19,7 @@ from app.core.security import get_current_user_id
 from app.core.rate_limiter import rate_limit_ai_tier
 from app.services.supabase_client import supabase_service, DatabaseUnavailableError
 from app.services.ai.content_optimizer import ai_content_service, DEFAULT_SAMPLE_TEMPLATES
-from app.services.ai.plan_policy import AIPlanPolicy, get_current_ai_policy
+from app.services.ai.plan_policy import AIPlanPolicy, get_current_ai_policy, get_enforced_ai_policy
 from app.services.ai.pricing import resolve_cost
 from app.services.ai.provider import GenerationResult
 from app.services.ai.telemetry_service import ai_telemetry_service
@@ -225,7 +225,8 @@ async def prune_ai_telemetry(
 @router.post("/audit-template")
 async def analyze_email_template(
     payload: TemplateAnalyzeRequest,
-    user_id: str = Depends(rate_limit_ai_tier)
+    user_id: str = Depends(rate_limit_ai_tier),
+    _ai_policy: AIPlanPolicy = Depends(get_enforced_ai_policy),
 ):
     """
     Audit template content for spam trigger density, formatting anomalies, and risk score.
@@ -279,7 +280,7 @@ async def _safe_release_concurrency_slot(user_id: str, lease_id: str) -> None:
 async def generate_polymorphic_variants(
     payload: PolymorphicGenerateRequest,
     user_id: str = Depends(rate_limit_ai_tier),
-    ai_policy: AIPlanPolicy = Depends(get_current_ai_policy),
+    ai_policy: AIPlanPolicy = Depends(get_enforced_ai_policy),
 ):
     """
     Generate 3 deliverability-optimized polymorphic variations of the email copy.
