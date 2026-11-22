@@ -24,6 +24,7 @@ from app.core.encryption import (
     mask_credential,
     safe_decrypt_credential,
 )
+from app.services.failover.telegram_result import safe_telegram_delivery_result, safe_telegram_message_id, redact_telegram_text
 
 logger = logging.getLogger("TelegramAlertEngine")
 
@@ -88,7 +89,7 @@ def sanitize_log_message(message: str, token: Optional[str] = None) -> str:
     sanitized = re.sub(r"Bearer\s+[A-Za-z0-9._-]+", "Bearer [REDACTED]", sanitized)
     if token and len(token) > 4:
         sanitized = sanitized.replace(token, "[REDACTED_TOKEN]")
-    return sanitized
+    return redact_telegram_text(sanitized)
 
 
 # In-memory storage fallbacks
@@ -289,7 +290,7 @@ class TelegramAlertService:
                     return await self._mock_dispatcher(bot_token=bot_token, chat_id=chat_id, text=text)
                 return self._mock_dispatcher(bot_token=bot_token, chat_id=chat_id, text=text)
 
-            logger.info(f"[SIMULATED] Mock Telegram dispatch to chat {chat_id or 'mock_chat'} (zero external network)")
+            logger.info("[SIMULATED] Mock Telegram dispatch (zero external network)")
             return {
                 "success": True,
                 "simulated": True,
@@ -395,10 +396,9 @@ class TelegramAlertService:
                 # Handle Transient Server Errors (500, 502, 503, 504)
                 if res.status_code in TRANSIENT_HTTP_STATUS_CODES:
                     last_status_code = res.status_code
-                    safe_text = sanitize_log_message(res.text[:300], clean_token)
-                    last_error = f"Telegram server error ({res.status_code}): {safe_text}"
+                    last_error = f"Telegram server error ({res.status_code})"
                     logger.warning(
-                        f"Telegram API transient error {res.status_code} (attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS}): {safe_text}"
+                        f"Telegram API transient error {res.status_code} (attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS})"
                     )
                     if attempt < MAX_TELEGRAM_ATTEMPTS:
                         exp_delay = min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)))
@@ -417,13 +417,12 @@ class TelegramAlertService:
                     }
 
                 # Permanent Client Errors (400, 401, 403, 404, etc.) - DO NOT RETRY
-                safe_text = sanitize_log_message(res.text[:300], clean_token)
-                logger.warning(f"Telegram API permanent client error ({res.status_code}): {safe_text}")
+                logger.warning(f"Telegram API permanent client error ({res.status_code})")
                 return {
                     "success": False,
                     "simulated": False,
                     "status_code": res.status_code,
-                    "error": f"Telegram API error ({res.status_code}): {safe_text}",
+                    "error": f"Telegram API error ({res.status_code})",
                     "retryable": False,
                 }
 
@@ -431,8 +430,7 @@ class TelegramAlertService:
                 logger.info("Telegram dispatch cancelled by caller or runtime.")
                 raise
             except (httpx.TimeoutException, httpx.NetworkError) as net_err:
-                safe_net_err = sanitize_log_message(str(net_err), clean_token)
-                last_error = f"Telegram network error ({type(net_err).__name__}): {safe_net_err}"
+                last_error = f"Telegram network error ({type(net_err).__name__})"
                 logger.warning(
                     f"Telegram network failure on attempt {attempt}/{MAX_TELEGRAM_ATTEMPTS}: {last_error}"
                 )
@@ -451,8 +449,8 @@ class TelegramAlertService:
                     "retryable": True,
                 }
             except Exception as e:
-                safe_err = sanitize_log_message(str(e), clean_token)
-                logger.error(f"Unexpected error calling Telegram API: {safe_err}")
+                safe_err = f"Telegram unexpected error ({type(e).__name__})"
+                logger.error(safe_err)
                 return {
                     "success": False,
                     "simulated": False,
@@ -516,7 +514,7 @@ class TelegramAlertService:
                 domain_name=domain_name or "unknown",
                 store_name=store_name or "unknown",
                 triggered_reason=trigger_reason or "unknown",
-                target_chat_id=chat_id or None,
+                target_chat_id=None,
                 customer_email=None,
                 customer_phone=None,
                 dispatch_payload={"success": False, "simulated": False, "error": err_msg},
@@ -526,7 +524,7 @@ class TelegramAlertService:
             return {
                 "dispatched": False,
                 "channel": "telegram",
-                "target_chat_id": chat_id or None,
+                "target_chat_id": None,
                 "error": err_msg,
                 "dispatch_res": {"success": False, "simulated": False, "error": err_msg},
                 "log": log_record,
@@ -556,8 +554,9 @@ class TelegramAlertService:
             text=alert_text
         )
 
-        is_sim = bool(dispatch_res.get("simulated", False))
-        is_success = bool(dispatch_res.get("success", False))
+        delivery_result = safe_telegram_delivery_result(dispatch_res)
+        is_sim = delivery_result["simulated"]
+        is_success = delivery_result["success"]
         dispatch_status = "dispatched" if is_sim else ("delivered" if is_success else "failed")
         p_status = "simulated" if is_sim else dispatch_status
 
@@ -573,19 +572,19 @@ class TelegramAlertService:
             domain_name=clean_domain,
             store_name=clean_store,
             triggered_reason=clean_reason,
-            target_chat_id=chat_id,
+            target_chat_id=None,
             customer_email=None,
             customer_phone=None,
-            dispatch_payload=dispatch_res,
-            error_message=dispatch_res.get("error") if not is_success else None,
+            dispatch_payload=delivery_result,
+            error_message=delivery_result.get("error") if not is_success else None,
             is_simulated=is_sim,
         )
 
         return {
             "dispatched": is_success or is_sim,
             "channel": "telegram",
-            "target_chat_id": chat_id,
-            "dispatch_res": dispatch_res,
+            "target_chat_id": None,
+            "dispatch_res": delivery_result,
             "log": log_record
         }
 
@@ -654,12 +653,12 @@ class TelegramAlertService:
                 error_message="Telegram Bot Token and Chat ID must be explicitly configured and cannot be placeholder values.",
             )
 
-        store_str = ctx.store_name or "Shopify Store"
-        domain_str = ctx.domain_name or "store.com"
-        order_str = ctx.order_id or "N/A"
-        esp_str = ctx.esp_provider.upper()
-        failure_str = ctx.failure_type.upper()
-        reason_str = ctx.failure_reason or "Permanent delivery rejection"
+        store_str = redact_telegram_text(ctx.store_name or "Shopify Store")
+        domain_str = redact_telegram_text(ctx.domain_name or "store.com")
+        order_str = redact_telegram_text(ctx.order_id or "N/A")
+        esp_str = redact_telegram_text(ctx.esp_provider.upper())
+        failure_str = redact_telegram_text(ctx.failure_type.upper())
+        reason_str = redact_telegram_text(ctx.failure_reason or "Permanent delivery rejection")
         encoded_domain = quote_plus(domain_str)
 
         alert_text = (
@@ -670,7 +669,7 @@ class TelegramAlertService:
             f"ESP: {esp_str}\n"
             f"Failure: {failure_str}\n"
             f"Reason: {reason_str}\n"
-            f"Recommended action: {ctx.recommended_dns_action}\n\n"
+            f"Recommended action: {redact_telegram_text(ctx.recommended_dns_action)}\n\n"
             f"[Open DNS Inspector](/dashboard/inspector?domain={encoded_domain})"
         )
 
@@ -683,24 +682,30 @@ class TelegramAlertService:
         is_sim = bool(send_res.get("simulated", False))
         if send_res.get("success"):
             data = send_res.get("data", {})
-            tg_msg_id = str(data.get("result", {}).get("message_id") or data.get("message_id") or "")
+            result_data = data.get("result", {}) if isinstance(data, dict) else {}
+            raw_msg_id = result_data.get("message_id") if isinstance(result_data, dict) else None
+            if raw_msg_id is None and isinstance(data, dict):
+                raw_msg_id = data.get("message_id")
+            tg_msg_id = safe_telegram_message_id(raw_msg_id, simulated=is_sim)
             return TelegramDispatchResult(
                 success=True,
                 provider="telegram",
                 provider_status="simulated" if is_sim else "delivered",
-                telegram_message_id=tg_msg_id or None,
+                telegram_message_id=tg_msg_id,
                 target_chat_id=chat_id,
                 error_message=None,
                 simulated=is_sim,
             )
         else:
+            safe_result = safe_telegram_delivery_result(send_res)
+            status_code = safe_result.get("status_code")
             return TelegramDispatchResult(
                 success=False,
                 provider="telegram",
                 provider_status="failed",
                 telegram_message_id=None,
                 target_chat_id=chat_id,
-                error_message=send_res.get("error") or "Failed to deliver Telegram alert",
+                error_message=f"Telegram delivery failed (HTTP {status_code})" if status_code else "Telegram delivery failed",
                 simulated=is_sim,
             )
 

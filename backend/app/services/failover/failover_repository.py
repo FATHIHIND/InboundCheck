@@ -273,7 +273,9 @@ class FailoverRepository:
         db_status = "dispatched" if sim else provider_status
         p_status = "simulated" if sim else provider_status
         delivered_ts = None if sim else (now_iso if provider_status == "delivered" else None)
-        payload = {"simulated": True, "provider_status": "simulated", "mock_message_id": provider_message_id} if sim else {}
+        from app.services.failover.telegram_result import safe_telegram_message_id
+        safe_message_id = safe_telegram_message_id(provider_message_id, simulated=sim)
+        payload = {"simulated": True, "provider_status": "simulated", "mock_message_id": safe_message_id} if sim else {}
 
         return self.supabase.persist_failover_log(
             user_id=user_id,
@@ -286,9 +288,9 @@ class FailoverRepository:
             domain_name=domain_name or "unknown",
             store_name=store_name or "unknown",
             triggered_reason=triggered_reason or "unknown",
-            target_chat_id=target_chat_id,
+            target_chat_id=None,
             delivery_failure_event_id=delivery_failure_event_id,
-            provider_sid=provider_message_id,
+            provider_sid=safe_message_id,
             attempted_at=now_iso,
             delivered_at=delivered_ts,
             dispatch_payload=payload,

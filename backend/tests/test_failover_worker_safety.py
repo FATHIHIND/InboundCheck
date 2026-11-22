@@ -399,7 +399,7 @@ async def test_event_finalization_and_idempotency_intact():
         res = await process_delivery_failure_event(fail_evt, worker_id)
         assert res is False
         mock_final_fail.assert_called_once()
-        assert "rate limit exceeded" in mock_final_fail.call_args[1]["reason"]
+        assert mock_final_fail.call_args[1]["reason"] == "Telegram delivery failed"
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +424,7 @@ async def test_simulated_dispatch_preserved_through_worker_and_repository():
         success=True,
         provider="telegram",
         provider_status="simulated",
-        telegram_message_id="mock_tg_abcd1234efgh",
+        telegram_message_id="mock_tg_abcd1234",
         target_chat_id="@sim_channel",
         simulated=True,
     )
@@ -451,7 +451,7 @@ async def test_simulated_dispatch_preserved_through_worker_and_repository():
     assert sim_log["status"] != "delivered"
     assert sim_log["provider_status"] == "simulated"
     assert sim_log["delivered_at"] is None
-    assert sim_log["provider_sid"] == "mock_tg_abcd1234efgh"
+    assert sim_log["provider_sid"] == "mock_tg_abcd1234"
     assert sim_log["dispatch_payload"].get("simulated") is True
 
 

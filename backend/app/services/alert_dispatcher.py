@@ -13,6 +13,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.services.supabase_client import supabase_service
 from app.services.failover.omnichannel_service import telegram_alert_service
+from app.services.failover.telegram_result import safe_telegram_delivery_result, redact_telegram_text
 
 logger = logging.getLogger("AlertDispatcher")
 
@@ -68,8 +69,8 @@ class AlertDispatcherService:
             "alert_on_spf_error": True,
             "alert_on_dkim_fail": True,
             "alert_on_dmarc_change": True,
-            "telegram_bot_token": settings.TELEGRAM_BOT_TOKEN or "",
-            "telegram_chat_id": settings.TELEGRAM_CHAT_ID or "",
+            "telegram_bot_token": "",
+            "telegram_chat_id": "",
             "email_notifications": True,
             "notification_email": None
         })
@@ -199,7 +200,7 @@ class AlertDispatcherService:
         email_dispatched = False
         if config.get("email_notifications", True) and config.get("notification_email"):
             email_dispatched = True
-            logger.info(f"Queued email alert for {config['notification_email']}: {domain_name} degraded to {health_score}%")
+            logger.info(f"Queued email alert for user '{user_id}': {domain_name} degraded to {health_score}%")
 
         # Mark alert timestamp to activate 6-hour debounce cooldown
         self.mark_alerted(user_id, domain_name)
@@ -226,15 +227,19 @@ class AlertDispatcherService:
         Dispatch critical administrative alert when an omnichannel fallback receipt is activated.
         """
         config = self.get_tenant_alert_config(user_id)
-        bot_token = config.get("telegram_bot_token") or settings.TELEGRAM_BOT_TOKEN
-        chat_id = config.get("telegram_chat_id") or settings.TELEGRAM_CHAT_ID
+        bot_token = config.get("telegram_bot_token")
+        chat_id = config.get("telegram_chat_id")
+
+        safe_domain = redact_telegram_text(domain_name)
+        safe_order = redact_telegram_text(order_id)
+        safe_reason = redact_telegram_text(trigger_reason)
 
         alert_text = (
             f"⚡ *INBOUNDCHECK OMNICHANNEL FAILOVER TRIGGERED*\n\n"
-            f"🏬 *Domain:* `{domain_name}`\n"
-            f"📦 *Order Ref:* `{order_id}`\n"
-            f"⚠️ *Failure Cause:* `{trigger_reason}`\n"
-            f"📬 *Customer Email:* `{customer_email or 'N/A'}`\n"
+            f"🏬 *Domain:* `{safe_domain}`\n"
+            f"📦 *Order Ref:* `{safe_order}`\n"
+            f"⚠️ *Failure Cause:* `{safe_reason}`\n"
+            f"📬 *Customer:* `redacted (see dashboard)`\n"
             f"🔄 *Status:* Automated SMS/WhatsApp receipt fallback dispatched.\n"
             f"👉 [Review Failover Logs]({settings.FRONTEND_URL}/dashboard/shopify)"
         )
@@ -250,23 +255,25 @@ class AlertDispatcherService:
             )
 
         # Persist incident record in failover_logs
-        dispatch_status = "delivered" if res.get("success") else "failed"
+        delivery_result = safe_telegram_delivery_result(res)
+        dispatch_status = "delivered" if delivery_result["success"] else "failed"
         supabase_service.persist_failover_log(
             user_id=user_id,
-            order_id=order_id,
+            order_id=safe_order,
             channel="telegram",
             provider="telegram_bot_api",
             status=dispatch_status,
-            domain_name=domain_name,
+            provider_status=dispatch_status,
+            domain_name=safe_domain,
             store_name="Store Sync",
-            triggered_reason=trigger_reason,
-            target_chat_id=chat_id,
-            customer_email=customer_email,
-            dispatch_payload=res,
-            error_message=res.get("error") if not res.get("success") else None,
+            triggered_reason=safe_reason,
+            target_chat_id=None,
+            customer_email=None,
+            dispatch_payload=delivery_result,
+            error_message="Telegram delivery failed" if not delivery_result["success"] else None,
         )
 
-        return res
+        return delivery_result
 
 
 alert_dispatcher = AlertDispatcherService()

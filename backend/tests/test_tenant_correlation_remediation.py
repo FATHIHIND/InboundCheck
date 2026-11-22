@@ -669,7 +669,7 @@ async def test_telegram_dispatch_failure_marks_event_failed():
 
     stored = supabase_service._in_memory_delivery_failure_events[evt_id]
     assert stored["processing_status"] == "failed"
-    assert "Telegram API rate limit (HTTP 429)" in stored.get("processing_error", "")
+    assert stored.get("processing_error") == "Telegram delivery failed"
     assert len(_all_failover_logs()) == 0
 
 

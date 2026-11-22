@@ -198,7 +198,8 @@ async def test_alert_dispatcher_dispatch_failover_alert_regression():
         assert "test-failover-store.com" in dispatched_text
         assert "ORD-777" in dispatched_text
         assert "hard_bounce" in dispatched_text
-        assert "buyer@brand.com" in dispatched_text
+        assert "buyer@brand.com" not in dispatched_text
+        assert "redacted (see dashboard)" in dispatched_text
 
     # Test skipped path when credentials unconfigured
     user_no_creds = "user-failover-nocreds-456"

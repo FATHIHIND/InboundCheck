@@ -275,7 +275,7 @@ async def test_telegram_failure_marks_event_failed(monkeypatch):
     cached_evt = store.get(key)
     assert cached_evt is not None
     assert cached_evt["processing_status"] == "failed"
-    assert "Bot blocked" in (cached_evt.get("processing_error") or "")
+    assert cached_evt.get("processing_error") == "Telegram delivery failed"
 
 
 # =====================================================================

@@ -17,6 +17,7 @@ from supabase import create_client, Client
 
 from app.core.config import settings
 from app.core.env_guard import validate_supabase_url, sanitize_exception, check_is_placeholder
+from app.services.failover.telegram_result import safe_telegram_delivery_result, safe_telegram_message_id, redact_telegram_text
 
 logger = logging.getLogger("SupabaseService")
 
@@ -1542,6 +1543,23 @@ class SupabaseService:
             if effective_delivered_at is None and effective_status == "delivered":
                 effective_delivered_at = now_iso
 
+        if channel == "telegram":
+            # Provider responses can echo alert text and recipient metadata. Enforce this
+            # boundary even when a caller forgets to sanitize its delivery result.
+            dispatch_payload = safe_telegram_delivery_result(dispatch_payload)
+            target_chat_id = None
+            customer_email = None
+            customer_phone = None
+            order_id = redact_telegram_text(order_id)
+            domain_name = redact_telegram_text(domain_name)
+            store_name = redact_telegram_text(store_name)
+            triggered_reason = redact_telegram_text(triggered_reason)
+            provider_sid = safe_telegram_message_id(provider_sid, simulated=is_simulated_dispatch)
+            if error_message:
+                error_message = "Telegram delivery failed"
+            if provider_error_message:
+                provider_error_message = "Telegram delivery failed"
+
         record = {
             "id": log_id,
             "user_id": user_id,
@@ -1575,7 +1593,7 @@ class SupabaseService:
                 if res.data and len(res.data) > 0:
                     record = res.data[0]
             except Exception as e:
-                logger.warning(f"Could not insert failover_log in Supabase: {e}")
+                logger.warning(f"Could not insert failover_log in Supabase ({type(e).__name__})")
                 if not self._allow_in_memory_fallback():
                     raise
 
