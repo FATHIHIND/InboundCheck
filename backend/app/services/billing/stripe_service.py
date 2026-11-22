@@ -694,6 +694,25 @@ class StripeService:
                             user_id = uid
                             break
 
+            # A delayed event for an old subscription must not change the current entitlement.
+            event_subscription_id = data_object.get("id")
+            if user_id and event_subscription_id:
+                try:
+                    current_profile = supabase_service.get_user_profile(user_id) or {}
+                except Exception as profile_err:
+                    logger.error(f"Could not load profile to validate subscription event: {type(profile_err).__name__}")
+                    raise
+                stored_subscription_id = current_profile.get("stripe_subscription_id")
+                if stored_subscription_id and stored_subscription_id != event_subscription_id:
+                    logger.warning("Ignoring event for a superseded subscription")
+                    if event_id:
+                        self.mark_event_processed(event_id, event_type=event_type)
+                    return {
+                        "status": "ignored",
+                        "reason": "superseded_subscription",
+                        "event_type": event_type,
+                    }
+
             if user_id:
                 if sub_status in ("canceled", "unpaid") or event_type == "customer.subscription.deleted":
                     status_val = "canceled" if sub_status == "canceled" else "expired"
