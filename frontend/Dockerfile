@@ -1,4 +1,4 @@
-﻿FROM node:20-alpine AS builder
+FROM node:24.14.0-alpine AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:24.14.0-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
