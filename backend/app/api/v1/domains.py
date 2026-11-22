@@ -141,10 +141,13 @@ async def add_monitored_domain(
 async def re_audit_domain(
     domain_id: str,
     domain_name: str = Query(...),
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
+    _entitled_profile: dict = Depends(verify_active_subscription_or_trial),
 ):
     """
     Trigger on-demand live DNS re-audit for a specific monitored domain.
+    Requires an active subscription or valid trial (HTTP 402 otherwise), the same entitlement as
+    adding a domain, because it runs the same live audit and writes the same records.
     Verifies that the target domain_id belongs to the authenticated user.
     Updates the health score, status pill badges, and appends a new audit log.
     """
