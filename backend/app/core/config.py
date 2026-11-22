@@ -1,11 +1,18 @@
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from app.core.env_guard import normalize_railway_environment
 
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "InboundCheck API"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
+
+    @field_validator("ENVIRONMENT", mode="before")
+    @classmethod
+    def validate_environment(cls, value: object) -> object:
+        return normalize_railway_environment(value)
     STAGING_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:3000"
 
@@ -94,6 +101,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
+        validate_default=True,
     )
 
     @property
