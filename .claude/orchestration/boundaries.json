@@ -1,0 +1,66 @@
+{
+  "_comment": "Single source of truth for guard-write.mjs and ledger.mjs. Paths are repo-relative globs. Verified against the repo tree on 2026-11-16.",
+  "security_boundaries": [
+    "backend/app/core/security.py",
+    "backend/app/core/rate_limiter.py",
+    "backend/app/core/encryption.py",
+    "backend/app/core/env_guard.py",
+    "backend/app/core/staging_guard.py",
+    "backend/app/core/tier_guards.py",
+    "backend/app/core/config.py",
+    "backend/app/main.py",
+    "backend/app/api/v1/billing.py",
+    "backend/app/api/v1/shopify.py",
+    "backend/app/api/v1/failover_webhooks.py",
+    "backend/app/api/v1/settings.py",
+    "backend/app/api/v1/seed_testing.py",
+    "backend/app/services/billing/**",
+    "backend/app/services/billing_service.py",
+    "backend/app/services/shopify/**",
+    "backend/app/services/security/**",
+    "backend/app/services/supabase_client.py",
+    "backend/app/workers/**",
+    "supabase/**",
+    "frontend/src/middleware.*",
+    "frontend/src/lib/supabase/**"
+  ],
+  "dependency_and_deploy_files": [
+    "backend/requirements.txt",
+    "backend/requirements.lock",
+    "package.json",
+    "package-lock.json",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "**/Dockerfile",
+    "docker-compose.yml",
+    ".dockerignore",
+    "frontend/next.config.mjs"
+  ],
+  "governance_paths": [
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/hooks/**",
+    ".claude/agents/**",
+    ".claude/skills/**",
+    ".claude/references/**",
+    ".claude/orchestration/*.json",
+    ".claude/orchestration/*.mjs",
+    ".claude/orchestration/*.md",
+    ".claude/AGENT-SKILLS-PROVENANCE.txt",
+    ".agent/**",
+    ".git/**",
+    "AGENTS.md",
+    "GEMINI.md"
+  ],
+  "agent_writable_paths": [
+    ".claude/reports/**",
+    ".claude/orchestration/runs/*/change-set.json",
+    ".claude/orchestration/runs/*/notes/**",
+    ".claude/orchestration/ACTIVE_RUN"
+  ],
+  "never_writable_by_tools": [
+    ".claude/orchestration/approvals/**",
+    ".claude/orchestration/runs/*/ledger.json"
+  ],
+  "read_only_roles": ["code-reviewer", "security-auditor", "devops-engineer", "Explore", "Plan"]
+}

@@ -50,6 +50,52 @@ Thumbs.db
 
 # Agent metadata
 .claude/
+# BEGIN reviewed Engineering OS package (all other Claude content stays ignored)
+!/.claude/
+/.claude/*
+!/.claude/hooks/
+/.claude/hooks/*
+!/.claude/orchestration/
+/.claude/orchestration/*
+!/.claude/references/
+/.claude/references/*
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/hooks/tests/
+/.claude/hooks/tests/*
+!/.claude/skills/inboundcheck-autonomous-orchestrator/
+/.claude/skills/inboundcheck-autonomous-orchestrator/*
+!/.claude/skills/inboundcheck-change-set-governance/
+/.claude/skills/inboundcheck-change-set-governance/*
+!/.claude/skills/inboundcheck-quality-gates/
+/.claude/skills/inboundcheck-quality-gates/*
+!/.claude/skills/inboundcheck-security-gates/
+/.claude/skills/inboundcheck-security-gates/*
+!/.claude/hooks/guard-agent.mjs
+!/.claude/hooks/guard-bash.mjs
+!/.claude/hooks/guard-write.mjs
+!/.claude/hooks/lib.mjs
+!/.claude/hooks/record-gate.mjs
+!/.claude/hooks/scope.mjs
+!/.claude/hooks/session-context.mjs
+!/.claude/hooks/subagent-log.mjs
+!/.claude/hooks/tests/evidence.test.mjs
+!/.claude/hooks/tests/selftest.mjs
+!/.claude/hooks/tests/packaging.test.mjs
+!/.claude/orchestration/ARCHITECTURE.md
+!/.claude/orchestration/boundaries.json
+!/.claude/orchestration/evidence-policy.mjs
+!/.claude/orchestration/gates.json
+!/.claude/orchestration/ledger-core.mjs
+!/.claude/orchestration/ledger.mjs
+!/.claude/orchestration/patterns.mjs
+!/.claude/orchestration/scan.mjs
+!/.claude/references/definition-of-done.md
+!/.claude/skills/inboundcheck-autonomous-orchestrator/SKILL.md
+!/.claude/skills/inboundcheck-change-set-governance/SKILL.md
+!/.claude/skills/inboundcheck-quality-gates/SKILL.md
+!/.claude/skills/inboundcheck-security-gates/SKILL.md
+# END reviewed Engineering OS package
 
 # Supabase CLI Local Cache
 supabase/.temp/
