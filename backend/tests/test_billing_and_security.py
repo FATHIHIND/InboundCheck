@@ -105,6 +105,7 @@ async def test_billing_endpoints():
             "type": "customer.subscription.deleted",
             "data": {
                 "object": {
+                    "id": "sub_test_xyz789",
                     "customer": "cus_test_abc123",
                     "status": "canceled",
                     "metadata": {"user_id": "test-user-1"}

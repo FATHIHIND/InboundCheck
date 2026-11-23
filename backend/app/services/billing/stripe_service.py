@@ -13,6 +13,7 @@ import hashlib
 import time
 import logging
 import httpx
+from fastapi import HTTPException
 
 try:
     import stripe
@@ -694,11 +695,66 @@ class StripeService:
                             user_id = uid
                             break
 
+            # A delayed event for an old subscription must not change the current entitlement.
+            event_subscription_id = data_object.get("id")
+            stored_subscription_id = None
+            if user_id and not event_subscription_id:
+                logger.warning("Ignoring subscription event without a subscription identifier")
+                if event_id:
+                    self.mark_event_processed(event_id, event_type=event_type)
+                return {
+                    "status": "ignored",
+                    "reason": "missing_subscription_id",
+                    "event_type": event_type,
+                }
+
+            if user_id and event_subscription_id:
+                try:
+                    current_profile = supabase_service.get_user_profile(user_id) or {}
+                except Exception as profile_err:
+                    logger.error(f"Could not load profile to validate subscription event: {type(profile_err).__name__}")
+                    raise
+                stored_subscription_id = current_profile.get("stripe_subscription_id")
+
             if user_id:
+                def persist_subscription_updates(updates):
+                    if event_subscription_id:
+                        updates = {
+                            **updates,
+                            "stripe_subscription_id": event_subscription_id,
+                        }
+                        expected_subscription_id = stored_subscription_id
+                        if stored_subscription_id and stored_subscription_id != event_subscription_id:
+                            expected_subscription_id = event_subscription_id
+                        if supabase_service.update_user_profile_if_subscription_matches(
+                            user_id,
+                            expected_subscription_id,
+                            updates,
+                        ):
+                            return True
+
+                        # The compare-and-set can lose to a concurrent checkout.
+                        # Re-read once so a matching new owner is not discarded;
+                        # the retry remains guarded by the database predicate.
+                        latest_profile = supabase_service.get_user_profile(user_id) or {}
+                        latest_subscription_id = latest_profile.get("stripe_subscription_id")
+                        if latest_subscription_id == event_subscription_id:
+                            retry_subscription_id = event_subscription_id
+                        elif stored_subscription_id is None and latest_subscription_id is None:
+                            retry_subscription_id = None
+                        else:
+                            return False
+                        return supabase_service.update_user_profile_if_subscription_matches(
+                            user_id,
+                            retry_subscription_id,
+                            updates,
+                        )
+                    supabase_service.update_user_profile(user_id, updates)
+                    return True
+
                 if sub_status in ("canceled", "unpaid") or event_type == "customer.subscription.deleted":
                     status_val = "canceled" if sub_status == "canceled" else "expired"
-                    supabase_service.update_user_profile(
-                        user_id,
+                    update_applied = persist_subscription_updates(
                         {
                             "subscription_tier": "starter",
                             "tier": "starter",
@@ -706,6 +762,13 @@ class StripeService:
                             "updated_at": datetime.now(timezone.utc).isoformat(),
                         },
                     )
+                    if not update_applied:
+                        # Different IDs do not establish subscription age. Checkout
+                        # may bind this subscription later; leave the event retryable.
+                        raise HTTPException(
+                            status_code=503,
+                            detail="Subscription ownership reconciliation pending",
+                        )
                     if event_id:
                         self.mark_event_processed(event_id, event_type=event_type)
                     return {
@@ -734,7 +797,13 @@ class StripeService:
                     if period_end_iso:
                         updates["current_period_end"] = period_end_iso
 
-                    supabase_service.update_user_profile(user_id, updates)
+                    if not persist_subscription_updates(updates):
+                        # Different IDs do not establish subscription age. Checkout
+                        # may bind this subscription later; leave the event retryable.
+                        raise HTTPException(
+                            status_code=503,
+                            detail="Subscription ownership reconciliation pending",
+                        )
                     if event_id:
                         self.mark_event_processed(event_id, event_type=event_type)
                     return {

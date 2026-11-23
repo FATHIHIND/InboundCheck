@@ -451,6 +451,7 @@ async def test_webhook_lifecycle_ingestion():
         "type": "customer.subscription.deleted",
         "data": {
             "object": {
+                "id": "sub_stripe_67890",
                 "customer": "cus_stripe_12345",
                 "status": "canceled",
                 "metadata": {"user_id": user_id}
