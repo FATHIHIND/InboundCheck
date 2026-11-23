@@ -248,6 +248,67 @@ class SupabaseService:
 
         return profile
 
+    def update_user_profile_if_subscription_matches(
+        self,
+        user_id: str,
+        expected_subscription_id: Optional[str],
+        updates: Dict[str, Any],
+    ) -> bool:
+        """Atomically update a profile only while it still owns the observed subscription."""
+        if self._client:
+            try:
+                query = self._client.table("profiles").update(updates).eq("id", user_id)
+                if expected_subscription_id is None:
+                    query = query.is_("stripe_subscription_id", "null")
+                else:
+                    query = query.eq("stripe_subscription_id", expected_subscription_id)
+                result = query.execute()
+                if result.data:
+                    return True
+
+                # Preserve the existing self-healing behavior without allowing an
+                # upsert to overwrite a profile created by a concurrent checkout.
+                defaults = {
+                    "id": user_id,
+                    "email": f"{user_id}@store.com",
+                    "tier": "starter",
+                    "subscription_tier": "starter",
+                    "subscription_status": "active",
+                    **updates,
+                }
+                created = (
+                    self._client.table("profiles")
+                    .upsert(defaults, ignore_duplicates=True)
+                    .execute()
+                )
+                return bool(created.data)
+            except Exception as e:
+                logger.error(
+                    "Conditional subscription profile update failed (%s)",
+                    type(e).__name__,
+                )
+                raise DatabaseUnavailableError(
+                    "Conditional subscription profile update failed"
+                ) from e
+
+        if not self._allow_in_memory_fallback():
+            raise DatabaseUnavailableError("Database client is not connected in production")
+
+        with self._in_memory_lock:
+            profile = self._in_memory_profiles.get(user_id)
+            if profile is None:
+                profile = {"id": user_id}
+            if profile.get("stripe_subscription_id") != expected_subscription_id:
+                return False
+
+            profile.update(updates)
+            if "subscription_tier" in updates and "tier" not in updates:
+                profile["tier"] = updates["subscription_tier"]
+            elif "tier" in updates and "subscription_tier" not in updates:
+                profile["subscription_tier"] = updates["tier"]
+            self._in_memory_profiles[user_id] = profile
+            return True
+
     def get_user_domain_count(self, user_id: str) -> int:
         """Get count of active monitored domains for user."""
         if self._allow_in_memory_fallback() and user_id in self._in_memory_domains:
