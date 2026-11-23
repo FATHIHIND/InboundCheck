@@ -11,6 +11,7 @@ from typing import Annotated, Optional, Dict, Any, List
 import logging
 
 from app.core.security import get_current_user_id
+from app.core.tier_guards import verify_active_subscription_or_trial
 from app.core.env_guard import sanitize_exception
 from app.services.supabase_client import supabase_service, DatabaseUnavailableError
 from app.services.failover.omnichannel_service import omnichannel_service
@@ -112,8 +113,11 @@ async def trigger_failover_dispatch(
     payload: TriggerTelegramAlertRequest,
     user_id: str = Depends(get_current_user_id),
     idempotency_header: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
+    _entitled_profile: dict = Depends(verify_active_subscription_or_trial),
 ):
     """
+    Requires an active subscription or valid trial (HTTP 402 otherwise) before anything is queued.
+
     Durable Outbox Incident Alert Dispatch:
     Persists incident payload to durable notification_outbox before attempting outbound HTTP.
     Returns HTTP 200/202 with job_id and queued status without synchronous external Telegram dependency.
@@ -176,8 +180,12 @@ async def get_failover_health_metrics(
 async def send_test_telegram_ping(
     payload: TelegramTestPingRequest,
     user_id: str = Depends(get_current_user_id),
+    _entitled_profile: dict = Depends(verify_active_subscription_or_trial),
 ):
     """
+    Requires an active subscription or valid trial (HTTP 402 otherwise); the stored token is not
+    decrypted and nothing is sent for a non-entitled account.
+
     Send an immediate test alert to verify Telegram bot connectivity.
     Uses stored decrypted token if omitted or masked.
     """

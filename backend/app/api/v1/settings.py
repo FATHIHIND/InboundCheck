@@ -12,6 +12,7 @@ import secrets
 import logging
 
 from app.core.security import get_current_user_id
+from app.core.tier_guards import verify_active_subscription_or_trial
 from app.core.encryption import (
     encrypt_credential,
     mask_credential,
@@ -415,8 +416,12 @@ async def save_alert_config(
 async def send_test_telegram_alert(
     payload: TelegramTestRequest,
     user_id: str = Depends(get_current_user_id),
+    _entitled_profile: dict = Depends(verify_active_subscription_or_trial),
 ):
     """
+    Requires an active subscription or valid trial (HTTP 402 otherwise); the stored token is not
+    decrypted and nothing is sent for a non-entitled account.
+
     Send a live rich Markdown test alert ping to the configured Telegram chat/channel.
     Uses stored decrypted token if token is omitted or masked in request.
     """
