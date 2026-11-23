@@ -188,3 +188,7 @@ curl http://localhost:8000/health
 # Readiness probe (verifies database persistence)
 curl http://localhost:8000/ready
 ```
+
+## 7. Shared Agent Memory Startup
+
+At session start, read `AGENTS.md`, then `agent-state/SESSION-HANDOFF.md` and `agent-state/CURRENT.md`. Check `agent-state/OWNERSHIP.md` before editing. Verify evidence that may be stale and resume the recorded next action without repeating completed work. Codex is the sole writer for shared `agent-state/` files; Claude Code may submit concise proposed updates but must not edit these files concurrently. Keep startup instructions under 150 words; never store secrets, customer data, credentials, or full session logs.
