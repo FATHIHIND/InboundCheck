@@ -13,6 +13,7 @@ import hashlib
 import time
 import logging
 import httpx
+from fastapi import HTTPException
 
 try:
     import stripe
@@ -762,14 +763,12 @@ class StripeService:
                         },
                     )
                     if not update_applied:
-                        logger.warning("Ignoring subscription event after ownership changed")
-                        if event_id:
-                            self.mark_event_processed(event_id, event_type=event_type)
-                        return {
-                            "status": "ignored",
-                            "reason": "superseded_subscription",
-                            "event_type": event_type,
-                        }
+                        # Different IDs do not establish subscription age. Checkout
+                        # may bind this subscription later; leave the event retryable.
+                        raise HTTPException(
+                            status_code=503,
+                            detail="Subscription ownership reconciliation pending",
+                        )
                     if event_id:
                         self.mark_event_processed(event_id, event_type=event_type)
                     return {
@@ -799,14 +798,12 @@ class StripeService:
                         updates["current_period_end"] = period_end_iso
 
                     if not persist_subscription_updates(updates):
-                        logger.warning("Ignoring subscription event after ownership changed")
-                        if event_id:
-                            self.mark_event_processed(event_id, event_type=event_type)
-                        return {
-                            "status": "ignored",
-                            "reason": "superseded_subscription",
-                            "event_type": event_type,
-                        }
+                        # Different IDs do not establish subscription age. Checkout
+                        # may bind this subscription later; leave the event retryable.
+                        raise HTTPException(
+                            status_code=503,
+                            detail="Subscription ownership reconciliation pending",
+                        )
                     if event_id:
                         self.mark_event_processed(event_id, event_type=event_type)
                     return {

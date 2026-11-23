@@ -10,7 +10,7 @@ subscriber from starting a second subscription. A late `deleted` or `past_due` e
 superseded subscription therefore downgraded or locked out an account that still holds a paid,
 active subscription.
 
-Expected: when the profile stores a different subscription id, the event is ignored unless a
+Expected: when the profile stores a different subscription id, the event remains retryable unless a
 concurrent checkout makes the event's subscription current before the guarded update. Events
 without a subscription id are ignored because ownership cannot be established.
 """
@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import HTTPException
 from postgrest import SyncPostgrestClient
 
 from app.services.billing.stripe_service import stripe_service
@@ -74,20 +75,23 @@ def _event(event_type, sub_status, sub_id=OLD_SUB):
 def test_late_delete_of_superseded_subscription_does_not_downgrade_the_current_one(harness):
     set_profile, update, guarded_update, _mark_processed, _profile = harness
     set_profile(CURRENT_SUB)
-    result = stripe_service.process_webhook_event(_event("customer.subscription.deleted", "canceled", OLD_SUB))
+    with pytest.raises(HTTPException) as failure:
+        stripe_service.process_webhook_event(_event("customer.subscription.deleted", "canceled", OLD_SUB))
+    assert failure.value.status_code == 503
     update.assert_not_called()
     assert guarded_update.call_args.args[0:2] == (USER, OLD_SUB)
-    assert result["status"] == "ignored"
-    _mark_processed.assert_called_once()
+    _mark_processed.assert_not_called()
 
 
 def test_late_past_due_update_of_superseded_subscription_does_not_change_status(harness):
     set_profile, update, guarded_update, _mark_processed, _profile = harness
     set_profile(CURRENT_SUB)
-    result = stripe_service.process_webhook_event(_event("customer.subscription.updated", "past_due", OLD_SUB))
+    with pytest.raises(HTTPException) as failure:
+        stripe_service.process_webhook_event(_event("customer.subscription.updated", "past_due", OLD_SUB))
+    assert failure.value.status_code == 503
     update.assert_not_called()
     assert guarded_update.call_args.args[0:2] == (USER, OLD_SUB)
-    assert result["status"] == "ignored"
+    _mark_processed.assert_not_called()
 
 
 def test_deleting_the_current_subscription_still_downgrades(harness):
@@ -158,24 +162,16 @@ def test_concurrent_checkout_replacement_prevents_stale_subscription_write(harne
 
     guarded_update.side_effect = lose_to_new_checkout
 
-    result = stripe_service.process_webhook_event(
-        _event("customer.subscription.deleted", "canceled", CURRENT_SUB)
-    )
-
-    assert result == {
-        "status": "ignored",
-        "reason": "superseded_subscription",
-        "event_type": "customer.subscription.deleted",
-    }
+    for _ in range(2):
+        with pytest.raises(HTTPException) as failure:
+            stripe_service.process_webhook_event(
+                _event("customer.subscription.deleted", "canceled", CURRENT_SUB)
+            )
+        assert failure.value.status_code == 503
     assert guarded_update.call_args_list[0].args[0:2] == (USER, CURRENT_SUB)
     update.assert_not_called()
-    mark_processed.assert_called_once()
-
-    replay = stripe_service.process_webhook_event(
-        _event("customer.subscription.deleted", "canceled", CURRENT_SUB)
-    )
-    assert replay["status"] == "already_processed"
-    guarded_update.assert_called_once()
+    mark_processed.assert_not_called()
+    assert profile["stripe_subscription_id"] == "sub_replacement_Z"
 
 
 def test_database_failure_does_not_mark_event_processed_for_retry(harness):
@@ -423,3 +419,56 @@ def test_pinned_postgrest_builders_encode_cas_and_insert_only_preferences():
         assert insert_only.headers["Prefer"] == "return=representation,resolution=ignore-duplicates"
     finally:
         client.session.close()
+
+
+def test_new_subscription_event_before_checkout_remains_retryable(harness):
+    from fastapi import HTTPException
+
+    set_profile, update, guarded_update, mark_processed, profile = harness
+    set_profile(OLD_SUB)
+    event = _event("customer.subscription.updated", "past_due", CURRENT_SUB)
+    event["data"]["object"]["current_period_end"] = 1900000000
+    with pytest.raises(HTTPException) as failure:
+        stripe_service.process_webhook_event(event)
+    assert failure.value.status_code == 503
+    mark_processed.assert_not_called()
+    update.assert_not_called()
+    assert profile["stripe_subscription_id"] == OLD_SUB
+
+    # Checkout binds B after the first delivery; retry the identical event ID.
+    profile["stripe_subscription_id"] = CURRENT_SUB
+    result = stripe_service.process_webhook_event(event)
+    assert result["action"] == "subscription_updated"
+    assert guarded_update.call_args.args[:2] == (USER, CURRENT_SUB)
+    assert guarded_update.call_args.args[2]["subscription_status"] == "past_due"
+    assert guarded_update.call_args.args[2]["current_period_end"]
+    mark_processed.assert_called_once()
+    calls = guarded_update.call_count
+    assert stripe_service.process_webhook_event(event)["status"] == "already_processed"
+    assert guarded_update.call_count == calls
+
+
+@pytest.mark.parametrize("event_type,status", [("customer.subscription.updated", "past_due"), ("customer.subscription.deleted", "canceled")])
+def test_ownership_mismatch_reaches_webhook_as_retryable_http(harness, monkeypatch, event_type, status):
+    import asyncio
+    import json
+    from app.api.v1.billing import stripe_webhook_handler
+
+    set_profile, update, guarded_update, mark_processed, profile = harness
+    set_profile(OLD_SUB)
+    payload = json.dumps(_event(event_type, status, CURRENT_SUB)).encode()
+
+    class Request:
+        headers = {"Stripe-Signature": "synthetic-test-signature"}
+
+        async def body(self):
+            return payload
+
+    monkeypatch.setattr(stripe_service, "verify_webhook_signature", lambda *_: True)
+    with pytest.raises(HTTPException) as failure:
+        asyncio.run(stripe_webhook_handler(Request()))
+    assert failure.value.status_code == 503
+    assert failure.value.detail == "Subscription ownership reconciliation pending"
+    mark_processed.assert_not_called()
+    update.assert_not_called()
+    assert profile["stripe_subscription_id"] == OLD_SUB
