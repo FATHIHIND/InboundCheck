@@ -1,0 +1,55 @@
+{
+  "run_id": "prsec01-profile-hardening",
+  "title": "PR-SEC-01 profile client-privilege hardening and neutral provisioning (r3)",
+  "status": "DRAFT",
+  "_revision": "r3 supersedes r2 (2026-11-24-pr-sec-01-change-set-r2.json, sha256 prefix B83C2C32, retained unchanged). Scope paths are identical to r2; only planned_tasks and this note changed. M1 no longer drops the client INSERT policy (the revoked grant denies first). Harness and evidence rules are in the r3 recovery package. Approval binds the exact bytes of this file; any edit voids it. Not approved. Do not treat as approved.",
+  "allowed_paths": [
+    "supabase/migrations/20261124000001_pr_sec_01_harden_profile_client_privileges.sql",
+    "supabase/migrations/20261124000002_pr_sec_01_safe_profile_provisioning.sql",
+    "supabase/tests/pr_sec_01/**",
+    "scripts/reconcile_migration_ledger.py",
+    "backend/tests/test_migration_ledger_reconciliation.py",
+    "backend/app/services/supabase_client.py",
+    "backend/tests/test_pr_sec_01_profile_provisioning.py",
+    "backend/tests/test_pr_sec_01_db_harness.py",
+    "docs/security/PR_SEC_01_AUDIT_AND_ROLLBACK.md"
+  ],
+  "forbidden_paths": [
+    ".env",
+    ".env.*",
+    "**/*.pem",
+    "**/*.key",
+    "supabase/migrations/**/apply*",
+    "frontend/**",
+    "backend/app/services/billing/**",
+    "backend/app/api/v1/shopify.py",
+    "backend/app/api/v1/settings.py",
+    "backend/app/api/v1/billing.py",
+    "scripts/validate_migration_sources.py",
+    "scripts/check_release_safety.py",
+    "scripts/safe_backend_tests.py",
+    ".github/**",
+    "docs/branch-protection.md",
+    "backend/pytest.ini",
+    "backend/tests/conftest.py",
+    ".claude/**",
+    "**/*.sql.txt",
+    "**/*.pgsql"
+  ],
+  "boundary_ack": [
+    "supabase/migrations/20261124000001_pr_sec_01_harden_profile_client_privileges.sql",
+    "supabase/migrations/20261124000002_pr_sec_01_safe_profile_provisioning.sql",
+    "supabase/tests/pr_sec_01/**",
+    "backend/app/services/supabase_client.py"
+  ],
+  "allow_dependency_changes": false,
+  "allow_migrations": true,
+  "planned_tasks": [
+    {"id": "T1", "risk": "HIGH", "title": "Harness: Supabase image calibration (roles, auth schema, default privileges, extension resolution) and RED baseline cells; cells.json; pytest wrapper with off/require modes", "depends_on": []},
+    {"id": "T2", "risk": "HIGH", "title": "M1: revoke client privileges on profiles (table and column), verified through aclexplode and attacl; no policy changes; manifest entry 1 with test pin 32", "depends_on": ["T1"]},
+    {"id": "T3", "risk": "HIGH", "title": "M2: non-deleting neutral provisioning, service entrypoint, handle_new_user ACL; manifest entry 2 with test pin 33; ordering, concurrency and compensation cells", "depends_on": ["T2"]},
+    {"id": "T4", "risk": "HIGH", "title": "R2b: missing-profile recovery through the service entrypoint with fail-closed 503; billing and Shopify regression", "depends_on": ["T3"]},
+    {"id": "T5", "risk": "HIGH", "title": "Runbook, independent reviews, release gates; stop before publication", "depends_on": ["T4"]}
+  ],
+  "_prerequisite": "The governance draft gov-pr-sec-01-evidence (G1-G3) must be approved and applied in its own run before T1 is registered, so that G-DB-PR-SEC-01 exists in gates.json and the skip rule is enforced."
+}

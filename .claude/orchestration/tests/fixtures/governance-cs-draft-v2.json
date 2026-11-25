@@ -1,0 +1,70 @@
+{
+  "run_id": "gov-trusted-gate-evidence",
+  "title": "Governance: trusted gate runner and evidence verification (v2)",
+  "status": "DRAFT_NOT_REGISTERED",
+  "supersedes": "2026-11-24-governance-cs-trusted-gate-evidence-draft.json (retained unchanged)",
+  "_revision": "v2 closes review blockers B1-B3. Draft only: not registered, not approved. Must run in the isolated worktree gov-trusted-gate-evidence (own .claude copy and ledger), never in the AUTHZ05 or PR-SEC-01 checkouts. The human fills baseline_manifest.path and baseline_manifest.sha256 from the real M0 before approval; approval binds these exact bytes and any later edit voids it. Design reference: 2026-11-24-trusted-gate-evidence-design-v2.md.",
+  "allowed_paths": [
+    ".claude/orchestration/run-gate.mjs",
+    ".claude/orchestration/gates.json",
+    ".claude/orchestration/ledger.mjs",
+    ".claude/orchestration/ledger-core.mjs",
+    ".claude/hooks/record-gate.mjs",
+    ".claude/orchestration/tests/**",
+    ".claude/hooks/tests/**"
+  ],
+  "forbidden_paths": [
+    ".env",
+    ".env.*",
+    "**/*.pem",
+    "**/*.key",
+    "supabase/migrations/**/apply*",
+    ".claude/orchestration/trusted-interpreters.json",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/hooks/guard-bash.mjs",
+    ".claude/hooks/guard-write.mjs",
+    ".claude/hooks/guard-agent.mjs",
+    ".claude/hooks/scope.mjs",
+    ".claude/hooks/subagent-log.mjs",
+    ".claude/hooks/session-context.mjs",
+    ".claude/hooks/lib.mjs",
+    ".claude/orchestration/scan.mjs",
+    ".claude/orchestration/patterns.mjs",
+    ".claude/orchestration/boundaries.json",
+    ".claude/agents/**",
+    ".claude/skills/**",
+    ".claude/references/**",
+    ".claude/orchestration/approvals/**",
+    ".claude/orchestration/ACTIVE_RUN",
+    ".claude/orchestration/runs/**/ledger.json",
+    "backend/**",
+    "frontend/**",
+    "supabase/**",
+    "scripts/**",
+    ".github/**"
+  ],
+  "boundary_ack": [],
+  "allow_dependency_changes": false,
+  "allow_migrations": false,
+  "allowed_deletions": [],
+  "baseline_manifest": {
+    "path": "REPLACE_WITH_ABSOLUTE_PATH_OF_M0.txt",
+    "sha256": "REPLACE_WITH_HUMAN_COMPUTED_M0_SHA256",
+    "format": "lines of '<sha256 lowercase hex>  <relative path with />' sorted by ordinal path; H-set excludes orchestration/runs/**, orchestration/approvals/**, orchestration/ACTIVE_RUN, orchestration/hook-debug.log, reports/**, worktrees/**"
+  },
+  "human_authored_inputs": [
+    ".claude/orchestration/trusted-interpreters.json (created by the human in the worktree BEFORE M0 is captured; agents may not write it; schema {schema:1, interpreters:[{path, sha256}]})"
+  ],
+  "required_independent_verification": "A reviewer who is not the author recomputes the final manifest MF, diffs it against M0, the Change Set and allowed_paths, reads every E-set change, reruns the Node tests in a clean shell and the adversarial cases in a temp tree, and records an APPROVABLE verdict before close. close --force is not an acceptance path.",
+  "planned_tasks": [
+    {"id": "GE1", "risk": "HIGH", "depends_on": [], "files": [".claude/orchestration/ledger-core.mjs", ".claude/orchestration/tests/ge1.test.mjs"], "title": "ledger-core.mjs: manifest enumeration and hashing (H-set and E-set rules), git-visible tree digest, strict schema-1 evidence validator"},
+    {"id": "GE2", "risk": "HIGH", "depends_on": [], "files": [".claude/orchestration/run-gate.mjs", ".claude/orchestration/tests/ge2.test.mjs"], "title": "run-gate.mjs: gate-ID-only; approved-run precondition; argv-only spawn; scrubbed env; fresh mkdtemp; interpreter allowlist from trusted-interpreters.json; junit recount; manifest-scope step; conditional harness env; schema-1 evidence bound to ledger run, gate and Change Set"},
+    {"id": "GE3", "risk": "HIGH", "depends_on": [], "files": [".claude/orchestration/gates.json", ".claude/orchestration/tests/ge3.test.mjs"], "title": "gates.json: runner blocks for every CONFIGURED and EXECUTABLE autonomous gate; two-step G-SCOPE; G-BE-FULL conditional harness block; BLOCKED gates unchanged"},
+    {"id": "GE5", "risk": "HIGH", "depends_on": [], "files": [".claude/hooks/record-gate.mjs", ".claude/hooks/tests/ge5.test.mjs"], "title": "record-gate.mjs writes source hook-observed"},
+    {"id": "GE6", "risk": "HIGH", "depends_on": [], "files": [".claude/orchestration/tests/ge6.test.mjs", ".claude/orchestration/tests/fixtures/**"], "title": "Cross-check Node manifest vs human PowerShell output on a fixture tree; adversarial cases in an isolated temp tree"},
+    {"id": "GE4", "risk": "HIGH", "depends_on": [], "files": [".claude/orchestration/ledger.mjs", ".claude/orchestration/tests/ge4.test.mjs"], "title": "ledger.mjs: verifier in done() (newest runner entry per gate, strict validator, ledger_run, change_set_sha256, tree and file hashes, 12 hour bound), latest includes E-set mtimes, computeRisk raises .claude/ files to HIGH, status shows trust state. LAST code edit."}
+  ],
+  "_order_note": "planned_tasks is advisory (no code reads it). Registered without depends_on on purpose; procedure order is GE1, GE2, GE3, GE5, GE6, then GE4 last. No task is marked DONE until GE4 is live and the acceptance sweep runs; legacy evidence is never final acceptance.",
+  "_probe_note": "Before any start, the human confirms hook-logged agent_stop events with agent_type exactly code-reviewer, security-auditor and test-engineer. If any is unknown or absent, stop; risk must not be downgraded."
+}
